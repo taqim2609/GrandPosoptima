@@ -44,6 +44,10 @@ dan catatan di akhir dokumen): blok klaim atomik `_finalize_payment` yang tertul
 
 1. **Kasir boleh void sendiri**, dengan batasan: **hanya order pada shift yang sedang terbuka**,
    **alasan wajib**, dan **semua tercatat**.
+   *Pembaruan 2026-09-13:* shift kini **bersama** (satu shift per toko per hari, dipakai semua akun —
+   lihat `docs/PANDUAN-SHIFT-HARIAN.md`), jadi yang menentukan bukan lagi "shift milik kasir itu"
+   melainkan **"shift order itu masih terbuka?"**. Kasir mana pun yang bekerja pada shift hari itu
+   boleh membatalkan transaksi di shift tersebut.
 2. **Cukup void seluruh order** — tidak ada void sebagian item.
 3. Order pada **shift yang sudah ditutup → DIBLOKIR**; hanya **admin** yang bisa melepas blokir
    secara sadar (aksi eksplisit + alasan + tercatat sebagai koreksi lintas shift).

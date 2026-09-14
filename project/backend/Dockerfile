@@ -14,4 +14,8 @@ RUN pip install --no-cache-dir \
 COPY . .
 
 EXPOSE 8001
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
+# Jumlah worker diatur env UVICORN_WORKERS (default 2). Satu worker membuat laporan
+# berat (mis. laporan periode 30 hari, ~1 detik CPU) MENAHAN semua request lain di
+# proses yang sama — kasir ikut menunggu, walau CPU masih lengang. Lihat
+# docs/PANDUAN-WORKER-UVICORN.md untuk cara menakar jumlah worker dengan RAM Pi.
+CMD ["sh", "-c", "exec uvicorn server:app --host 0.0.0.0 --port 8001 --workers ${UVICORN_WORKERS:-2}"]

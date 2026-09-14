@@ -49,6 +49,7 @@ export default function POS() {
   const [cacheAt, setCacheAt] = useState(() => localStorage.getItem("gak_pos_cache_at"));
   const [shift, setShift] = useState(undefined);
   const [openingCash, setOpeningCash] = useState("");
+  const [openingCashRetail, setOpeningCashRetail] = useState("");
   // Bill terbuka (dine-in) yang sedang dibatalkan lewat VoidDialog
   const [voidBill, setVoidBill] = useState(null);
   const [barcode, setBarcode] = useState("");
@@ -201,10 +202,14 @@ export default function POS() {
 
   const openShiftInline = async () => {
     try {
-      const { data } = await api.post("/shifts/open", { opening_cash: Number(openingCash || 0) });
+      // Shift harian bersama: satu tombol membuka F&B & Retail (kas awal terpisah).
+      const { data } = await api.post("/shifts/open", {
+        opening_cash_fnb: Number(openingCash || 0),
+        opening_cash_retail: Number(openingCashRetail || 0),
+      });
       setShift(data);
-      toast.success("Shift dibuka. POS siap digunakan.");
-    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+      toast.success("Shift hari ini dibuka. POS siap digunakan.");
+    } catch (e) { toast.error(apiError(e.response?.data?.detail), { duration: 9000 }); }
   };
   const handleBarcode = (e) => {
     if (e.key !== "Enter") return;
@@ -363,13 +368,19 @@ export default function POS() {
         <div className="w-full max-w-md bg-white rounded-2xl border p-7 text-center">
           <div className="h-14 w-14 rounded-2xl bg-[#FEF2F2] grid place-items-center mx-auto mb-4"><Clock className="text-[#E63946]" /></div>
           <h2 className="text-2xl font-extrabold">Buka Shift Dulu</h2>
-          <p className="text-sm text-[#52525B] mt-1 mb-5">Masukkan kas awal untuk memulai. POS Kasir baru bisa dipakai setelah shift dibuka.</p>
-          <label className="text-xs uppercase tracking-wider font-bold text-[#52525B] text-left block">Kas Awal</label>
+          <p className="text-sm text-[#52525B] mt-1 mb-5">
+            Satu shift per hari untuk F&amp;B &amp; Retail. Isi kas awal tiap toko, lalu semua akun
+            bisa langsung memakai shift ini (tidak perlu buka shift baru).
+          </p>
+          <label className="text-xs uppercase tracking-wider font-bold text-[#52525B] text-left block">Kas Awal F&amp;B</label>
           <input data-testid="gate-opening-cash" type="number" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)}
             placeholder="0" className="w-full h-12 rounded-xl border px-3 mt-1.5 font-num text-lg" autoFocus />
+          <label className="text-xs uppercase tracking-wider font-bold text-[#52525B] text-left block mt-3">Kas Awal Retail</label>
+          <input data-testid="gate-opening-cash-retail" type="number" value={openingCashRetail} onChange={(e) => setOpeningCashRetail(e.target.value)}
+            placeholder="0" className="w-full h-12 rounded-xl border px-3 mt-1.5 font-num text-lg" />
           <button data-testid="gate-open-shift-btn" onClick={openShiftInline}
             className="tap w-full py-3 mt-4 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center justify-center gap-2">
-            <Play size={16} /> Buka Shift & Mulai
+            <Play size={16} /> Buka Shift F&amp;B &amp; Retail
           </button>
         </div>
       </div>
@@ -393,6 +404,13 @@ export default function POS() {
           </button>
         ))}
         <div className="flex-1" />
+        {shift?.opened_by && (
+          <div data-testid="pos-shift-chip" title="Shift hari ini dipakai bersama semua akun — tidak perlu buka shift baru"
+            className="h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-[#EEF2FF] text-[#3730A3]">
+            <Clock size={13} /> Shift dibuka: {shift.opened_by}
+            {Array.isArray(shift.scopes) ? ` · ${shift.scopes.map((s) => (s === "retail" ? "Retail" : "F&B")).join(" + ")}` : ""}
+          </div>
+        )}
         {cacheAt && (
           <div data-testid="cache-indicator" title="Waktu data produk/harga terakhir diperbarui dari server"
             className={`h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold ${online ? "bg-[#F4F5F7] text-[#52525B]" : "bg-[#FEF3C7] text-[#B45309]"}`}>

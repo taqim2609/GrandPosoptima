@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import api, { apiError } from "@/lib/api";
 import { rupiah, wibToday } from "@/lib/format";
 import { toast } from "sonner";
-import { Wallet, ArrowDownCircle, ArrowUpCircle, Plus, ScanLine, Loader2, Utensils, Store, Trash2 } from "lucide-react";
+import { Wallet, ArrowDownCircle, ArrowUpCircle, Plus, ScanLine, Loader2, Utensils, Store, Trash2, Info } from "lucide-react";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
 
 const SCOPES = [
@@ -45,8 +45,14 @@ export default function Cash() {
           : apiError(e?.response?.data?.detail));
       });
   const loadCats = () => api.get("/cash/categories").then((r) => setCats(r.data.categories || [])).catch(() => {});
+  // Status shift hari ini (shift harian bersama per toko) — pengeluaran menempel ke shift
+  // toko yang sesuai; `undefined` = belum diketahui (jangan tampilkan banner dulu).
+  const [shiftInfo, setShiftInfo] = useState(undefined);
+  const loadShift = () => api.get("/shifts/current")
+    .then((r) => setShiftInfo(r.data || null))
+    .catch(() => setShiftInfo(undefined));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch on date change
-  useEffect(() => { load(); loadCats(); }, [date]);
+  useEffect(() => { load(); loadCats(); loadShift(); }, [date]);
 
   const addCat = async () => {
     const c = newCat.trim();
@@ -64,7 +70,7 @@ export default function Cash() {
     if (!amount || Number(amount) <= 0) return toast.error("Nominal harus > 0");
     try {
       await api.post("/cash", { type, amount: Number(amount), category, note, scope });
-      toast.success(type === "in" ? "Kas masuk dicatat" : "Pengeluaran dicatat");
+      toast.success(type === "in" ? "Kas masuk dicatat" : `Pengeluaran ${scLabel(scope)} dicatat`);
       setAmount(""); setNote("");
       load();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
@@ -131,6 +137,25 @@ export default function Cash() {
           <input ref={scanRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={scanReceipt} data-testid="scan-expense-input" />
         </div>
       </div>
+
+      {/* Keterangan shift: pengeluaran menempel ke shift TOKO yang sesuai (bila shift terbuka) */}
+      {shiftInfo !== undefined && (
+        <div data-testid="cash-shift-info"
+          className={`mb-6 flex items-start gap-2 rounded-xl border px-4 py-3 text-[12px] ${
+            shiftInfo ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#1E40AF]" : "bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]"}`}>
+          <Info size={15} className="shrink-0 mt-0.5" />
+          <span>
+            {shiftInfo ? (
+              <>Shift {scLabel("fnb")} &amp; {scLabel("retail")} hari ini dibuka oleh <b>{shiftInfo.opened_by || "-"}</b>.
+                {" "}Pengeluaran {scLabel("fnb")} masuk shift {scLabel("fnb")}, pengeluaran {scLabel("retail")} masuk shift {scLabel("retail")} —
+                boleh diisi kapan saja selama shift terbuka, atau nanti saat <b>tutup shift</b>.</>
+            ) : (
+              <>Shift hari ini <b>belum dibuka</b>. Pengeluaran tetap tercatat pada tanggal ini dan ikut laporan harian,
+                tetapi belum masuk laporan shift mana pun — buka shift di halaman <b>Shift</b> bila perlu.</>
+            )}
+          </span>
+        </div>
+      )}
 
       {/* Ringkasan terpisah */}
       <div className="grid md:grid-cols-4 gap-4 mb-6">

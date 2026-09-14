@@ -21,6 +21,9 @@ services:
     environment:
       - HOST_PROJECT_DIR=${HOST_PROJECT_DIR:-}
       - UPDATER_IMAGE=${UPDATER_IMAGE:-docker:cli}
+      # Jumlah proses backend. 2 = laporan berat tidak lagi menahan semua request lain;
+      # naikkan (3-4) hanya bila RAM masih lega — lihat docs/PANDUAN-WORKER-UVICORN.md.
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-2}
     depends_on:
       - mongo
     volumes:

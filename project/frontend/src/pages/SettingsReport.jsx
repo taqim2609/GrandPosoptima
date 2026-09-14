@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { MessageCircle, Save, Loader2, ShieldAlert, ShoppingCart, TrendingUp, ListChecks } from "lucide-react";
+import { MessageCircle, Save, Loader2, ShieldAlert, ShoppingCart, TrendingUp, ListChecks, Clock } from "lucide-react";
 
 export default function SettingsReport() {
-  const [form, setForm] = useState({ whatsapp_enabled: false, whatsapp_time: "22:00", recipients: "", include_ai: true, send_sales: true, send_purchases: false });
+  const [form, setForm] = useState({ whatsapp_enabled: false, whatsapp_time: "22:00", recipients: "", include_ai: true, send_sales: true, send_purchases: false, send_shift_auto: true });
   const [shop, setShop] = useState({ recipients: "", request_on_close: false });
   const [configured, setConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -20,6 +20,7 @@ export default function SettingsReport() {
           include_ai: a.data.include_ai,
           send_sales: a.data.send_sales !== false,
           send_purchases: !!a.data.send_purchases,
+          send_shift_auto: a.data.send_shift_auto !== false,
         });
         setConfigured(!!a.data.whatsapp_configured);
         setShop({ recipients: (b.data.recipients || []).join("\n"), request_on_close: !!b.data.request_on_close });
@@ -77,6 +78,28 @@ export default function SettingsReport() {
             <input data-testid="report-send-purchases" type="checkbox" checked={form.send_purchases}
               onChange={(e) => setForm({ ...form, send_purchases: e.target.checked })} className="h-5 w-5" />
           </label>
+        </div>
+
+        <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3 space-y-2">
+          <label className="flex items-start justify-between gap-3">
+            <span className="flex items-start gap-2 text-sm font-bold text-[#1E40AF]">
+              <Clock size={16} className="mt-0.5 shrink-0" />
+              <span>Kirim laporan tutup shift otomatis ke WhatsApp
+                <span className="block text-[11px] font-normal text-[#374151]">
+                  Setiap kali shift ditutup, laporan shift (template <b>Laporan Shift</b>) langsung dikirim
+                  ke nomor WhatsApp di bawah — tanpa perlu menekan tombol kirim. Matikan bila tidak diinginkan.
+                  Format pesannya diatur di bagian <b>Template WhatsApp</b>.
+                </span>
+              </span>
+            </span>
+            <input data-testid="report-shift-auto" type="checkbox" checked={!!form.send_shift_auto}
+              onChange={(e) => setForm({ ...form, send_shift_auto: e.target.checked })} className="h-5 w-5 mt-0.5" />
+          </label>
+          {!form.send_shift_auto && (
+            <div className="text-[11px] text-[#92400E]" data-testid="report-shift-auto-off">
+              Auto-kirim mati — laporan shift hanya terkirim bila ditekan manual di halaman Shift.
+            </div>
+          )}
         </div>
 
         <div>

@@ -7,6 +7,7 @@ $ALLOW = [
     'update-pi.sh',
     'check-integrity-pi.sh',
     'collect-metrics-pi.sh',
+    'check-workers-pi.sh',
     'bootstrap-pi.sh',
     'backup-pi.sh',
     'backup-to-vibecoder.sh',

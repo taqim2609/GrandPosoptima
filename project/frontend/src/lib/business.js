@@ -12,6 +12,7 @@ export const BIZ_DEFAULTS = {
   member_redeem_per_point: 100,
   low_stock_threshold: 10,
   service_tax_percent: 0,
+  transport_amount: 20000,
 };
 
 const KEY = "gak_biz_cache";

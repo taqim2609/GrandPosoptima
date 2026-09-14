@@ -22,11 +22,22 @@ from bson import json_util
 
 # ------------------------------------------------------------------ DB
 mongo_url = os.environ['MONGO_URL']
+
+# Jumlah proses worker uvicorn. Dockerfile menjalankan `--workers ${UVICORN_WORKERS}`,
+# jadi nilai ini harus sama dengan jumlah proses yang benar-benar hidup; env yang sama
+# dibaca di sini untuk menyesuaikan anggaran koneksi Mongo: N worker tidak boleh
+# membuka N x 30 koneksi di Pi ber-RAM kecil.
+WORKERS = max(1, int(os.environ.get("UVICORN_WORKERS", "1") or 1))
+
+# Batas koneksi Mongo per proses. Total anggaran 30 koneksi dibagi rata antar worker
+# supaya 4 worker tidak membuka 120 koneksi di Pi ber-RAM kecil.
+MONGO_POOL_SIZE = int(os.environ.get("MONGO_MAX_POOL_SIZE", str(max(6, 30 // WORKERS))))
+
 client = AsyncIOMotorClient(
     mongo_url,
-    # Pooling koneksi: single-proses backend di Pi; batas wajar + timeout jelas
-    # supaya trafik tinggi tidak menguras koneksi Mongo (env bisa di-override).
-    maxPoolSize=int(os.environ.get("MONGO_MAX_POOL_SIZE", "30")),
+    # Pooling koneksi: batas wajar + timeout jelas supaya trafik tinggi tidak
+    # menguras koneksi Mongo (env bisa di-override).
+    maxPoolSize=MONGO_POOL_SIZE,
     minPoolSize=int(os.environ.get("MONGO_MIN_POOL_SIZE", "1")),
     maxIdleTimeMS=int(os.environ.get("MONGO_MAX_IDLE_MS", "60000")),
     serverSelectionTimeoutMS=int(os.environ.get("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000")),
@@ -808,11 +819,30 @@ class VoidIn(BaseModel):
     force_note: Optional[str] = ""
 
 class ShiftOpenIn(BaseModel):
+    # SATU shift per toko per hari (F&B & Retail), dipakai bersama semua akun.
+    # opening_cash (lama) = kas awal F&B bila opening_cash_fnb tidak dikirim.
     opening_cash: float = 0
+    opening_cash_fnb: Optional[float] = None
+    opening_cash_retail: Optional[float] = None
 
 class ShiftCloseIn(BaseModel):
+    # closing_cash (lama) = kas akhir F&B bila closing_cash_fnb tidak dikirim.
     closing_cash: float = 0
+    closing_cash_fnb: Optional[float] = None
+    closing_cash_retail: Optional[float] = None
     vendor_payments: Optional[List[dict]] = None  # [{vendor_id, paid}]
+    # Uang transport: pengeluaran WAJIB saat tutup shift (tidak boleh 0), dibebankan ke F&B.
+    # Bila tidak dikirim (perangkat/bundle lama) dipakai nominal dari Pengaturan → Aplikasi.
+    transport: Optional[float] = None
+    # Konfirmasi sadar bahwa memang tidak ada pengeluaran harian (F&B & Retail kosong).
+    # Tanpa ini, tutup shift DITOLAK 400 supaya laporan tidak kehilangan keterangan belanja.
+    ack_no_expense: bool = False
+    # None = ikuti Pengaturan (bawaan AKTIF); False = jangan kirim WA kali ini; True = paksa kirim.
+    send_shift_wa: Optional[bool] = None
+    # Pengeluaran yang diisi LANGSUNG saat tutup shift (boleh juga diisi kapan saja
+    # selama shift buka lewat halaman Pengeluaran & Kas).
+    # [{scope: "fnb"|"retail", category, amount, note}]
+    expenses: Optional[List[dict]] = None
 
 class AIDescIn(BaseModel):
     name: str
@@ -942,6 +972,9 @@ BIZ_DEFAULTS = {
     "member_redeem_per_point": 100,     # 1 poin = RpX
     "low_stock_threshold": 10,
     "service_tax_percent": 0,           # pajak layanan opsional (%)
+    # Uang transport saat TUTUP SHIFT: pengeluaran WAJIB (tidak boleh 0), dibebankan ke F&B.
+    # Nilai ini = nominal bawaan yang terisi otomatis di form tutup shift.
+    "transport_amount": 20000,
 }
 
 async def _business():
@@ -1016,6 +1049,21 @@ async def _feat(path, default=None):
 async def _invalidate_features():
     _feature_mem["doc"] = None
 
+async def _feat_int(path, default):
+    """Nilai fitur sebagai bilangan bulat.
+
+    PENTING: 0 adalah nilai SAH (Senin = 0, jam 00:00 = 0) dan TIDAK boleh dianggap "kosong".
+    Pola lama `int(await _feat(k, default) or default)` membuat jadwal hari Senin / jam 00:00
+    diam-diam berubah jadi bawaan (Minggu 03:00) sehingga tugas terjadwal tidak pernah jalan.
+    """
+    v = await _feat(path, default)
+    if v is None or v == "":
+        return int(default)
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return int(default)
+
 FEATURE_LABELS = {
     "ai": "AI (Master)",
     "ai.summary": "AI — Analisis Laporan",
@@ -1046,6 +1094,18 @@ _CACHE = {}          # key -> (expires, value)
 _RCACHE = {}         # laporan: key -> (gen, expires, value)
 _RS_GEN = 0          # bertambah saat data order berubah -> laporan ter-cache invalid
 
+# Cache ini hidup di MEMORI TIAP PROSES. Sejak backend berjalan multi-worker, satu
+# penulisan (mis. penjualan retail yang mengurangi stok) hanya membersihkan cache di
+# proses yang menanganinya; proses lain masih menyajikan katalog basi sampai TTL (20 dtk).
+# Karena itu setiap invalidasi lokal ditandai "kotor", lalu satu epoch bersama dinaikkan
+# di MongoDB dan dipantau proses lain (poll 2 dtk) — proses yang melihat epoch berubah
+# membersihkan cache lokalnya sendiri. Batas basi turun dari ~20 dtk menjadi ~2 dtk.
+# (Jalur uang TIDAK bergantung pada cache: validasi stok & harga selalu baca MongoDB.)
+_CACHE_DIRTY = False
+_CACHE_EPOCH_SEEN = None
+_CACHE_EPOCH_DOC = "cache"
+CACHE_SYNC_SECONDS = 2.0
+
 def _cache_get(key):
     e = _CACHE.get(key)
     if e is None:
@@ -1060,8 +1120,39 @@ def _cache_set(key, value, ttl=20.0):
     _CACHE[key] = (_t.time() + ttl, value)
 
 def _cache_del(prefix=""):
+    global _CACHE_DIRTY
     for k in [k for k in _CACHE if k.startswith(prefix)]:
         _CACHE.pop(k, None)
+    _CACHE_DIRTY = True
+
+def _cache_clear_local():
+    """Buang seluruh cache proses ini (dipakai saat worker lain menulis data)."""
+    _CACHE.clear()
+    _RCACHE.clear()
+
+async def _cache_sync():
+    """Tandai & sebarkan invalidasi cache antar-worker (dipanggil berkala multi-worker).
+
+    Hanya dijalankan saat WORKERS > 1: satu proses cukup mengandalkan _cache_del langsung.
+    """
+    global _CACHE_DIRTY, _CACHE_EPOCH_SEEN
+    if _CACHE_DIRTY:
+        try:
+            await db.settings.update_one({"_id": _CACHE_EPOCH_DOC}, {"$inc": {"epoch": 1}}, upsert=True)
+            _CACHE_DIRTY = False          # hanya dianggap selesai bila penulisan berhasil
+        except Exception as e:
+            logger.debug(f"cache epoch bump failed: {e}")
+    try:
+        doc = await db.settings.find_one({"_id": _CACHE_EPOCH_DOC}, {"epoch": 1}) or {}
+        ep = int(doc.get("epoch") or 0)
+        if _CACHE_EPOCH_SEEN is None:
+            _CACHE_EPOCH_SEEN = ep        # pertama kali: belum ada yang perlu dibuang
+        elif ep != _CACHE_EPOCH_SEEN:
+            _CACHE_EPOCH_SEEN = ep
+            _cache_clear_local()
+            logger.info("cache lokal dibersihkan (worker lain menulis data)")
+    except Exception as e:
+        logger.debug(f"cache epoch read failed: {e}")
 
 def _rcache_get(key):
     import time as _t
@@ -1079,8 +1170,9 @@ def _rcache_set(key, value, ttl=3600.0):
     _RCACHE[key] = (_RS_GEN, _t.time() + ttl, value)
 
 def _bump_rs_gen():
-    global _RS_GEN
+    global _RS_GEN, _CACHE_DIRTY
     _RS_GEN += 1
+    _CACHE_DIRTY = True
 
 async def _cached(key, ttl, builder, flag="perf.cache_master"):
     """Generic read-through cache. Flag mati -> selalu bangun ulang."""
@@ -1156,6 +1248,94 @@ def _metric_record(method, path, ms, status):
     p["ms"] += ms
     if status >= 400:
         p["errors"] += 1
+
+# ---- Metrik lintas worker -------------------------------------------------------
+# Angka _METRICS hidup di memori SATU proses. Sejak backend berjalan multi-worker
+# (uvicorn --workers), endpoint /admin/metrics harus menjumlah angka SEMUA worker —
+# kalau tidak, halaman metrik menampilkan sebagian kecil trafik dan seolah "tidak ada
+# error / semua cepat" hanya karena request kebetulan dilayani worker yang lengang.
+_METRICS_DOC_PREFIX = "metrics_process:"
+# Penanda asal dokumen = hostname container (Docker menyetelnya ke id container).
+# WAJIB dipakai saat menjumlahkan: dokumen metrik hidup di database dan proses lama
+# (container yang dibuat ulang saat update) heartbeats-nya masih "segar" beberapa detik
+# sehingga ikut terhitung sebagai worker hantu (0 request) — pernah terjadi: dipakai
+# melaporkan "3 worker" padahal hanya 2 yang hidup. Dengan penanda ini hanya worker
+# dari container YANG SAMA yang dijumlahkan.
+_METRICS_NODE = os.uname().nodename
+
+def _metrics_snapshot():
+    m = _METRICS
+    return {
+        "total": m["total"], "errors": m["errors"], "total_ms": round(m["total_ms"], 1),
+        "by_path": {k: {"count": v["count"], "ms": round(v["ms"], 1), "errors": v["errors"]}
+                    for k, v in m["by_path"].items()},
+        "slow": list(m["slow"]),
+        "pid": os.getpid(), "workers": WORKERS, "at": now_utc().isoformat(),
+        "node": _METRICS_NODE,
+    }
+
+_metrics_flush_tick = 0
+# Interval tulis ringkasan metrik. Dulu 5 dtk: dengan 2 worker itu ~2.900 tulis/jam
+# ke MongoDB yang berada di KARTU SD — tulis kecil yang terus-menerus seperti itu
+# menambah keausan kartu dan menyaingi I/O database (yang justru jadi bottleneck Pi).
+# 15 dtk sudah jauh lebih halus daripada interval apa pun yang dipakai untuk membaca
+# halaman metrik, jadi ketelitian angkanya tidak berkurang.
+METRICS_FLUSH_SECONDS = 15.0
+# Ringkasan worker dianggap masih hidup bila heartbeat-nya lebih muda dari ini
+# (harus > METRICS_FLUSH_SECONDS; dipakai agar worker yang sempat lengang tidak
+# tiba-tiba hilang dari penjumlahan).
+METRICS_STALE_SECONDS = 45.0
+
+async def _metrics_flush():
+    """Tulis ringkasan proses ini ke Mongo (khusus multi-worker)."""
+    global _metrics_flush_tick
+    if WORKERS <= 1:
+        return
+    try:
+        await db.settings.update_one({"_id": f"{_METRICS_DOC_PREFIX}{os.getpid()}"},
+                                     {"$set": _metrics_snapshot()}, upsert=True)
+        _metrics_flush_tick += 1
+        if _metrics_flush_tick % 40 == 0:   # tiap ~10 menit: bersihkan jejak proses yang sudah mati
+            cutoff = (now_utc() - timedelta(hours=1)).isoformat()
+            await db.settings.delete_many({"_id": {"$regex": f"^{_METRICS_DOC_PREFIX}"}, "at": {"$lt": cutoff}})
+            # Dokumen dari container LAIN tidak akan pernah dihitung lagi (lihat filter node),
+            # jadi cukup disimpan sebentar untuk keperluan pemeriksaan, lalu dibuang.
+            lama = (now_utc() - timedelta(minutes=10)).isoformat()
+            await db.settings.delete_many({"_id": {"$regex": f"^{_METRICS_DOC_PREFIX}"},
+                                           "node": {"$ne": _METRICS_NODE}, "at": {"$lt": lama}})
+    except Exception as e:
+        logger.debug(f"metrics flush failed: {e}")
+
+async def _metrics_aggregate():
+    """Jumlahkan metrik semua worker DI CONTAINER INI yang heartbeat-nya masih segar."""
+    local = _metrics_snapshot()
+    mine = int(local["pid"])
+    docs = []
+    try:
+        cutoff = (now_utc() - timedelta(seconds=METRICS_STALE_SECONDS)).isoformat()
+        docs = [d async for d in db.settings.find({"_id": {"$regex": f"^{_METRICS_DOC_PREFIX}"},
+                                                  "node": _METRICS_NODE,
+                                                  "at": {"$gte": cutoff}})]
+    except Exception:
+        docs = []
+    merged = {"total": 0, "errors": 0, "total_ms": 0.0, "by_path": {}, "slow": [], "nodes": []}
+    for d in docs + [local]:               # proses ini selalu ikut, dokumennya sendiri dilewati
+        if docs and d is not local and int(d.get("pid") or 0) == mine:
+            continue
+        merged["total"] += int(d.get("total") or 0)
+        merged["errors"] += int(d.get("errors") or 0)
+        merged["total_ms"] += float(d.get("total_ms") or 0)
+        for k, v in (d.get("by_path") or {}).items():
+            p = merged["by_path"].setdefault(k, {"count": 0, "ms": 0.0, "errors": 0})
+            p["count"] += int(v.get("count") or 0)
+            p["ms"] += float(v.get("ms") or 0)
+            p["errors"] += int(v.get("errors") or 0)
+        merged["slow"] += list(d.get("slow") or [])
+        merged["nodes"].append({"pid": d.get("pid"), "total": int(d.get("total") or 0),
+                                "errors": int(d.get("errors") or 0), "at": d.get("at")})
+    merged["slow"] = sorted(merged["slow"], key=lambda x: str((x or {}).get("at", "")), reverse=True)[:20]
+    merged["nodes"].sort(key=lambda n: -n["total"])
+    return merged
 
 async def _record_slow_if_needed(method, path, ms):
     try:
@@ -1288,17 +1468,22 @@ async def _maybe_orphan_auto():
     if not await _feat("maint.orphan_auto"):
         return
     try:
-        doc = await db.settings.find_one({"_id": "orphan"}, {"_id": 0}) or {}
-        last = (doc.get("last") or {}).get("at", "")[:10]
-        today = wib_today()
-        if last == today:
-            return
         noww = datetime.now(WIB)
         hour = int(await _feat("maint.orphan_hour", 4))
         day = int(await _feat("maint.orphan_day", 6))
-        if noww.hour == hour and noww.weekday() == day:
+        if not (noww.hour == hour and noww.weekday() == day):
+            return
+        today = wib_today()
+        # Klaim atomik: cek yatim itu berat & hanya boleh jalan sekali per hari,
+        # walau scheduler hidup di beberapa proses worker sekaligus.
+        if not await _claim_once("orphan", "auto_date", today, stale_seconds=3600):
+            return
+        try:
             await _run_orphan_check()
-            logger.info("orphan check otomatis mingguan selesai")
+        except Exception:
+            await _release_claim("orphan", "auto_date")
+            raise
+        logger.info("orphan check otomatis mingguan selesai")
     except Exception as e:
         logger.error(f"orphan auto check failed: {e}")
 
@@ -2064,8 +2249,205 @@ async def _validate_order_rules(order_type, table_id, items):
     elif table_id:
         raise HTTPException(400, "Take away/retail tidak boleh memakai meja")
 
-async def _current_shift(user):
-    return await db.shifts.find_one({"cashier_id": user["id"], "status": "open"}, {"_id": 0})
+# ------------------------------------------------------------------ SHIFT HARIAN (F&B & Retail)
+# Perubahan model (permintaan pemilik): shift kini MILIK TOKO, bukan milik akun.
+#   1. Shift dibuka satu kali per hari lewat SATU tombol → membuat 2 shift: F&B & Retail.
+#   2. Akun lain (kasir lain) LANGSUNG memakai shift hari itu, tanpa membuka shift baru.
+#   3. Kas awal terpisah untuk F&B dan Retail.
+#   4. Nama akun yang MEMBUKA dan yang MENUTUP selalu dicatat.
+# Dokumen shift lama (sebelum pemisahan) tidak punya `scope` → dianggap F&B
+# (lihat juga _migrate_shift_scopes()).
+SHIFT_SCOPES = ("fnb", "retail")
+# Uang transport = PENGELUARAN WAJIB saat tutup shift (tidak boleh 0), selalu dibebankan ke F&B.
+# Kategori ini dipakai sebagai penanda di kas keluar supaya bisa ditampilkan di laporan shift.
+SHIFT_TRANSPORT_CAT = "Transport"
+
+
+def _shift_scope_label(scope):
+    return "Retail" if scope == "retail" else "F&B"
+
+
+def _shift_scope_of(doc):
+    sc = (doc or {}).get("scope")
+    return sc if sc in SHIFT_SCOPES else "fnb"
+
+
+def _expense_rows_of(moves):
+    """Ringkas kas keluar (pengeluaran) per toko untuk PENGECEKAN "pengeluaran harian sudah diisi".
+
+    DUA kategori DIKECUALIKAN karena bukan bagian dari laporan pengeluaran harian yang diisi
+    kasir (keduanya dibuat OTOMATIS oleh sistem):
+      * `Transport` (SHIFT_TRANSPORT_CAT) — uang transport wajib saat tutup shift;
+      * `Bagi Hasil Vendor` (SETTLE_CAT) — pembayaran bagi hasil vendor (settlement).
+    Tanpa ini, hari yang TIDAK ada pengeluaran apa pun tetap dianggap "sudah diisi" hanya
+    karena uang transport/bagi hasil vendor tercatat sebagai kas keluar.
+    `SETTLE_CAT` memang didefinisikan jauh di bawah file ini — dibaca saat pemanggilan
+    (bukan saat definisi), jadi aman (JANGAN dijadikan konstanta modul di baris ini).
+    """
+    skip = {SHIFT_TRANSPORT_CAT, SETTLE_CAT}
+    out = {"fnb": {"count": 0, "total": 0.0}, "retail": {"count": 0, "total": 0.0}}
+    for m in moves:
+        if (m.get("category") or "") in skip:
+            continue
+        sc = m.get("scope") if m.get("scope") in SHIFT_SCOPES else "fnb"
+        out[sc]["count"] += 1
+        out[sc]["total"] = round(out[sc]["total"] + float(m.get("amount") or 0), 2)
+    out["empty"] = (out["fnb"]["count"] + out["retail"]["count"]) == 0
+    return out
+
+
+async def _shift_day_expenses(date):
+    """Pengeluaran pada satu tanggal (WIB) per toko — termasuk yang dicatat saat shift
+    belum/tidak terbuka (`shift_id` kosong), supaya peringatan "pengeluaran harian belum
+    diisi" tidak salah/tidak lolos. Dipakai halaman Shift & penutupan shift."""
+    start, end = wib_day_range(date)
+    moves = await db.cash_movements.find({"type": "out", "created_at": {"$gte": start, "$lt": end}},
+                                         {"_id": 0, "amount": 1, "scope": 1, "category": 1}).to_list(5000)
+    return _expense_rows_of(moves)
+
+
+def _scope_of_order_type(order_type):
+    """Retail masuk shift Retail; dine-in & take away masuk shift F&B."""
+    return "retail" if order_type == "retail" else "fnb"
+
+
+def _shift_open_key(scope):
+    """Penanda unik shift terbuka (dipakai indeks unik parsial) supaya dua perangkat
+    tidak bisa membuka dua shift untuk toko yang sama."""
+    return f"{scope}:open"
+
+
+async def _open_shifts():
+    """SEMUA shift yang sedang terbuka (maks 1 per toko), urut waktu buka."""
+    return await db.shifts.find({"status": "open"}, {"_id": 0}).sort("opened_at", 1).to_list(20)
+
+
+async def _open_shift(scope="fnb"):
+    """Shift terbuka untuk SATU toko (F&B/Retail) — dipakai siapa pun, bukan milik satu akun."""
+    sc = scope if scope in SHIFT_SCOPES else "fnb"
+    for d in await _open_shifts():
+        if _shift_scope_of(d) == sc:
+            return d
+    return None
+
+
+async def _open_shift_any(scope=None):
+    """Shift terbuka untuk toko tsb; bila toko itu belum dibuka, pakai shift toko lain yang
+    sedang terbuka. Dipakai untuk PENCATATAN (mis. void dicatat pada shift hari ini) dan
+    TIDAK membuat shift baru."""
+    if scope:
+        sh = await _open_shift(scope)
+        if sh:
+            return sh
+    opens = await _open_shifts()
+    return opens[0] if opens else None
+
+
+async def _shift_for_order(order_type):
+    """Shift yang harus dipakai order ini, membuat shift toko yang belum ada bila sesi
+    hari itu sudah terbuka (mis. shift Retail dibuat belakangan) — supaya transaksi
+    tidak pernah tercatat tanpa shift hanya karena satu toko belum dibukakan."""
+    scope = _scope_of_order_type(order_type)
+    sh = await _open_shift(scope)
+    if sh:
+        return sh
+    opens = await _open_shifts()
+    if not opens:
+        return None
+    anchor = opens[0]
+    doc = {"id": new_id(), "cashier_id": anchor.get("cashier_id"), "cashier_name": anchor.get("cashier_name"),
+           "opened_by": anchor.get("opened_by") or anchor.get("cashier_name") or "",
+           "opened_by_id": anchor.get("opened_by_id") or anchor.get("cashier_id"),
+           "opened_at": anchor.get("opened_at") or now_utc().isoformat(), "closed_at": None,
+           "opening_cash": 0, "status": "open", "scope": scope, "auto_created": True,
+           "session_id": anchor.get("session_id") or anchor.get("id"),
+           "date": anchor.get("date") or wib_today(), "open_key": _shift_open_key(scope)}
+    try:
+        await db.shifts.insert_one(dict(doc))
+    except Exception:
+        # Balapan dengan perangkat lain: pakai shift yang sudah dibuat itu.
+        return await _open_shift(scope)
+    doc.pop("_id", None)
+    return doc
+
+
+def _shift_brief(s):
+    """Ringkasan satu shift (dipakai UI/print) — tidak memuat _id Mongo."""
+    if not s:
+        return None
+    return {"id": s.get("id"), "scope": _shift_scope_of(s), "status": s.get("status"),
+            "opened_at": s.get("opened_at"), "closed_at": s.get("closed_at"),
+            "opened_by": s.get("opened_by") or s.get("cashier_name") or "",
+            "opened_by_id": s.get("opened_by_id") or s.get("cashier_id"),
+            "closed_by": s.get("closed_by") or "", "closed_by_id": s.get("closed_by_id"),
+            "opening_cash": round(float(s.get("opening_cash") or 0), 2),
+            "closing_cash": round(float(s.get("closing_cash") or 0), 2),
+            "auto_created": bool(s.get("auto_created")),
+            "session_id": s.get("session_id"), "date": s.get("date")}
+
+
+async def _session_accounts(shifts):
+    """Akun-akun yang memakai shift ini (pembuka + yang membuat order/mengeluarkan kas) —
+    ditampilkan supaya jelas siapa saja yang bekerja pada shift bersama ini."""
+    ids = [s["id"] for s in shifts]
+    if not ids:
+        return []
+    per = {}
+    for s in shifts:
+        nm = s.get("opened_by") or s.get("cashier_name") or ""
+        if nm:
+            d = per.setdefault(nm, {"name": nm, "id": s.get("opened_by_id") or s.get("cashier_id"),
+                                    "orders": 0, "amount": 0.0, "opened": True})
+            d["opened"] = True
+    for coll, is_order in (("orders", True), ("cash_movements", False)):
+        docs = await db[coll].find({"shift_id": {"$in": ids}}, {"_id": 0, "cashier_name": 1, "cashier_id": 1,
+                                                               "total": 1, "amount": 1, "type": 1,
+                                                               "status": 1}).to_list(5000)
+        for d in docs:
+            if is_order and d.get("status") != "paid":
+                continue
+            nm = d.get("cashier_name") or ""
+            if not nm:
+                continue
+            rec = per.setdefault(nm, {"name": nm, "id": d.get("cashier_id"), "orders": 0,
+                                      "amount": 0.0, "opened": False})
+            if is_order:
+                rec["orders"] += 1
+                rec["amount"] = round(rec["amount"] + float(d.get("total") or 0), 2)
+            else:
+                rec["amount"] = round(rec["amount"] + float(d.get("amount") or 0), 2)
+    return sorted(per.values(), key=lambda x: (-x["orders"], x["name"]))
+
+
+async def _session_view(shifts=None):
+    """/shifts/current: keadaan shift hari ini (bisa dua toko sekaligus)."""
+    if shifts is None:
+        shifts = await _open_shifts()
+    if not shifts:
+        return None
+    fnb = next((s for s in shifts if _shift_scope_of(s) == "fnb"), None)
+    retail = next((s for s in shifts if _shift_scope_of(s) == "retail"), None)
+    anchor = fnb or retail
+    opened = sorted([s.get("opened_at") or "" for s in shifts])
+    return {"id": anchor.get("session_id") or anchor.get("id"),
+            "session_id": anchor.get("session_id") or anchor.get("id"),
+            "status": "open", "shared": True, "scopes": [sc for sc, s in
+                                                          (("fnb", fnb), ("retail", retail)) if s],
+            "date": anchor.get("date") or wib_day_of(anchor.get("opened_at") or now_utc().isoformat()),
+            "opened_at": (opened[0] if opened else None),
+            "opened_by": anchor.get("opened_by") or anchor.get("cashier_name") or "",
+            "opened_by_id": anchor.get("opened_by_id") or anchor.get("cashier_id"),
+            # kompatibilitas tampilan lama (bundle/APK versi sebelumnya membaca field ini)
+            "cashier_name": anchor.get("opened_by") or anchor.get("cashier_name") or "",
+            "cashier_id": anchor.get("opened_by_id") or anchor.get("cashier_id"),
+            "fnb": _shift_brief(fnb), "retail": _shift_brief(retail),
+            "shift_ids": {"fnb": (fnb or {}).get("id"), "retail": (retail or {}).get("id")},
+            "accounts": await _session_accounts(shifts),
+            # Status pengeluaran harian per toko → dipakai form tutup shift untuk memperingatkan
+            # bila laporan pengeluaran harian belum diisi sama sekali.
+            "expenses": await _shift_day_expenses(anchor.get("date")
+                                                 or wib_day_of(anchor.get("opened_at") or now_utc().isoformat())),
+            "wa_auto_shift": await _shift_wa_auto_enabled()}
 
 async def _finalize_payment(order, payment_method, amount_paid, user, splits=None):
     payment_splits = None
@@ -2107,7 +2489,8 @@ async def _finalize_payment(order, payment_method, amount_paid, user, splits=Non
         if pm["type"] == "cash" and paid < order["total"]:
             raise HTTPException(400, "Jumlah bayar kurang dari total")
         cash_change = round(paid - order["total"], 2)
-    shift = await _current_shift(user)
+    # Shift bersama: order F&B masuk shift F&B, order retail masuk shift Retail.
+    shift = await _shift_for_order(order.get("order_type"))
     # Validasi stok (baca) — decrement dilakukan SETELAH klaim berhasil.
     for it in order["items"]:
         if it.get("type") == "retail":
@@ -2367,7 +2750,6 @@ async def _void_policy(order, user, cfg=None):
     if cfg is None:
         cfg = await _void_cfg()
     mod_ok = "void" in allowed_mods
-    cur = await _current_shift(user)
     o_shift = order.get("shift_id") or None
     o_shift_doc = await db.shifts.find_one({"id": o_shift}, {"_id": 0, "status": 1}) if o_shift else None
     order_shift_open = bool(o_shift_doc and o_shift_doc.get("status") == "open")
@@ -2390,12 +2772,12 @@ async def _void_policy(order, user, cfg=None):
         return {**out, "allowed": False,
                 "block_reason": "Pembatalan oleh kasir dimatikan admin (Pengaturan → Aplikasi → Void & Refund)"}
     if cfg["kasir_hanya_shift_berjalan"]:
-        if not cur:
-            return {**out, "allowed": False,
-                    "block_reason": "Buka shift dulu sebelum membatalkan transaksi (pembatalan hanya untuk shift berjalan)"}
-        if o_shift != cur["id"]:
+        # Shift kini BERSAMA (satu shift per toko per hari), jadi patokannya bukan lagi
+        # "shift milik akun ini" melainkan "shift order itu masih terbuka?" — kasir mana pun
+        # yang bekerja pada shift hari ini boleh membatalkan transaksinya.
+        if not order_shift_open:
             return {**out, "allowed": False, "block_reason":
-                    "Transaksi ini bukan pada shift yang sedang terbuka. Minta admin membatalkannya "
+                    "Transaksi ini berada pada shift yang sudah ditutup. Minta admin membatalkannya "
                     "(koreksi lintas shift)"}
     mx = float(cfg["kasir_max_amount"] or 0)
     if mx > 0 and float(order.get("total") or 0) > mx:
@@ -2632,7 +3014,9 @@ async def void_order(oid: str, body: VoidIn, user: dict = Depends(require_any_mo
     prev_status = o["status"]
     new_status = "refunded" if body.action == "refund" else "void"
     now = now_utc().isoformat()
-    cur_shift = await _current_shift(user)
+    # Shift tempat void INI dicatat = shift toko yang sedang terbuka hari ini
+    # (shift bersama; tidak membuat shift baru hanya untuk mencatat void).
+    cur_shift = await _open_shift_any(_scope_of_order_type(o.get("order_type")))
     upd = {"status": new_status, "voided_at": now, "void_reason": reason,
            "voided_by": user.get("name") or user.get("username") or "",
            "voided_by_id": user.get("id"),
@@ -2674,28 +3058,75 @@ async def audit_logs(admin: dict = Depends(require_admin)):
 # ================================================================== SHIFTS
 @api.get("/shifts/current")
 async def current_shift(user: dict = Depends(admin_or_kasir)):
-    return await _current_shift(user)
+    """Keadaan shift hari ini — SATU shift per toko (F&B & Retail), dipakai bersama semua akun.
+
+    Mengembalikan null bila belum ada shift terbuka; kalau ada, memuat ringkasan F&B & Retail,
+    siapa yang membukanya, dan akun-akun yang ikut memakai shift ini."""
+    return await _session_view()
 
 @api.post("/shifts/open")
 async def open_shift(body: ShiftOpenIn, user: dict = Depends(admin_or_kasir)):
-    if await _current_shift(user):
-        raise HTTPException(400, "Sudah ada shift terbuka")
-    doc = {"id": new_id(), "cashier_id": user["id"], "cashier_name": user["name"],
-           "opening_cash": body.opening_cash, "status": "open",
-           "opened_at": now_utc().isoformat(), "closed_at": None}
-    await db.shifts.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
+    """Buka shift HARIAN dengan SATU tombol → membuat shift F&B dan Retail sekaligus.
+
+    Kas awal F&B & Retail terpisah. Akun yang membuka dicatat (opened_by); akun lain
+    langsung memakai shift ini tanpa membuka shift baru (satu shift per toko per hari)."""
+    opens = await _open_shifts()
+    if opens:
+        who = opens[0].get("opened_by") or opens[0].get("cashier_name") or "akun lain"
+        raise HTTPException(400, f"Shift hari ini sudah dibuka oleh {who} — langsung pakai saja, "
+                                 f"atau tutup dulu bila ingin membuka shift baru")
+    fnb_cash = body.opening_cash_fnb if body.opening_cash_fnb is not None else body.opening_cash
+    retail_cash = body.opening_cash_retail if body.opening_cash_retail is not None else 0
+    now = now_utc().isoformat()
+    date = wib_today()
+    session_id = new_id()
+    created = []
+    for scope, cash in (("fnb", fnb_cash), ("retail", retail_cash)):
+        if await _open_shift(scope):
+            continue    # toko ini sudah dibuka (mis. shift lama sebelum pemisahan F&B/Retail)
+        doc = {"id": new_id(), "cashier_id": user["id"], "cashier_name": user["name"],
+               "opened_by": user.get("name") or "", "opened_by_id": user.get("id"),
+               "opening_cash": round(float(cash or 0), 2), "status": "open",
+               "opened_at": now, "closed_at": None,
+               "scope": scope, "session_id": session_id, "date": date,
+               "open_key": _shift_open_key(scope)}
+        try:
+            await db.shifts.insert_one(dict(doc))
+        except Exception:
+            # Balapan dua perangkat: shift toko ini baru saja dibuat yang lain → pakai itu.
+            continue
+        doc.pop("_id", None)
+        created.append(doc)
+    view = await _session_view()
+    if not view:
+        raise HTTPException(400, "Shift gagal dibuka — coba lagi")
+    view["created"] = [_shift_brief(c) for c in created]
+    return view
 
 @api.post("/shifts/close")
 async def close_shift(body: ShiftCloseIn, user: dict = Depends(admin_or_kasir)):
-    """Tutup shift. Nominal "Diberikan" ke vendor di sini bersifat SATU PINTU: setiap nominal
-    > 0 otomatis dibuatkan dokumen Settlement Vendor + kas keluar (dan saldo utang vendor ikut
-    berkurang), sehingga pembayaran tidak mungkin tercatat dua kali hanya karena kasir juga
-    mengisinya di form tutup shift."""
-    shift = await _current_shift(user)
-    if not shift:
+    """Tutup shift F&B & Retail SEKALIGUS (kas akhir per toko + pengeluaran + bagi hasil vendor).
+
+    Yang perlu diingat:
+      - pengeluaran boleh diisi kapan saja selama shift buka (halaman Pengeluaran & Kas)
+        DAN di sini saat tutup shift — dibuat sebagai kas keluar shift toko terkait;
+      - nominal "Diberikan" ke vendor SATU PINTU: setiap nominal > 0 otomatis dibuatkan
+        dokumen Settlement Vendor + kas keluar (tidak mungkin tercatat dua kali);
+      - akun yang menutup dicatat (closed_by), akun yang membuka sudah tercatat sejak awal;
+      - PERINGATAN pengeluaran: bila laporan pengeluaran harian sama sekali belum diisi
+        (F&B & Retail kosong) dan saat tutup shift ini juga tidak ada pengeluaran yang
+        dimasukkan, wajib dikonfirmasi sadar (ack_no_expense) — kalau tidak, tutup shift
+        ditolak 400 supaya tidak ada laporan tanpa keterangan belanja;
+      - AUTO-KIRIM WA: laporan shift langsung dikirim ke nomor laporan (Pengaturan →
+        WhatsApp & Laporan; bawaan AKTIF, bisa dimatikan). Kegagalan WA TIDAK
+        menggagalkan penutupan shift.
+    """
+    shifts = await _open_shifts()
+    if not shifts:
         raise HTTPException(400, "Tidak ada shift terbuka")
+    by_scope = {_shift_scope_of(s): s for s in shifts}
+    fnb_shift = by_scope.get("fnb")
+    retail_shift = by_scope.get("retail")
     # --- validasi masukan SEBELUM ada perubahan apa pun (shift tetap terbuka bila ditolak)
     pays = []
     for vp in (body.vendor_payments or []):
@@ -2705,56 +3136,229 @@ async def close_shift(body: ShiftCloseIn, user: dict = Depends(admin_or_kasir)):
             continue
         pays.append((vid, paid))
     await _settlement_validate_paid([p[0] for p in pays])
-    # --- klaim ATOMIK: klik ganda / dua perangkat tidak bisa membuat pembayaran dua kali
+    expenses = []
+    for ex in (body.expenses or []):
+        sc = str((ex or {}).get("scope") or "").strip().lower()
+        if sc not in SHIFT_SCOPES:
+            raise HTTPException(400, "Toko pengeluaran harus F&B atau Retail")
+        try:
+            amt = round(float((ex or {}).get("amount") or 0), 2)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Nominal pengeluaran tidak valid")
+        if amt <= 0:
+            raise HTTPException(400, "Nominal pengeluaran harus lebih dari 0")
+        expenses.append({"scope": sc, "amount": amt,
+                         "category": (str((ex or {}).get("category") or "Lainnya")).strip() or "Lainnya",
+                         "note": str((ex or {}).get("note") or "").strip()})
+    # Uang transport: pengeluaran WAJIB (tidak boleh 0), selalu dibebankan ke F&B.
+    # Perangkat/bundle lama yang belum mengirim nominal → dipakai nominal dari
+    # Pengaturan → Aplikasi (transport_amount) agar tutup shift tetap bisa dilakukan.
+    if body.transport is None:
+        transport = round(float((await _business()).get("transport_amount") or 0), 2)
+    else:
+        try:
+            transport = round(float(body.transport), 2)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Nominal uang transport tidak valid")
+    if transport <= 0:
+        raise HTTPException(400, "Uang transport wajib diisi dan tidak boleh 0 — "
+                                 "atur nominal bawaan di Pengaturan → Aplikasi")
+    expenses.append({"scope": "fnb", "amount": transport, "category": SHIFT_TRANSPORT_CAT,
+                     "note": "Uang transport (tutup shift)", "is_transport": True})
+    # PERINGATAN pengeluaran harian: uang transport TIDAK dihitung (itu pengeluaran otomatis
+    # wajib, bukan laporan belanja). Bila hari ini belum ada pengeluaran sama sekali DAN form
+    # tutup shift juga tidak mengisi pengeluaran, kasir harus mengonfirmasi sadar.
+    day_exp = await _shift_day_expenses(shifts[0].get("date")
+                                        or wib_day_of(shifts[0].get("opened_at") or now_utc().isoformat()))
+    manual_rows = [e for e in expenses if not e.get("is_transport")]
+    no_expense = bool(day_exp.get("empty")) and not manual_rows
+    if no_expense and not body.ack_no_expense:
+        raise HTTPException(400, "Laporan pengeluaran harian belum diisi (F&B & Retail kosong). "
+                                 "Isi pengeluaran hari ini, atau konfirmasi sadar bahwa memang "
+                                 "tidak ada pengeluaran untuk melanjutkan tutup shift.")
+    fnb_close = body.closing_cash_fnb if body.closing_cash_fnb is not None else body.closing_cash
+    retail_close = body.closing_cash_retail if body.closing_cash_retail is not None else 0
+    # --- klaim ATOMIK per toko: klik ganda / dua perangkat tidak bisa menggandakan pembayaran
     now = now_utc().isoformat()
-    claim = await db.shifts.update_one({"id": shift["id"], "status": "open"}, {"$set": {
-        "status": "closed", "closed_at": now, "closing_cash": body.closing_cash}})
-    if claim.matched_count == 0:
-        raise HTTPException(400, "Shift sudah ditutup")
-    day = shift.get("opened_at") and wib_day_of(shift["opened_at"]) or wib_today()
+    closed_ids = []
+    for s, cash in ((fnb_shift, fnb_close), (retail_shift, retail_close)):
+        if not s:
+            continue
+        claim = await db.shifts.update_one({"id": s["id"], "status": "open"},
+                                          {"$set": {"status": "closed", "closed_at": now,
+                                                    "closing_cash": round(float(cash or 0), 2),
+                                                    "closed_by": user.get("name") or "",
+                                                    "closed_by_id": user.get("id")},
+                                           "$unset": {"open_key": ""}})
+        if claim.matched_count == 0:
+            raise HTTPException(400, f"Shift {_shift_scope_label(_shift_scope_of(s))} sudah ditutup perangkat lain")
+        closed_ids.append(s["id"])
+    session_id = shifts[0].get("session_id") or shifts[0].get("id")
+    # --- pengeluaran yang diisi saat tutup shift (kas keluar toko terkait)
+    expense_rows = []
+    for ex in expenses:
+        target = fnb_shift if ex["scope"] == "fnb" else retail_shift
+        doc = {"id": new_id(), "type": "out", "amount": ex["amount"], "category": ex["category"],
+               "note": ex["note"] or "Diisi saat tutup shift", "scope": ex["scope"],
+               "cashier_id": user.get("id"), "cashier_name": user.get("name") or "",
+               "shift_id": (target or {}).get("id"), "session_id": session_id,
+               "source": "shift_close", "created_at": now}
+        await db.cash_movements.insert_one(dict(doc))
+        doc.pop("_id", None)
+        expense_rows.append(doc)
+    # --- pembayaran vendor (satu pintu: settlement + kas keluar)
+    day = (shifts[0].get("opened_at") and wib_day_of(shifts[0]["opened_at"])) or wib_today()
     created = []
     for vid, paid in pays:
         doc = await _create_settlement(vid, day, paid, user, create_cash_out=True,
-                                       shift_id=shift["id"], source="shift_close",
+                                       shift_id=(fnb_shift or retail_shift or {}).get("id"),
+                                       source="shift_close",
                                        note=f"Pembayaran saat tutup shift {day}")
         created.append({k: doc.get(k) for k in ("id", "settlement_no", "vendor_id", "vendor_name",
                                                 "paid", "carry_in", "total_due", "carry_out")})
-    # Laporan dihitung SETELAH settlement dibuat → cash_out sudah memuat pembayaran vendor.
-    # Karena itu uang bersih = penjualan − kas keluar (TIDAK dikurangi nominal vendor lagi,
-    # kalau dikurangi lagi pembayaran lewat form tutup shift terhitung dua kali).
-    report = await _shift_report(shift)
-    vendor_rows = report.get("vendor_share", [])
-    settled_map = await _vendor_settled_map({"shift_id": shift["id"]})
+    # --- laporan dihitung SETELAH pengeluaran & settlement dibuat
+    fresh = await db.shifts.find({"id": {"$in": closed_ids}}, {"_id": 0}).to_list(5)
+    reports = await _session_reports(fresh)
+    combined = _combine_reports(reports)
+    vendor_rows = combined.get("vendor_share") or []
+    # Pembayaran NYATA per vendor pada sesi ini (termasuk yang baru dibuat di atas) —
+    # `_shift_report` hanya tahu bagian yang SEHARUSNYA dibayar.
+    settled_map = await _vendor_settled_map({"shift_id": {"$in": closed_ids}})
     total_share = 0.0
     total_paid = 0.0
     for v in vendor_rows:
-        v["paid"] = settled_map.get(str(v["vendor_id"]), 0.0)   # REAL: yang benar-benar dibayar
+        v["paid"] = settled_map.get(str(v["vendor_id"]), 0.0)
         v["difference"] = round(v["share"] - v["paid"], 2)
-        # Bagian outlet = omzet − bagi hasil (bagian hak vendor atas penjualan shift ini);
-        # sama dengan _vendor_report supaya angka outlet konsisten di semua halaman.
         v["outlet_share"] = round(v["gross"] - v["share"], 2)
         total_share += v["share"]
-        total_paid += v["paid"]
-    report["vendor_share"] = vendor_rows
-    report["vendor_total_share"] = round(total_share, 2)
-    report["vendor_total_paid"] = round(total_paid, 2)
-    report["vendor_total_difference"] = round(total_share - total_paid, 2)
-    report["vendor_total_outlet"] = round(sum(v.get("outlet_share", 0) for v in vendor_rows), 2)
-    report["vendor_settlements_created"] = created
-    report["net_cash_fnb"] = round(report["fnb_total"] - report["cash_out_fnb"], 2)
-    report["net_cash_retail"] = round(report["retail_total"] - report["cash_out_retail"], 2)
-    report["net_cash"] = round(report["net_cash_fnb"] + report["net_cash_retail"], 2)
-    await db.shifts.update_one({"id": shift["id"]}, {"$set": {"report": report}})
+        total_paid += v.get("paid", 0)
+    combined["vendor_share"] = vendor_rows
+    combined["vendor_total_share"] = round(total_share, 2)
+    combined["vendor_total_paid"] = round(total_paid, 2)
+    combined["vendor_total_difference"] = round(total_share - total_paid, 2)
+    combined["vendor_total_outlet"] = round(sum(v.get("outlet_share", 0) for v in vendor_rows), 2)
+    combined["expenses_created"] = expense_rows
+    combined["vendor_settlements_created"] = created
+    # Catatan pengeluaran harian (dipakai laporan, cetak, WA, dan UI)
+    combined["expenses_empty"] = no_expense
+    combined["expenses_ack"] = bool(no_expense and body.ack_no_expense)
+    combined["expenses_fnb"] = day_exp.get("fnb") or {"count": 0, "total": 0.0}
+    combined["expenses_retail"] = day_exp.get("retail") or {"count": 0, "total": 0.0}
+    for s in fresh:
+        rep = reports.get(_shift_scope_of(s))
+        if rep is not None:
+            rep["expenses_empty"] = no_expense
+            rep["expenses_ack"] = combined["expenses_ack"]
+            if _shift_scope_of(s) == "fnb":
+                rep["expenses_fnb"] = combined["expenses_fnb"]
+            else:
+                rep["expenses_retail"] = combined["expenses_retail"]
+            await db.shifts.update_one({"id": s["id"]}, {"$set": {"report": rep}})
     _bump_rs_gen()
     try:
         import asyncio as _aio
         _aio.create_task(_fire_webhook("shift.closed", {
-            "shift_id": shift["id"], "cashier": user.get("name"),
-            "total_sales": report.get("total_sales"), "net_cash": report.get("net_cash"),
+            "shift_id": (fnb_shift or {}).get("id"), "session_id": session_id,
+            "cashier": shifts[0].get("opened_by") or shifts[0].get("cashier_name"),
+            "closed_by": user.get("name"),
+            "total_sales": combined.get("total_sales"), "net_cash": combined.get("net_cash"),
         }))
     except Exception as e:
         logger.error(f"webhook shift.closed task gagal: {e}")
-    return {**shift, "closing_cash": body.closing_cash, "report": report, "status": "closed"}
+    view = _closed_session_view(fresh, user)
+    # --- AUTO-KIRIM laporan shift ke WhatsApp (nomor laporan harian; bawaan AKTIF).
+    # Dijalankan SETELAH laporan tersimpan, dan TIDAK PERNAH menggagalkan penutupan shift.
+    # `send_shift_wa` opsional: None = ikuti Pengaturan; False = lewati kirim; True = paksa kirim.
+    want_wa = (await _shift_wa_auto_enabled()) if body.send_shift_wa is None else bool(body.send_shift_wa)
+    if want_wa:
+        wa = await _send_shift_wa_auto(session_id)
+        view["wa_auto"] = wa
+        try:
+            await db.shifts.update_many({"id": {"$in": closed_ids}},
+                                        {"$set": {"wa_auto": wa, "wa_auto_at": now_utc().isoformat()}})
+        except Exception as e:
+            logger.error(f"simpan status wa_auto gagal: {e}")
+    else:
+        view["wa_auto"] = {"enabled": False, "ok": False, "skipped": "dilewati"}
+    view["report"] = combined
+    view["reports"] = dict(reports)
+    return view
+
+def _closed_session_view(shifts, user=None):
+    """Bentuk balikan tutup shift (kompatibel dengan UI lama yang membaca shift + report)."""
+    fnb = next((s for s in shifts if _shift_scope_of(s) == "fnb"), None)
+    retail = next((s for s in shifts if _shift_scope_of(s) == "retail"), None)
+    anchor = fnb or retail or {}
+    nm = anchor.get("opened_by") or anchor.get("cashier_name") or ""
+    return {"id": anchor.get("session_id") or anchor.get("id"),
+            "session_id": anchor.get("session_id"), "status": "closed", "shared": True,
+            "date": anchor.get("date"), "opened_at": anchor.get("opened_at"),
+            "closed_at": anchor.get("closed_at"), "opened_by": nm, "cashier_name": nm,
+            "closed_by": anchor.get("closed_by") or (user or {}).get("name") or "",
+            "closed_by_id": anchor.get("closed_by_id") or (user or {}).get("id"),
+            "fnb": _shift_brief(fnb), "retail": _shift_brief(retail),
+            "shift_ids": {"fnb": (fnb or {}).get("id"), "retail": (retail or {}).get("id")}}
+
+async def _session_reports(shifts):
+    """Laporan per toko (F&B & Retail) untuk shift-shift satu sesi."""
+    out = {}
+    for s in shifts:
+        out[_shift_scope_of(s)] = await _shift_report(s)
+    return out
+
+# Kunci angka yang dijumlahkan saat menggabungkan laporan F&B + Retail.
+_SHIFT_INT_KEYS = ("order_count", "void_count", "void_refund_count")
+
+def _combine_reports(reports):
+    """Gabungkan laporan per toko menjadi satu laporan sesi (dipakai WA, cetak, ringkasan)."""
+    reps = [r for r in (reports or {}).values() if r]
+    fnb = (reports or {}).get("fnb") or {}
+    retail = (reports or {}).get("retail") or {}
+
+    def s(key, as_int=False):
+        tot = sum(float(r.get(key) or 0) for r in reps)
+        return int(tot) if as_int else round(tot, 2)
+
+    by_type = {"dine_in": 0, "take_away": 0, "retail": 0}
+    for r in reps:
+        for k in by_type:
+            by_type[k] = round(by_type[k] + float((r.get("by_type") or {}).get(k) or 0), 2)
+    by_pm = {}
+    for r in reps:
+        for k, v in (r.get("by_payment") or {}).items():
+            by_pm[k] = round(by_pm.get(k, 0) + float(v or 0), 2)
+    void_rows = []
+    for r in reps:
+        void_rows += list(r.get("void_rows") or [])
+    return {
+        "order_count": s("order_count", True), "total_sales": s("total_sales"),
+        "by_type": by_type, "by_payment": by_pm,
+        "void_count": s("void_count", True), "void_amount": s("void_amount"),
+        "void_refund_count": s("void_refund_count", True), "void_rows": void_rows,
+        "fnb_total": s("fnb_total"), "retail_total": s("retail_total"),
+        "gross_profit_fnb": s("gross_profit_fnb"), "gross_profit_retail": s("gross_profit_retail"),
+        "cash_out": s("cash_out"), "cash_out_fnb": s("cash_out_fnb"), "cash_out_retail": s("cash_out_retail"),
+        # rincian metode bayar + sisa kas tunai (setelah pengeluaran) per toko
+        "cash_sales_fnb": s("cash_sales_fnb"), "cash_sales_retail": s("cash_sales_retail"),
+        "sisa_cash_fnb": s("sisa_cash_fnb"), "sisa_cash_retail": s("sisa_cash_retail"),
+        "sisa_cash": s("sisa_cash"), "transport": s("transport"),
+        "expected_cash": s("expected_cash"),
+        "net_cash_fnb": s("net_cash_fnb"), "net_cash_retail": s("net_cash_retail"), "net_cash": s("net_cash"),
+        "opening_cash_fnb": round(float(fnb.get("opening_cash") or 0), 2),
+        "opening_cash_retail": round(float(retail.get("opening_cash") or 0), 2),
+        "closing_cash_fnb": round(float(fnb.get("closing_cash") or 0), 2),
+        "closing_cash_retail": round(float(retail.get("closing_cash") or 0), 2),
+        "vendor_share": fnb.get("vendor_share") or [],
+        "vendor_expected_share": s("vendor_expected_share"),
+        "vendor_total_share": s("vendor_total_share"), "vendor_total_paid": s("vendor_total_paid"),
+        "vendor_settled_paid": s("vendor_settled_paid"),
+        "vendor_settled_rows": fnb.get("vendor_settled_rows") or [],
+        # Peringatan pengeluaran harian (kosong = laporan belanja hari itu belum diisi)
+        "expenses_empty": bool(fnb.get("expenses_empty") or retail.get("expenses_empty")),
+        "expenses_ack": bool(fnb.get("expenses_ack") or retail.get("expenses_ack")),
+        "expenses_fnb": fnb.get("expenses_fnb") or {"count": 0, "total": 0.0},
+        "expenses_retail": retail.get("expenses_retail") or {"count": 0, "total": 0.0},
+    }
 
 async def _vendor_share_from_orders(orders):
     """Kumpulkan bagian vendor dari order (per vendor): gross & share (yang seharusnya) + detail per produk."""
@@ -2815,6 +3419,15 @@ async def _shift_report(shift):
     def _out_scope(sc):
         return round(sum(m["amount"] for m in moves if m["type"] == "out" and m.get("scope") == sc), 2)
     out_fnb = _out_scope("fnb"); out_retail = _out_scope("retail")
+    # Uang transport (kategori khusus) pada shift ini — pengeluaran wajib saat tutup shift.
+    transport = round(sum(m["amount"] for m in moves
+                          if m["type"] == "out" and (m.get("category") or "") == SHIFT_TRANSPORT_CAT), 2)
+    # Sisa kas TUNAI = penjualan tunai toko − pengeluaran toko (uang laci setelah belanja).
+    _sc = _shift_scope_of(shift)
+    cash_sales_fnb = round(cash, 2) if _sc == "fnb" else 0.0
+    cash_sales_retail = round(cash, 2) if _sc == "retail" else 0.0
+    sisa_cash_fnb = round(cash_sales_fnb - out_fnb, 2)
+    sisa_cash_retail = round(cash_sales_retail - out_retail, 2)
     vendor_rows = await _vendor_share_from_orders(orders)
     vendor_expected = round(sum(v.get("share", 0) for v in vendor_rows), 2)
     # Bagi hasil yang dibayar lewat modul Settlement Vendor selama shift ini (sudah masuk kas keluar di atas).
@@ -2842,6 +3455,10 @@ async def _shift_report(shift):
                           "at": v.get("voided_at")})
     void_amount = round(sum(v["amount"] for v in void_rows), 2)
     return {"order_count": len(orders), "total_sales": round(total, 2), "by_type": by_type,
+            # identitas toko & kas shift ini (dipakai laporan gabungan F&B+Retail)
+            "scope": _shift_scope_of(shift),
+            "opening_cash": round(float(shift.get("opening_cash") or 0), 2),
+            "closing_cash": round(float(shift.get("closing_cash") or 0), 2),
             # pembatalan pada shift ini (tidak termasuk penjualan karena status bukan 'paid')
             "void_count": len(void_rows), "void_amount": void_amount,
             "void_refund_count": sum(1 for v in void_rows if v["kind"] == "refund"),
@@ -2855,6 +3472,11 @@ async def _shift_report(shift):
             "expected_cash": round(shift["opening_cash"] + cash - cash_out, 2),
             "cash_out": round(cash_out, 2),
             "cash_out_fnb": out_fnb, "cash_out_retail": out_retail,
+            # Rincian metode pembayaran (by_payment) + sisa kas TUNAI setelah pengeluaran
+            "cash_sales_fnb": cash_sales_fnb, "cash_sales_retail": cash_sales_retail,
+            "sisa_cash_fnb": sisa_cash_fnb, "sisa_cash_retail": sisa_cash_retail,
+            "sisa_cash": round(sisa_cash_fnb + sisa_cash_retail, 2),
+            "transport": transport,
             "vendor_share": vendor_rows,
             "vendor_expected_share": vendor_expected,
             "vendor_total_share": round(sum(v["share"] for v in vendor_rows), 2),
@@ -2866,8 +3488,8 @@ async def _shift_report(shift):
 
 @api.get("/shifts/current/vendor")
 async def shift_vendor_preview(user: dict = Depends(admin_or_kasir)):
-    """Preview bagian vendor dari shift yang sedang berjalan (untuk form penutupan)."""
-    shift = await _current_shift(user)
+    """Preview bagian vendor dari shift F&B yang sedang berjalan (untuk form penutupan)."""
+    shift = await _open_shift("fnb") or await _open_shift("retail")
     if not shift:
         raise HTTPException(400, "Tidak ada shift terbuka")
     orders = await db.orders.find({"shift_id": shift["id"], "status": "paid"}, {"_id": 0}).to_list(5000)
@@ -2900,24 +3522,86 @@ async def list_shifts(admin: dict = Depends(require_admin)):
 
 @api.get("/shifts/history")
 async def shift_history(admin: dict = Depends(admin_or_kasir)):
-    """Histori laporan shift tertutup — ringkasan untuk ditampilkan di UI."""
-    shifts = await db.shifts.find({"status": "closed"}, {"_id": 0}).sort("opened_at", -1).to_list(200)
-    out = []
+    """Histori shift tertutup — dikelompokkan PER SESI (F&B + Retail dalam satu baris),
+    lengkap dengan nama akun yang membuka & menutup."""
+    shifts = await db.shifts.find({"status": "closed"}, {"_id": 0}).sort("opened_at", -1).to_list(400)
+    sessions = {}
+    order = []
     for s in shifts:
-        r = s.get("report") or {}
+        key = s.get("session_id") or s["id"]
+        if key not in sessions:
+            sessions[key] = []
+            order.append(key)
+        sessions[key].append(s)
+    out = []
+    for key in order:
+        grp = sessions[key]
+        fnb = next((x for x in grp if _shift_scope_of(x) == "fnb"), None)
+        retail = next((x for x in grp if _shift_scope_of(x) == "retail"), None)
+        reps = {k: (v.get("report") or {}) for k, v in (("fnb", fnb), ("retail", retail)) if v}
+        r = _combine_reports(reps)
+        anchor = fnb or retail or grp[0]
+        opened = sorted([x.get("opened_at") or "" for x in grp])
         out.append({
-            "id": s["id"], "cashier_name": s.get("cashier_name", "-"),
-            "opened_at": s.get("opened_at"), "closed_at": s.get("closed_at"),
-            "opening_cash": s.get("opening_cash", 0), "closing_cash": s.get("closing_cash", 0),
+            "id": key, "session_id": key,
+            "fnb_shift_id": (fnb or {}).get("id"), "retail_shift_id": (retail or {}).get("id"),
+            "cashier_name": anchor.get("opened_by") or anchor.get("cashier_name", "-"),
+            "opened_by": anchor.get("opened_by") or anchor.get("cashier_name", "-"),
+            "closed_by": anchor.get("closed_by") or "",
+            "opened_at": opened[0] if opened else None, "closed_at": anchor.get("closed_at"),
+            "opening_cash": r.get("opening_cash_fnb", 0), "closing_cash": (fnb or {}).get("closing_cash", 0),
+            "opening_cash_fnb": r.get("opening_cash_fnb", 0), "opening_cash_retail": r.get("opening_cash_retail", 0),
+            "closing_cash_fnb": (fnb or {}).get("closing_cash", 0),
+            "closing_cash_retail": (retail or {}).get("closing_cash", 0),
             "total_sales": r.get("total_sales", 0), "order_count": r.get("order_count", 0),
             "fnb_total": r.get("fnb_total", 0), "retail_total": r.get("retail_total", 0),
             "expected_cash": r.get("expected_cash", 0), "net_cash": r.get("net_cash", 0),
+            "net_cash_fnb": r.get("net_cash_fnb", 0), "net_cash_retail": r.get("net_cash_retail", 0),
             "cash_out": r.get("cash_out", 0),
+            "cash_out_fnb": r.get("cash_out_fnb", 0), "cash_out_retail": r.get("cash_out_retail", 0),
+            "cash_sales_fnb": r.get("cash_sales_fnb", 0), "cash_sales_retail": r.get("cash_sales_retail", 0),
+            "sisa_cash_fnb": r.get("sisa_cash_fnb", 0), "sisa_cash_retail": r.get("sisa_cash_retail", 0),
+            "sisa_cash": r.get("sisa_cash", 0), "transport": r.get("transport", 0),
             "vendor_total_share": r.get("vendor_total_share", 0),
             "vendor_total_paid": r.get("vendor_total_paid", 0),
             "vendor_settled_paid": r.get("vendor_settled_paid", 0),
+            "expenses_empty": bool(r.get("expenses_empty")),
         })
     return {"shifts": out}
+
+async def _shift_report_docs(sid):
+    """Cari shift untuk cetak/kirim WA: terima ID SESI (F&B+Retail) maupun ID shift tunggal."""
+    s = await db.shifts.find_one({"id": sid}, {"_id": 0})
+    if s:
+        grp = await db.shifts.find({"session_id": s.get("session_id") or s["id"]}, {"_id": 0}).to_list(10)
+        return (grp or [s]), s
+    grp = await db.shifts.find({"session_id": sid}, {"_id": 0}).to_list(10)
+    if not grp:
+        raise HTTPException(404, "Shift tidak ditemukan")
+    return grp, (grp[0] if grp else None)
+
+async def _shift_wa_report(sid):
+    """Laporan gabungan sesi + nama pembuka/penutup + tanggal untuk template WA/cetak."""
+    grp, anchor = await _shift_report_docs(sid)
+    reports = {_shift_scope_of(x): (x.get("report") or {}) for x in grp}
+    if len(grp) > 1 or not anchor.get("scope"):
+        r = _combine_reports(reports)
+    else:
+        r = dict(anchor.get("report") or {})
+        _sc = _shift_scope_of(anchor)
+        r.setdefault("opening_cash_fnb", r.get("opening_cash", 0) if _sc == "fnb" else 0)
+        r.setdefault("opening_cash_retail", r.get("opening_cash", 0) if _sc == "retail" else 0)
+        r["opening_cash_fnb"] = round(float(r.get("opening_cash_fnb") or 0), 2)
+        r["opening_cash_retail"] = round(float(r.get("opening_cash_retail") or 0), 2)
+        r["closing_cash_fnb"] = round(float(anchor.get("closing_cash") or 0), 2) if _sc == "fnb" else 0
+        r["closing_cash_retail"] = round(float(anchor.get("closing_cash") or 0), 2) if _sc == "retail" else 0
+    fnb = next((x for x in grp if _shift_scope_of(x) == "fnb"), None)
+    anchor2 = fnb or anchor
+    r = dict(r)
+    r["dibuka_oleh"] = anchor2.get("opened_by") or anchor2.get("cashier_name") or ""
+    r["ditutup_oleh"] = anchor2.get("closed_by") or ""
+    r["kasir"] = r["dibuka_oleh"]
+    return r, anchor2
 
 def _shift_report_lines(r):
     L = ["*LAPORAN SHIFT — Grand Aceh Kuliner*", ""]
@@ -2927,11 +3611,28 @@ def _shift_report_lines(r):
     L.append(f"  Take Away: Rp{r.get('by_type', {}).get('take_away', 0):,.0f}")
     L.append(f"*Retail*: Rp{r.get('retail_total', 0):,.0f}")
     L.append("")
+    # Rincian metode pembayaran (Tunai/QRIS/Transfer/...) — permintaan pemilik
+    if r.get("by_payment"):
+        L.append("Metode Bayar:")
+        for k, v in r["by_payment"].items():
+            L.append(f"   - {k}: Rp{float(v or 0):,.0f}")
+        L.append("")
     if r.get("void_count"):
         L.append(f"Pembatalan/Refund: {r.get('void_count')} transaksi (Rp{r.get('void_amount', 0):,.0f}) — tidak termasuk penjualan")
     L.append(f"Pengeluaran F&B: Rp{r.get('cash_out_fnb', 0):,.0f}")
     L.append(f"Pengeluaran Retail: Rp{r.get('cash_out_retail', 0):,.0f}")
+    if r.get("transport"):
+        L.append(f"   termasuk uang transport (wajib): Rp{r.get('transport', 0):,.0f}")
+    # Sisa kas TUNAI setelah dikurangi pengeluaran (uang laci) per toko
+    L.append("")
+    L.append("*SISA KAS TUNAI (tunai − pengeluaran)*")
+    L.append(f"F&B: Rp{r.get('sisa_cash_fnb', 0):,.0f} (tunai Rp{r.get('cash_sales_fnb', 0):,.0f})")
+    L.append(f"Retail: Rp{r.get('sisa_cash_retail', 0):,.0f} (tunai Rp{r.get('cash_sales_retail', 0):,.0f})")
+    L.append(f"Total: Rp{r.get('sisa_cash', 0):,.0f}")
     L.append(f"Perkiraan kas: Rp{r.get('expected_cash', 0):,.0f}")
+    if r.get("expenses_empty"):
+        L.append("Catatan: laporan pengeluaran harian BELUM DIISI "
+                 "(dikonfirmasi memang tidak ada pengeluaran)")
     L.append("")
     L.append("*UANG BERSIH*")
     L.append(f"F&B: Rp{r.get('net_cash_fnb', 0):,.0f}")
@@ -2951,16 +3652,15 @@ def _shift_report_lines(r):
 
 @api.post("/shifts/{sid}/send-wa")
 async def shift_send_wa(sid: str, admin: dict = Depends(require_admin)):
-    """Kirim laporan shift ke WhatsApp (nomor tujuan dari Pengaturan Laporan)."""
-    s = await db.shifts.find_one({"id": sid}, {"_id": 0})
-    if not s:
-        raise HTTPException(404, "Shift tidak ditemukan")
-    r = s.get("report") or {}
+    """Kirim laporan shift ke WhatsApp (nomor tujuan dari Pengaturan Laporan).
+
+    `sid` boleh ID sesi (F&B+Retail sekaligus) maupun ID satu shift."""
+    r, anchor = await _shift_wa_report(sid)
     doc = await db.settings.find_one({"_id": "report"}) or {}
     recips = doc.get("recipients", [])
     if not recips:
         raise HTTPException(400, "Belum ada nomor WhatsApp tujuan. Atur di Pengaturan → Laporan & WhatsApp.")
-    text = await _tpl_fill("shift", _shift_wa_env(r, s.get("cashier_name", ""), (s.get("opened_at") or "")[:10]))
+    text = await _tpl_fill("shift", _shift_wa_env(r, r.get("kasir", ""), (anchor.get("opened_at") or "")[:10]))
     result = await _send_whatsapp(recips, text)
     if not any(x.get("ok") for x in result):
         raise HTTPException(400, f"Gagal kirim WhatsApp: {result[0].get('error') if result else 'tidak diketahui'}")
@@ -2969,13 +3669,12 @@ async def shift_send_wa(sid: str, admin: dict = Depends(require_admin)):
 @api.get("/shifts/{sid}/print")
 async def shift_print_preview(sid: str, admin: dict = Depends(require_admin)):
     """Pratinjau teks laporan shift utk dicetak — memakai TEMPLATE laporan shift
-    (bisa dirancang sendiri di Pengaturan → WhatsApp & Laporan → Template WhatsApp)."""
-    s = await db.shifts.find_one({"id": sid}, {"_id": 0})
-    if not s:
-        raise HTTPException(404, "Shift tidak ditemukan")
-    r = s.get("report") or {}
-    text = await _tpl_fill("shift", _shift_wa_env(r, s.get("cashier_name", ""), (s.get("opened_at") or "")[:10]))
-    return {"text": text, "shift_id": sid, "shift_number": s.get("shift_number") or (s.get("opened_at") or "")[:10]}
+    (bisa dirancang sendiri di Pengaturan → WhatsApp & Laporan → Template WhatsApp).
+    `sid` boleh ID sesi (F&B+Retail) maupun ID satu shift."""
+    r, anchor = await _shift_wa_report(sid)
+    text = await _tpl_fill("shift", _shift_wa_env(r, r.get("kasir", ""), (anchor.get("opened_at") or "")[:10]))
+    return {"text": text, "shift_id": sid,
+            "shift_number": anchor.get("shift_number") or (anchor.get("opened_at") or "")[:10]}
 
 # ================================================================== REPORTS
 @api.get("/reports/summary")
@@ -4151,10 +4850,14 @@ class CashCatIn(BaseModel):
 
 @api.post("/cash")
 async def create_cash(body: CashIn, user: dict = Depends(admin_or_kasir)):
-    shift = await _current_shift(user)
+    # Pengeluaran masuk ke shift TOKO yang sesuai (F&B/Retail) bila shift hari itu terbuka.
+    # "general" (fitur lama) ikut shift F&B supaya tidak jatuh ke luar laporan shift.
+    _sc = body.scope if body.scope in SHIFT_SCOPES else "fnb"
+    shift = await _open_shift(_sc)
     doc = {"id": new_id(), "type": body.type, "amount": body.amount, "category": body.category,
            "note": body.note, "scope": body.scope, "cashier_id": user["id"], "cashier_name": user["name"],
-           "shift_id": shift["id"] if shift else None, "created_at": now_utc().isoformat()}
+           "shift_id": shift["id"] if shift else None,
+           "session_id": (shift or {}).get("session_id"), "created_at": now_utc().isoformat()}
     await db.cash_movements.insert_one(doc)
     _bump_rs_gen()  # pengeluaran masuk ringkasan laporan hari itu
     doc.pop("_id", None)
@@ -4163,12 +4866,14 @@ async def create_cash(body: CashIn, user: dict = Depends(admin_or_kasir)):
 @api.post("/cash/bulk")
 async def create_cash_bulk(body: CashBulkIn, user: dict = Depends(admin_or_kasir)):
     """Simpan banyak catatan kas sekaligus (dipakai hasil scan Vision pengeluaran)."""
-    shift = await _current_shift(user)
     created = []
     for it in body.items:
+        _sc = it.scope if it.scope in SHIFT_SCOPES else "fnb"
+        shift = await _open_shift(_sc)
         doc = {"id": new_id(), "type": it.type, "amount": it.amount, "category": it.category,
                "note": it.note, "scope": it.scope, "cashier_id": user["id"], "cashier_name": user["name"],
-               "shift_id": shift["id"] if shift else None, "created_at": now_utc().isoformat()}
+               "shift_id": shift["id"] if shift else None,
+               "session_id": (shift or {}).get("session_id"), "created_at": now_utc().isoformat()}
         await db.cash_movements.insert_one(doc)
         doc.pop("_id", None)
         created.append(doc)
@@ -5494,13 +6199,22 @@ TPL_DEFAULTS = {
              "Per Kategori:\n- Makanan: {kategori_makanan}\n- Minuman: {kategori_minuman}\n- Retail: {kategori_retail}"
              "{rincian_metode}{rincian_terlaris}{rincian_ai}",
     "shift": "*LAPORAN SHIFT {kasir} ({tanggal_shift}) — {nama_aplikasi}*\n\n"
+             "Dibuka oleh: {dibuka_oleh}\nDitutup oleh: {ditutup_oleh}\n"
+             "Kas awal F&B: {kas_awal_fnb} | Retail: {kas_awal_retail}\n\n"
              "Total Penjualan: {total_penjualan} ({order_count} order)\n"
              "*F&B*: {fnb_total}\n  Dine-in: {dine_in}\n  Take Away: {take_away}\n"
-             "*Retail*: {retail_total}\n\n"
+             "*Retail*: {retail_total}"
+             "{rincian_metode}\n\n"
              "Pengeluaran F&B: {out_fnb}\nPengeluaran Retail: {out_retail}\n"
+             "  termasuk uang transport (wajib): {transport}\n"
              "Pembatalan/Refund: {void_count} transaksi ({void_amount})\n"
-             "Bagi hasil vendor dibayar: {bayar_vendor}\n"
-             "Perkiraan kas: {expected_cash}\n\n"
+             "Bagi hasil vendor dibayar: {bayar_vendor}\n\n"
+             "*SISA KAS TUNAI (tunai − pengeluaran)*\n"
+             "F&B: {sisa_cash_fnb} (tunai {penjualan_tunai_fnb})\n"
+             "Retail: {sisa_cash_retail} (tunai {penjualan_tunai_retail})\n"
+             "Total: {sisa_cash}\n"
+             "Perkiraan kas: {expected_cash}\n"
+             "{catatan_pengeluaran}\n\n"
              "*UANG BERSIH*\nF&B: {net_cash_fnb}\nRetail: {net_cash_retail}\nTotal: {net_cash}"
              "{rincian_vendor}",
     "vendor": "*Laporan Bagi Hasil Vendor — {nama_aplikasi}*\nPeriode: {periode}\n\n"
@@ -5612,7 +6326,29 @@ def _shift_wa_env(r, cashier="", date_shift=""):
         "bayar_vendor": _rp(r.get("vendor_settled_paid", 0)),
         # pembatalan/refund pada shift ini
         "void_count": str(r.get("void_count", 0)), "void_amount": _rp(r.get("void_amount", 0)),
+        # shift harian bersama: siapa yang membuka & menutup + kas awal/akhir per toko
+        "dibuka_oleh": r.get("dibuka_oleh") or cashier or r.get("cashier_name", ""),
+        "ditutup_oleh": r.get("ditutup_oleh") or "",
+        "kas_awal_fnb": _rp(r.get("opening_cash_fnb", 0)), "kas_awal_retail": _rp(r.get("opening_cash_retail", 0)),
+        "kas_akhir_fnb": _rp(r.get("closing_cash_fnb", 0)), "kas_akhir_retail": _rp(r.get("closing_cash_retail", 0)),
+        # sisa kas TUNAI setelah dikurangi pengeluaran (uang laci) + uang transport wajib
+        "penjualan_tunai": _rp(float(r.get("cash_sales_fnb", 0) or 0) + float(r.get("cash_sales_retail", 0) or 0)),
+        "penjualan_tunai_fnb": _rp(r.get("cash_sales_fnb", 0)),
+        "penjualan_tunai_retail": _rp(r.get("cash_sales_retail", 0)),
+        "sisa_cash_fnb": _rp(r.get("sisa_cash_fnb", 0)), "sisa_cash_retail": _rp(r.get("sisa_cash_retail", 0)),
+        "sisa_cash": _rp(r.get("sisa_cash", 0)),
+        "transport": _rp(r.get("transport", 0)),
+        # Peringatan pengeluaran harian: kosong = laporan belanja hari itu belum diisi
+        "pengeluaran_fnb": _rp((r.get("expenses_fnb") or {}).get("total", 0)),
+        "pengeluaran_retail": _rp((r.get("expenses_retail") or {}).get("total", 0)),
+        "catatan_pengeluaran": ("Pengeluaran harian: BELUM DIISI (dikonfirmasi tidak ada pengeluaran)"
+                                if r.get("expenses_empty") else ""),
     }
+    # Rincian metode pembayaran (Tunai / QRIS / Transfer / ...) — blok dinamis {rincian_metode}
+    blk_pm = ""
+    if r.get("by_payment"):
+        blk_pm = "\nMetode Bayar:\n" + "\n".join(f"- {k}: {_rp(v)}" for k, v in r["by_payment"].items())
+    env["rincian_metode"] = blk_pm
     L = []
     for v in (r.get("vendor_share") or []):
         L.append(f"Vendor {v.get('vendor_name', '?')}: bagi hasil {v.get('share', 0):,.0f} | diberikan {v.get('paid', 0):,.0f} | selisih {v.get('difference', 0):,.0f}")
@@ -6006,7 +6742,7 @@ async def vendor_settlement_board(date_str: Optional[str] = Query(None, alias="d
         for row in rows:
             if row["vendor_id"] in others:
                 row["scope"] = scopes.get(row["vendor_id"], "fnb")
-    _shift = await _current_shift(admin)
+    _shift = await _open_shift("fnb") or await _open_shift("retail")
     return {"date": d, "rows": rows,
             "totals": {
                 "gross": round(sum(r["gross"] for r in rows), 2),
@@ -6107,7 +6843,7 @@ async def create_vendor_settlement(body: VendorSettlementIn, admin: dict = Depen
     diambil dari riwayat, sisa kekurangan otomatis menjadi saldo berikutnya. Bila
     `create_cash_out` aktif, pembayaran dicatat sebagai kas keluar sehingga mengurangi
     kas laci & uang bersih (dan muncul di laporan shift yang berjalan)."""
-    shift = await _current_shift(admin)
+    shift = await _open_shift("fnb") or await _open_shift("retail")
     doc = await _create_settlement(body.vendor_id, body.date or wib_today(), body.paid, admin,
                                    payment_method=body.payment_method, note=body.note,
                                    create_cash_out=body.create_cash_out,
@@ -6200,10 +6936,18 @@ class ReportSettingsIn(BaseModel):
     include_ai: bool = True
     send_sales: bool = True
     send_purchases: bool = False
+    # Kirim laporan SHIFT otomatis setiap kali shift ditutup (nomor tujuan = nomor laporan harian).
+    send_shift_auto: bool = True
+
+async def _report_cfg():
+    return await db.settings.find_one({"_id": "report"}, {"_id": 0}) or {}
+
+async def _shift_wa_auto_enabled():
+    return bool((await _report_cfg()).get("send_shift_auto", True))
 
 @api.get("/settings/report")
 async def get_report_settings(admin: dict = Depends(require_admin)):
-    doc = await db.settings.find_one({"_id": "report"}, {"_id": 0}) or {}
+    doc = await _report_cfg()
     return {
         "whatsapp_enabled": doc.get("whatsapp_enabled", False),
         "whatsapp_time": doc.get("whatsapp_time", "22:00"),
@@ -6211,6 +6955,9 @@ async def get_report_settings(admin: dict = Depends(require_admin)):
         "include_ai": doc.get("include_ai", True),
         "send_sales": doc.get("send_sales", True),
         "send_purchases": doc.get("send_purchases", False),
+        # BAWAAN AKTIF (permintaan pemilik): laporan tutup shift langsung dikirim ke WA,
+        # bisa dimatikan di Pengaturan → WhatsApp & Laporan.
+        "send_shift_auto": doc.get("send_shift_auto", True),
         "whatsapp_configured": await _wa_configured(),
         "last_sent_date": doc.get("last_sent_date"),
     }
@@ -6221,8 +6968,36 @@ async def put_report_settings(body: ReportSettingsIn, admin: dict = Depends(requ
         "whatsapp_enabled": body.whatsapp_enabled, "whatsapp_time": body.whatsapp_time,
         "recipients": [r.strip() for r in body.recipients if r.strip()], "include_ai": body.include_ai,
         "send_sales": body.send_sales, "send_purchases": body.send_purchases,
+        "send_shift_auto": body.send_shift_auto,
     }}, upsert=True)
     return {"ok": True}
+
+async def _send_shift_wa_auto(sid):
+    """Kirim laporan shift ke WA otomatis (dipakai SAAT TUTUP SHIFT).
+
+    Tidak pernah menggagalkan penutupan shift: status tunai sudah berubah sebelum ini,
+    jadi kegagalan WhatsApp dilaporkan sebagai hasil (bukan error) supaya kasir tidak
+    mengulang tutup shift. Ada batas waktu supaya WA yang lambat/mati tidak menahan
+    respons penutupan shift.
+    """
+    enabled = await _shift_wa_auto_enabled()
+    recips = list((await _report_cfg()).get("recipients") or [])
+    if not enabled:
+        return {"enabled": False, "ok": False, "skipped": "dimatikan di Pengaturan"}
+    if not recips:
+        return {"enabled": True, "ok": False, "skipped": "belum ada nomor WhatsApp tujuan"}
+    if not await _wa_configured():
+        return {"enabled": True, "ok": False, "skipped": "WhatsApp gateway belum siap"}
+    try:
+        r, anchor = await _shift_wa_report(sid)
+        text = await _tpl_fill("shift", _shift_wa_env(r, r.get("kasir", ""), (anchor.get("opened_at") or "")[:10]))
+        result = await asyncio.wait_for(_send_whatsapp(recips, text), timeout=25)
+    except Exception as e:
+        logger.error(f"auto-kirim laporan shift gagal: {e}")
+        return {"enabled": True, "ok": False, "recipients": recips, "error": str(e)}
+    ok = any(x.get("ok") for x in result)
+    return {"enabled": True, "ok": ok, "recipients": recips, "sent": result,
+            "error": None if ok else (result[0].get("error") if result else "tidak diketahui")}
 
 async def _send_whatsapp(recipients, text):
     if not await _feat("wa.enabled"):
@@ -6271,6 +7046,49 @@ async def send_report_whatsapp(body: WhatsAppSendIn, admin: dict = Depends(requi
         raise HTTPException(400, f"Gagal kirim WhatsApp: {result[0].get('error') if result else 'tidak diketahui'}")
     return {"sent": result}
 
+async def _claim_once(doc_id, field, value, stale_seconds=900, guard_field=None, guard_value=None):
+    """Klaim atomik "kerjakan sekali" pada satu dokumen settings.
+
+    Dipakai tugas terjadwal (laporan WA harian, cek data yatim, cek integritas) supaya
+    beberapa proses backend yang hidup bersamaan — uvicorn multi-worker, atau backend
+    Pi + PC pada rancangan replika — TIDAK menjalankan tugas yang sama dua kali.
+    Pola lama (baca `last_sent_date` lalu tulis setelah kirim) punya celah: dua proses
+    membaca nilai lama pada saat hampir bersamaan, keduanya lolos, keduanya mengirim.
+    Di sini pemeriksaan dan penulisan menjadi SATU operasi Mongo, sehingga hanya satu
+    proses yang mendapat matched_count = 1.
+
+    Klaim juga menyimpan <field>_at; bila proses mati di tengah tugas, klaim yang lebih
+    tua dari `stale_seconds` boleh diambil alih tick berikutnya (jadi tugas tidak
+    hilang selamanya, tapi juga tidak dobel dalam jendela singkat).
+    True = pemanggil berhak mengerjakan; False = sudah dikerjakan/diambil proses lain.
+    """
+    now = now_utc()
+    stale_iso = (now - timedelta(seconds=int(stale_seconds))).isoformat()
+    try:
+        await db.settings.update_one({"_id": doc_id}, {"$setOnInsert": {"_id": doc_id}}, upsert=True)
+    except Exception:
+        # Balapan upsert (dua proses membuat dokumen yang sama) — dokumennya toh sudah
+        # ada, jadi klaim di bawah tetap boleh dicoba. JANGAN keluar di sini.
+        pass
+    flt = {"_id": doc_id,
+           "$or": [{field: {"$ne": value}}, {f"{field}_at": {"$lt": stale_iso}}, {f"{field}_at": {"$exists": False}}]}
+    if guard_field:
+        flt[guard_field] = {"$ne": guard_value}
+    upd = {"$set": {field: value, f"{field}_at": now.isoformat()}}
+    try:
+        res = await db.settings.update_one(flt, upd)
+        return bool(getattr(res, "matched_count", 0))
+    except Exception as e:
+        logger.error(f"claim {doc_id}.{field} failed: {e}")
+        return False
+
+async def _release_claim(doc_id, field):
+    """Lepas klaim setelah tugas GAGAL, supaya tick berikutnya (10 menit) boleh mencoba lagi."""
+    try:
+        await db.settings.update_one({"_id": doc_id}, {"$unset": {field: "", f"{field}_at": ""}})
+    except Exception as e:
+        logger.error(f"release claim {doc_id}.{field} failed: {e}")
+
 async def _run_daily_report_job():
     if not await _feat("wa.enabled"):
         return
@@ -6287,7 +7105,10 @@ async def _run_daily_report_job():
     if noww.hour != target_hour:
         return
     today = noww.strftime("%Y-%m-%d")
-    if doc.get("last_sent_date") == today:
+    # Klaim SEBELUM menyusun/mengirim. `last_sent_date` tetap hanya diisi setelah
+    # benar-benar terkirim, supaya tampilan "terakhir dikirim" di Pengaturan jujur.
+    if not await _claim_once("report", "sending_date", today, stale_seconds=900,
+                             guard_field="last_sent_date", guard_value=today):
         return
     messages = []
     if doc.get("send_sales", True):
@@ -6304,14 +7125,18 @@ async def _run_daily_report_job():
         items, total = await _purchase_summary(today)
         messages.append(await _tpl_fill("purchase", _purchase_wa_env(today, items, total)))
     if not messages:
+        await _release_claim("report", "sending_date")
         return
     try:
         for msg in messages:
             await _send_whatsapp(doc["recipients"], msg)
-        await db.settings.update_one({"_id": "report"}, {"$set": {"last_sent_date": today}}, upsert=True)
+        await db.settings.update_one({"_id": "report"},
+                                     {"$set": {"last_sent_date": today, "last_sent_at": now_utc().isoformat()},
+                                      "$unset": {"sending_date": "", "sending_date_at": ""}}, upsert=True)
         logger.info(f"Daily WA report sent for {today}")
     except Exception as e:
         logger.error(f"Daily WA report failed: {e}")
+        await _release_claim("report", "sending_date")
 
 @api.post("/cron/daily-report")
 async def cron_daily_report(request: Request, background: BackgroundTasks):
@@ -6722,6 +7547,15 @@ async def put_business(body: dict, admin: dict = Depends(require_admin)):
             clean["labels"] = {str(kk).strip(): str(vv).strip() for kk, vv in v.items() if str(vv).strip()}
         elif k == "order_prefix":
             clean["order_prefix"] = str(v).strip()[:10] or "GAK-"
+        elif k == "transport_amount":
+            # Uang transport wajib & tidak boleh 0 (dipakai sebagai bawaan tutup shift).
+            try:
+                amt = float(v)
+            except (TypeError, ValueError):
+                raise HTTPException(400, "Nominal uang transport tidak valid")
+            if amt <= 0:
+                raise HTTPException(400, "Uang transport tidak boleh 0 (wajib diisi saat tutup shift)")
+            clean[k] = round(amt, 2)
         elif isinstance(v, (int, float)) and not isinstance(v, bool):
             clean[k] = max(0, float(v)) if k != "discount_reason_percent" else min(100, max(0, float(v)))
         elif isinstance(v, str) and str(v).strip() and k not in ("labels", "order_prefix"):
@@ -7488,7 +8322,7 @@ INTG_REQUIRED_INDEXES = {
                ["status", "voided_at"]],
     "products": [["id"], ["sku"]],
     "users": [["id"], ["username"]],
-    "shifts": [["id"], ["cashier_id", "status"]],
+    "shifts": [["id"], ["cashier_id", "status"], ["status", "scope"], ["session_id"], ["open_key"]],
     "coupons": [["id"], ["code"]],
     "reservations": [["id"], ["date", "table_id"]],
     "ingredients": [["id"], ["name"]],
@@ -7857,6 +8691,22 @@ async def _run_integrity_check():
         "Laporan & pencarian jadi lambat (data tetap benar). Perbaikan: indeks dipasang ulang sekarang.",
         missing_idx, fix="fix_indexes", fix_label="Pasang ulang indeks"))
 
+    # Shift harian bersama: idealnya MAKSIMAL satu shift terbuka per toko (F&B/Retail).
+    # Kalau ada dua, transaksi bisa tersebar ke dua shift → laporan shift tidak lengkap.
+    open_by_scope = {}
+    for s in d["shifts"]:
+        if s.get("status") != "open":
+            continue
+        open_by_scope.setdefault(_shift_scope_of(s), []).append(s)
+    dup_open = [f"{_shift_scope_label(sc)}: {len(v)} shift terbuka ({', '.join(x.get('id', '?') for x in v)})"
+                for sc, v in open_by_scope.items() if len(v) > 1]
+    sysc.append(_intg_chk(
+        "shift_open_duplicate", "Ada lebih dari satu shift terbuka untuk toko yang sama", len(dup_open),
+        "Shift harian seharusnya hanya satu per toko (dipakai bersama semua akun). Bila ini sisa percobaan "
+        "buka shift, tutup shift yang tidak dipakai dari halaman Shift (jangan dihapus — laporan tetap tercatat). "
+        "Tidak ada perbaikan otomatis karena menyangkut uang.",
+        dup_open, level="warn"))
+
     idx_warn = list(_IDX_WARN)
     # Dipisah menurut SEBABNYA — dulu semuanya disebut "data ganda", padahal kasus paling
     # umum di lapangan adalah indeks sudah ada dengan opsi berbeda (kode 85, mis. indeks
@@ -8187,17 +9037,21 @@ async def _maybe_integrity_auto():
         return
     noww = datetime.now(WIB)
     today = noww.strftime("%Y-%m-%d")
-    # Penanda hari (WIB) ditegakkan terpisah dari laporan, supaya zona waktu UTC/WIB
-    # tidak membuat pemeriksaan otomatis jalan dua kali dalam sehari.
-    doc = await db.settings.find_one({"_id": "integrity"}, {"_id": 0, "auto_date": 1}) or {}
-    if doc.get("auto_date") == today:
-        return
-    hour = int(await _feat("maint.integrity_hour", 3) or 3)
-    day = int(await _feat("maint.integrity_day", 6) or 6)
+    hour = await _feat_int("maint.integrity_hour", 3)
+    day = await _feat_int("maint.integrity_day", 6)
     if noww.weekday() != (day % 7) or noww.hour != hour:
         return
-    rep = await _run_integrity_check()
-    await db.settings.update_one({"_id": "integrity"}, {"$set": {"auto_date": today}}, upsert=True)
+    # Klaim atomik SEBELUM memeriksa (pemeriksaan ini membaca ribuan dokumen; tidak boleh
+    # dijalankan serentak oleh beberapa proses worker). Penanda hari (WIB) sekaligus
+    # menjaga zona waktu UTC/WIB tidak membuat pemeriksaan jalan dua kali.
+    if not await _claim_once("integrity", "auto_date", today, stale_seconds=3600):
+        return
+    try:
+        rep = await _run_integrity_check()
+    except Exception as e:
+        logger.error(f"cek integritas otomatis gagal: {e}")
+        await _release_claim("integrity", "auto_date")
+        return
     s = rep.get("summary") or {}
     logger.info(f"cek integritas otomatis: error={s.get('error')} warn={s.get('warn')} durasi={rep.get('duration_ms')}ms")
     try:
@@ -8219,8 +9073,8 @@ class CronIntegrityIn(BaseModel):
 async def integrity_status(admin: dict = Depends(require_admin)):
     """Hasil cek integritas terakhir + jadwal mingguan + daftar perbaikan yang tersedia."""
     doc = await db.settings.find_one({"_id": "integrity"}, {"_id": 0}) or {}
-    hour = int(await _feat("maint.integrity_hour", 3) or 3)
-    day = int(await _feat("maint.integrity_day", 6) or 6)
+    hour = await _feat_int("maint.integrity_hour", 3)
+    day = await _feat_int("maint.integrity_day", 6)
     nama = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
     return {"last": doc.get("last"), "auto": bool(await _feat("maint.integrity_auto")),
             "schedule": f"{nama[day % 7]} {hour:02d}:00 WIB",
@@ -8268,8 +9122,13 @@ async def cron_integrity(request: Request, body: Optional[CronIntegrityIn] = Non
 
 @api.get("/admin/metrics")
 async def admin_metrics(admin: dict = Depends(require_admin)):
-    """Statistik performa endpoint (dikumpulkan middleware bila dbg.metrics ON)."""
-    m = _METRICS
+    """Statistik performa endpoint (dikumpulkan middleware bila dbg.metrics ON).
+
+    Multi-worker: angka dijumlahkan dari SEMUA proses worker (heartbeat < 30 detik),
+    bukan hanya proses yang melayani request ini. `cache_entries` tetap per worker
+    karena cache memang in-memory per proses.
+    """
+    m = await _metrics_aggregate()
     total = m["total"] or 1
     return {
         "total": m["total"], "errors": m["errors"],
@@ -8281,6 +9140,12 @@ async def admin_metrics(admin: dict = Depends(require_admin)):
         "breakers": _breaker_status(),
         "cache_entries": len(_CACHE) + len(_RCACHE),
         "uptime_s": round(__import__("time").time() - _PROC_START, 1),
+        "workers": WORKERS,
+        "nodes": m["nodes"],
+        # Dipakai alat pemantau (check-workers-pi.sh) untuk tahu berapa lama harus menunggu
+        # sebelum membandingkan angka: tiap worker menulis ringkasannya sebesar ini.
+        "metrics_flush_s": METRICS_FLUSH_SECONDS,
+        "node": _METRICS_NODE,
     }
 
 # ------------------------------------------------------------------ indexes
@@ -8293,28 +9158,65 @@ async def _ensure_indexes():
     tetap lanjut; bersihkan duplikatnya lalu restart agar indeks terpasang.
     Catatan rancangan lengkap: docs/INDEKS-DATABASE.md di root repo."""
     _IDX_WARN.clear()
-    async def _mk(coll, keys, unique=False, sparse=False, partial=None):
+
+    async def _index_present(coll, keys, unique, sparse, partial):
+        """True bila indeks dengan kunci & opsi yang diminta SUDAH ada.
+
+        Dipakai saat multi-worker: beberapa proses menjalankan _ensure_indexes()
+        hampir bersamaan, sehingga create_index bisa gagal (balapan membangun indeks
+        yang sama). Kalau ternyata indeksnya sudah ada dengan opsi yang benar, itu
+        bukan masalah dan TIDAK boleh dicatat sebagai temuan integritas.
+        """
         try:
-            kw = {"unique": unique, "sparse": sparse}
-            if partial:
-                kw["partialFilterExpression"] = partial
-            await db[coll].create_index(keys, **kw)
-        except Exception as e:
-            msg = str(e)
-            code = getattr(e, "code", None)
-            # Dibedakan: bentrokan OPSI (indeks lama bernama sama) vs DATA KEMBAR vs lainnya.
-            if code == 85 or "already exists with different options" in msg:
-                kind = "options"
-            elif code == 11000 or "E11000" in msg or "duplicate key" in msg.lower():
-                kind = "duplicate"
-            else:
-                kind = "other"
-            logger.warning(f"index {coll} {keys} not applied ({kind}): {msg[:200]}")
-            # Dicatat agar muncul di cek integritas (Pengaturan > Fitur & Integrasi > Integritas)
-            _IDX_WARN.append({"coll": coll, "keys": str(keys), "raw": keys, "kind": kind,
-                              "name": _intg_index_name(keys), "unique": unique, "sparse": sparse,
-                              "partial": bool(partial), "error": msg[:180], "at": now_utc().isoformat()})
-            del _IDX_WARN[:-20]
+            info = await db[coll].index_information()
+        except Exception:
+            return False
+        want = None
+        for name, spec in info.items():
+            k = spec.get("key") or []
+            if list(k) == list(keys if not isinstance(keys, str) else [(keys, 1)]):
+                want = spec
+                break
+        if want is None:
+            return False
+        if bool(want.get("unique")) != bool(unique):
+            return False
+        if unique and not partial:                     # sparse hanya relevan untuk indeks unik
+            if bool(want.get("sparse")) != bool(sparse):
+                return False
+        return True
+
+    async def _mk(coll, keys, unique=False, sparse=False, partial=None):
+        import asyncio as _aio
+        for attempt in (1, 2):
+            try:
+                kw = {"unique": unique, "sparse": sparse}
+                if partial:
+                    kw["partialFilterExpression"] = partial
+                await db[coll].create_index(keys, **kw)
+                return
+            except Exception as e:
+                msg = str(e)
+                code = getattr(e, "code", None)
+                if await _index_present(coll, keys, unique, sparse, partial):
+                    return                       # dibuat oleh worker lain — beres
+                if attempt == 1:
+                    await _aio.sleep(0.6)        # beri kesempatan worker lain menyelesaikan
+                    continue
+                # Dibedakan: bentrokan OPSI (indeks lama bernama sama) vs DATA KEMBAR vs lainnya.
+                if code == 85 or "already exists with different options" in msg:
+                    kind = "options"
+                elif code == 11000 or "E11000" in msg or "duplicate key" in msg.lower():
+                    kind = "duplicate"
+                else:
+                    kind = "other"
+                logger.warning(f"index {coll} {keys} not applied ({kind}): {msg[:200]}")
+                # Dicatat agar muncul di cek integritas (Pengaturan > Fitur & Integrasi > Integritas)
+                _IDX_WARN.append({"coll": coll, "keys": str(keys), "raw": keys, "kind": kind,
+                                  "name": _intg_index_name(keys), "unique": unique, "sparse": sparse,
+                                  "partial": bool(partial), "error": msg[:180], "at": now_utc().isoformat()})
+                del _IDX_WARN[:-20]
+                return
 
     # ---- orders (koleksi terbesar & terpanas) --------------------------------
     # Setiap muat dashboard/laporan menscan order lunas per rentang tanggal
@@ -8385,10 +9287,70 @@ async def _ensure_indexes():
     await _mk("purchases", "created_at")                          # daftar & ringkasan belanja
     await _mk("stock_opname", "created_at")                       # daftar opname per tanggal
 
+    # ---- shift harian bersama (satu shift per toko per hari: F&B & Retail) ----
+    # Cari shift terbuka per toko dipanggil di hampir tiap aksi POS.
+    await _mk("shifts", [("status", 1), ("scope", 1)])
+    await _mk("shifts", "session_id")                             # kelompok F&B + Retail satu sesi
+    await _mk("shifts", [("date", 1), ("scope", 1)])               # histori harian per toko
+    # Kunci unik shift TERBUKA: dua perangkat tidak bisa membuka dua shift untuk toko yang
+    # sama. `open_key` hanya ada saat status open (dilepas $unset saat tutup), dan karena
+    # sparse hanya melewati field yang TIDAK ADA, indeksnya dibuat PARSIAL atas tipe string
+    # supaya dokumen lama/tanpa kunci tidak saling dianggap duplikat.
+    await _mk("shifts", "open_key", unique=True, partial={"open_key": {"$type": "string"}})
+    await _mk("cash_movements", "session_id")                     # ringkasan kas per sesi shift
+
 # ------------------------------------------------------------------ startup
+async def _migrate_shift_scopes():
+    """Migrasi shift TERBUKA dari model lama (per akun, satu dokumen gabungan F&B+Retail)
+    ke model baru (satu shift per toko, dipakai bersama).
+
+    Tanpa ini, shift yang sedang terbuka saat update akan "hilang" di mata POS (dianggap
+    belum dibuka) dan kas keluar tidak nyambung ke laporan shift. Dokumen lama dianggap
+    F&B (mayoritas transaksi); shift Retail dibuat otomatis saat ada transaksi retail
+    (lihat _shift_for_order) atau saat dibuka manual.
+    Shift lama yang sudah TERTUTUP tidak disentuh — laporannya sudah tersimpan apa adanya."""
+    try:
+        opens = await db.shifts.find({"status": "open"}, {"_id": 0}).to_list(50)
+        if not opens:
+            return
+        seen = {}
+        for s in opens:
+            upd = {}
+            if s.get("scope") not in SHIFT_SCOPES:
+                upd["scope"] = "fnb"
+            if not s.get("session_id"):
+                upd["session_id"] = s.get("id") or new_id()
+            if not s.get("date"):
+                upd["date"] = wib_day_of(s.get("opened_at") or now_utc().isoformat())
+            if not s.get("opened_by"):
+                upd["opened_by"] = s.get("cashier_name") or ""
+                upd["opened_by_id"] = s.get("cashier_id")
+            sc = upd.get("scope") or s.get("scope")
+            # Kalau sudah ada shift terbuka lain untuk toko yang sama, jangan pasang open_key
+            # (indeks unik akan menolaknya) — yang duplikat ditutup manual lewat
+            # Pengaturan → Integritas (temuan "shift terbuka ganda").
+            if sc not in seen and not s.get("open_key"):
+                upd["open_key"] = _shift_open_key(sc)
+            seen.setdefault(sc, True)
+            if upd:
+                await db.shifts.update_one({"id": s["id"]}, {"$set": upd})
+                logger.info(f"migrasi shift {s['id']} → scope={sc} (shift harian bersama)")
+    except Exception as e:
+        logger.warning(f"migrasi shift scope gagal: {e}")
+
 @app.on_event("startup")
 async def startup():
+    import asyncio as _aio
+    import random as _random
+    if WORKERS > 1:
+        # Semua worker start hampir bersamaan: beri jeda acak singkat supaya
+        # migrasi/seed/pembuatan indeks tidak bertabrakan (create_index untuk indeks
+        # yang sama bisa gagal bila dua proses membangunnya serentak).
+        await _aio.sleep(_random.uniform(0, min(3.0, 0.6 * WORKERS)))
+    logger.info(f"backend start: worker={os.getpid()} UVICORN_WORKERS={WORKERS} "
+                f"mongo_pool={MONGO_POOL_SIZE}")
     await _ensure_indexes()
+    await _migrate_shift_scopes()
     # ---- MIGRASI akun: email -> username (tanpa email) ----
     # Username diambil dari bagian depan email (mis. admin@grandaceh.com -> admin),
     # dijamin unik. Email tetap disimpan agar APK/bundle versi lama masih bisa login.
@@ -8457,6 +9419,9 @@ async def startup():
     logger.info("Startup seeding complete")
 
     # Scheduler internal untuk laporan WhatsApp harian (self-hosted; tanpa cron eksternal).
+    # CATATAN multi-worker: ketiga tugas di bawah WAJIB memakai klaim atomik (_claim_once);
+    # pola lama (baca penanda -> kerjakan -> tulis penanda) membuat SEMUA worker yang start
+    # bersamaan mengerjakan tugas yang sama (mis. laporan WA terkirim berulang).
     import asyncio as _asyncio
 
     async def _report_scheduler():
@@ -8475,6 +9440,18 @@ async def startup():
                 logger.error(f"integrity scheduler tick failed: {e}")
             await _asyncio.sleep(600)  # cek tiap 10 menit
     _asyncio.create_task(_report_scheduler())
+    if WORKERS > 1:
+        async def _metrics_flush_loop():
+            while True:
+                await _asyncio.sleep(METRICS_FLUSH_SECONDS)
+                await _metrics_flush()
+        _asyncio.create_task(_metrics_flush_loop())
+
+        async def _cache_sync_loop():
+            while True:
+                await _asyncio.sleep(CACHE_SYNC_SECONDS)
+                await _cache_sync()
+        _asyncio.create_task(_cache_sync_loop())
 
 @app.on_event("shutdown")
 async def shutdown():

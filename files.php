@@ -1,15 +1,41 @@
 <?php
-// Daftar seluruh berkas proyek dari folder `project/` (tanpa kompresi/arsip) —
-// setiap berkas bisa diunduh SATU PER SATU atau dibaca langsung.
+// Halaman daftar berkas proyek (tanpa kompresi).
+//
+// Rancangan penting (pelajaran dari versi "optimized" yang pernah diusulkan):
+//  - Pagination TIDAK boleh memotong daftar SEBELUM pencarian — kalau dipotong dulu,
+//    kotak cari hanya menelusuri segelintir berkas dan berkas seperti backend/server.py
+//    menjadi "tidak ada". Karena itu pencarian dilakukan di SERVER atas SELURUH daftar,
+//    lalu hasilnya yang dipaginasi (?q=...&page=2).
+//  - Pencarian tetap bekerja tanpa JavaScript (form GET biasa); JavaScript hanya
+//    menambah kenyamanan: jeda 300 ms sebelum mengirim (debounce) + menyaring baris
+//    yang sedang terlihat seketika supaya terasa langsung.
 require __DIR__ . '/lib.php';
 
 $DIR     = gak_project_dir();
-$entries = gak_project_scan($DIR);
+$PER     = 20;
+$ALL     = gak_project_list($DIR);            // seluruh berkas, terurut, dari cache versi
+$Q       = isset($_GET['q']) ? trim((string) $_GET['q']) : '';
+$ROWS    = gak_project_filter($ALL, $Q);      // pencarian dulu, paginasi belakangan
+$TOTAL_ALL  = count($ALL);
+$TOTAL_ROWS = count($ROWS);
+$PAGES   = max(1, (int) ceil($TOTAL_ROWS / $PER));
+$PAGE    = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
+if ($PAGE > $PAGES) {
+    $PAGE = $PAGES;
+}
+$OFFSET  = ($PAGE - 1) * $PER;
+$SHOWN   = array_slice($ROWS, $OFFSET, $PER);
+$FIRST   = $TOTAL_ROWS ? $OFFSET + 1 : 0;
+$LAST    = $OFFSET + count($SHOWN);
+$SUM_ALL = 0;
+foreach ($ALL as $e) {
+    $SUM_ALL += $e['size'];
+}
 $GZ      = __DIR__ . '/pos-grand.tar.gz';
 
-$ver  = '';
-$upd  = '';
-$vj   = __DIR__ . '/version.json';
+$ver = '';
+$upd = '';
+$vj  = __DIR__ . '/version.json';
 if (is_file($vj)) {
     $j = json_decode((string) file_get_contents($vj), true);
     if (is_array($j)) {
@@ -18,43 +44,18 @@ if (is_file($vj)) {
     }
 }
 
-// Kelompokkan per folder teratas.
-$groups = array();
-$total  = 0;
-foreach ($entries as $e) {
-    $total += $e['size'];
-    $n     = $e['name'];
-    $slash = strpos($n, '/');
-    $g     = ($slash === false) ? '' : substr($n, 0, $slash);
-    $groups[$g][] = $e;
-}
-ksort($groups);
-foreach ($groups as $g => $rows) {
-    usort($rows, function ($a, $b) {
-        return strcmp($a['name'], $b['name']);
-    });
-    $groups[$g] = $rows;
-}
-
-// Urutan kelompok: berkas akar dulu, sisanya sesuai abjad.
-$order = array_keys($groups);
-usort($order, function ($a, $b) {
-    if ($a === '') {
-        return -1;
-    }
-    if ($b === '') {
-        return 1;
-    }
-    return strcmp($a, $b);
-});
-
-function h($s)
+function h($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
+function stat_of($path) { return is_file($path) ? gak_size_h(filesize($path)) : '—'; }
+function page_url($q, $page)
 {
-    return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
-}
-function stat_of($path)
-{
-    return is_file($path) ? gak_size_h(filesize($path)) : '—';
+    $p = array();
+    if ($q !== '') {
+        $p['q'] = $q;
+    }
+    if ($page > 1) {
+        $p['page'] = $page;
+    }
+    return 'files.php' . ($p ? '?' . http_build_query($p) : '');
 }
 ?>
 <!DOCTYPE html>
@@ -95,10 +96,7 @@ function stat_of($path)
     background: linear-gradient(90deg, #4F46E5, #8B5CF6);
   }
   a.btn.ghost { background: rgba(79,70,229,0.10); color: #4F46E5; }
-  .toolbar {
-    position: sticky; top: 0; z-index: 5; padding-top: 10px;
-    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-  }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   input[type=search] {
     flex: 1 1 220px; min-width: 180px; font-size: 14px; font-family: inherit;
     padding: 11px 13px; border-radius: 11px; color: #1F1B3A;
@@ -106,12 +104,7 @@ function stat_of($path)
   }
   input[type=search]:focus { outline: 2px solid rgba(79,70,229,0.35); }
   .count { color: #635F82; font-size: 12.5px; }
-  h2 {
-    font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: #4F46E5;
-    margin: 20px 0 8px; display: flex; justify-content: space-between; gap: 10px;
-  }
-  h2 span.n { color: #8b87a8; font-weight: 600; text-transform: none; letter-spacing: 0; }
-  table { width: 100%; border-collapse: collapse; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
   td { padding: 8px 6px; border-bottom: 1px solid rgba(79,70,229,0.10); vertical-align: middle; }
   tr.row:hover { background: rgba(79,70,229,0.05); }
   td.p { font-size: 13px; word-break: break-all; }
@@ -128,8 +121,22 @@ function stat_of($path)
   td.a a.vw { background: rgba(139,92,246,0.12); color: #7C3AED; }
   .foot { color: #8b87a8; font-size: 12px; text-align: center; margin: 6px 0 24px; }
   .foot a { color: #4F46E5; }
-  .empty { color: #635F82; font-size: 13.5px; line-height: 1.7; }
+  .empty { color: #635F82; font-size: 13.5px; line-height: 1.7; margin-top: 12px; }
   code.k { background: #1F1B3A; color: #C7D2FE; border-radius: 8px; padding: 2px 7px; font-size: 12px; }
+  .pager { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin-top: 18px; }
+  .pager a, .pager span.pg {
+    display: inline-block; min-width: 36px; text-align: center; padding: 8px 10px;
+    border-radius: 9px; text-decoration: none; font-size: 13px;
+  }
+  .pager a { background: rgba(79,70,229,0.10); color: #4F46E5; font-weight: 600; }
+  .pager a:hover { background: rgba(79,70,229,0.20); }
+  .pager span.pg { background: #4F46E5; color: #fff; font-weight: 700; }
+  .pager span.gap { color: #8b87a8; }
+  .hint { color: #635F82; font-size: 12px; margin-top: 10px; }
+  .banner {
+    margin-top: 14px; padding: 10px 12px; border-radius: 11px; font-size: 13px;
+    background: rgba(79,70,229,0.08); color: #2b2550;
+  }
 </style>
 </head>
 <body>
@@ -138,7 +145,7 @@ function stat_of($path)
   <div class="card">
     <h1>Berkas Proyek (tanpa kompresi)</h1>
     <div class="sub">
-      Ini folder proyek apa adanya — <b><?= count($entries) ?> berkas</b> dari
+      Ini folder proyek apa adanya — <b><?= (int) $TOTAL_ALL ?> berkas</b> dari
       <code class="k">project/</code>, bisa diunduh <b>satu per satu</b>
       (mis. <code class="k">backend/server.py</code> saja) atau dibaca langsung di peramban.
       Tidak perlu mengunduh arsip apa pun.
@@ -153,32 +160,39 @@ function stat_of($path)
       <a class="btn ghost" href="index.php">← Kembali ke Update Center</a>
     </div>
     <div class="sub" style="margin-top:10px">
-      Total isi berkas: <b><?= h(gak_size_h($total)) ?></b>.
+      Total isi seluruh berkas: <b><?= h(gak_size_h($SUM_ALL)) ?></b>.
       Klik nama berkas untuk membacanya (berkas teks), atau tombol untuk mengunduh.
     </div>
   </div>
 
   <div class="card">
-    <div class="toolbar">
-      <input type="search" id="q" placeholder="Cari berkas… (mis. server.py, Reports, docker)" autocomplete="off" />
+    <form class="toolbar" method="get" action="files.php" id="cari">
+      <input type="search" id="q" name="q" value="<?= h($Q) ?>"
+             placeholder="Cari di SELURUH <?= (int) $TOTAL_ALL ?> berkas… (mis. server.py, Reports, docker)"
+             autocomplete="off" />
+      <button class="btn" type="submit" style="border:0;cursor:pointer">Cari</button>
       <div class="count" id="cnt"></div>
-    </div>
+    </form>
 
-    <?php if (!$entries): ?>
-      <div class="empty">
-        Folder <code class="k">project/</code> belum ada di server ini, jadi daftar berkas belum bisa
-        ditampilkan. Jalankan skrip rilis di komputer pengembang
-        (<code class="k">./build-update-archive.sh</code>) lalu terbitkan ulang Update Center.
+    <?php if ($Q !== ''): ?>
+      <div class="banner">
+        Hasil pencarian <b><?= h($Q) ?></b>: <b><?= (int) $TOTAL_ROWS ?></b> berkas
+        dari <?= (int) $TOTAL_ALL ?>. <a href="files.php">Tampilkan semua berkas</a>
       </div>
     <?php endif; ?>
 
-    <?php foreach ($order as $g): $rows = $groups[$g]; ?>
-      <h2 data-group="<?= h($g) ?>">
-        <span><?= $g === '' ? 'Berkas utama (akar proyek)' : h($g) . '/' ?></span>
-        <span class="n"><?= count($rows) ?> berkas</span>
-      </h2>
+    <?php if (!$SHOWN): ?>
+      <div class="empty">
+        <?php if ($Q !== ''): ?>
+          Tidak ada berkas yang cocok dengan <code class="k"><?= h($Q) ?></code>.
+          <a href="files.php">Tampilkan semua berkas</a>
+        <?php else: ?>
+          Folder <code class="k">project/</code> belum ada atau kosong.
+        <?php endif; ?>
+      </div>
+    <?php else: ?>
       <table>
-        <?php foreach ($rows as $e): $n = $e['name']; $slash = strrpos($n, '/'); ?>
+        <?php foreach ($SHOWN as $e): $n = $e['name']; $slash = strrpos($n, '/'); ?>
           <tr class="row" data-p="<?= h(strtolower($n)) ?>">
             <td class="p">
               <?php if ($slash !== false): ?>
@@ -197,7 +211,42 @@ function stat_of($path)
           </tr>
         <?php endforeach; ?>
       </table>
-    <?php endforeach; ?>
+
+      <?php if ($PAGES > 1): ?>
+        <div class="pager" id="pager">
+          <?php if ($PAGE > 1): ?>
+            <a href="<?= h(page_url($Q, 1)) ?>">«</a>
+            <a href="<?= h(page_url($Q, $PAGE - 1)) ?>">‹ Sebelumnya</a>
+          <?php endif; ?>
+          <?php
+            $from = max(1, $PAGE - 2);
+            $to   = min($PAGES, $PAGE + 2);
+          if ($from > 1): ?>
+            <a href="<?= h(page_url($Q, 1)) ?>">1</a><span class="gap">…</span>
+          <?php endif;
+          for ($i = $from; $i <= $to; $i++): ?>
+            <?php if ($i === $PAGE): ?>
+              <span class="pg"><?= $i ?></span>
+            <?php else: ?>
+              <a href="<?= h(page_url($Q, $i)) ?>"><?= $i ?></a>
+            <?php endif; ?>
+          <?php endfor;
+          if ($to < $PAGES): ?>
+            <span class="gap">…</span><a href="<?= h(page_url($Q, $PAGES)) ?>"><?= $PAGES ?></a>
+          <?php endif;
+          if ($PAGE < $PAGES): ?>
+            <a href="<?= h(page_url($Q, $PAGE + 1)) ?>">Selanjutnya ›</a>
+            <a href="<?= h(page_url($Q, $PAGES)) ?>">»</a>
+          <?php endif; ?>
+        </div>
+        <div class="foot">Halaman <?= (int) $PAGE ?> dari <?= (int) $PAGES ?>
+          (berkas <?= (int) $FIRST ?>–<?= (int) $LAST ?> dari <?= (int) $TOTAL_ROWS ?><?= $Q !== '' ? ' hasil pencarian' : '' ?>)</div>
+      <?php endif; ?>
+    <?php endif; ?>
+
+    <div class="hint" id="hint">
+      Dicari di seluruh <?= (int) $TOTAL_ALL ?> berkas (bukan hanya halaman ini), lalu ditampilkan 20 per halaman.
+    </div>
   </div>
 
   <div class="foot">
@@ -207,39 +256,50 @@ function stat_of($path)
 
 <script>
 (function () {
-  var q = document.getElementById('q');
-  var cnt = document.getElementById('cnt');
-  var rows = document.querySelectorAll('tr.row');
-  var heads = document.querySelectorAll('h2[data-group]');
-  var total = rows.length;
+  var form  = document.getElementById('cari');
+  var q     = document.getElementById('q');
+  var cnt   = document.getElementById('cnt');
+  var rows  = document.querySelectorAll('tr.row');
+  var totalIni = rows.length;          // baris yang ADA di halaman ini
+  var totalSemua = <?= (int) $TOTAL_ROWS ?>;
+  var timer = null;
 
-  function apply() {
+  function hitung() {
     var s = (q.value || '').toLowerCase().replace(/^\s+|\s+$/g, '');
-    var shown = 0;
+    var vis = 0;
     for (var i = 0; i < rows.length; i++) {
-      var ok = s === '' || rows[i].getAttribute('data-p').indexOf(s) !== -1;
-      rows[i].style.display = ok ? '' : 'none';
-      if (ok) { shown++; }
+      var teks = rows[i].getAttribute('data-p') || '';
+      var tampil = (s === '' || teks.indexOf(s) !== -1);
+      rows[i].style.display = tampil ? '' : 'none';
+      if (tampil) { vis++; }
     }
-    for (var j = 0; j < heads.length; j++) {
-      var g = heads[j];
-      var next = g.nextElementSibling;
-      var vis = 0;
-      while (next && next.tagName === 'TABLE') {
-        var r = next.querySelectorAll('tr.row');
-        for (var k = 0; k < r.length; k++) {
-          if (r[k].style.display !== 'none') { vis++; }
-        }
-        next = next.nextElementSibling;
-      }
-      g.style.display = vis > 0 ? '' : 'none';
+    if (s === '') {
+      cnt.textContent = 'Menampilkan ' + totalSemua + ' berkas (' + totalIni + ' di halaman ini)';
+    } else {
+      cnt.textContent = 'Cocok di halaman ini: ' + vis + ' — mencari di SEMUA berkas…';
     }
-    cnt.textContent = 'Menampilkan ' + shown + ' dari ' + total + ' berkas';
   }
 
-  q.addEventListener('input', apply);
-  q.addEventListener('keyup', apply);
-  apply();
+  function kirim() {
+    // Kirim ke server supaya pencarian mencakup SEMUA berkas, bukan hanya halaman ini.
+    var s = q.value;
+    if (s === <?= json_encode($Q) ?>) { return; }     // tidak berubah → tidak perlu memuat ulang
+    if (s.replace(/^\s+|\s+$/g, '') === '') { q.disabled = true; }  // jangan tinggalkan "?q=" di URL
+    form.submit();
+  }
+
+  function onInput() {
+    hitung();                                          // umpan balik seketika (murah: <=20 baris)
+    clearTimeout(timer);
+    timer = setTimeout(kirim, 300);                    // debounce 300 ms
+  }
+
+  q.addEventListener('input', onInput);
+  form.addEventListener('submit', function () {
+    timer = null;
+    if ((q.value || '').replace(/^\s+|\s+$/g, '') === '') { q.disabled = true; }
+  });
+  hitung();
 })();
 </script>
 </body>
