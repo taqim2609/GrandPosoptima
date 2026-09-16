@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Printer, Server, Store, Save, ReceiptText, Upload, Loader2, Bluetooth, Wifi } from "lucide-react";
+import { Printer, Server, Store, Save, ReceiptText, Upload, Loader2, Bluetooth, Wifi, Wallet } from "lucide-react";
 import api, { apiError } from "@/lib/api";
-import { getDeviceConfig, setDeviceConfig, getServerUrl, setServerUrl, sampleOrder, getPrinterStatus } from "@/lib/device";
+import { getDeviceConfig, setDeviceConfig, getServerUrl, setServerUrl, sampleOrder, getPrinterStatus, openCashDrawer } from "@/lib/device";
 import { printReceipt } from "@/lib/receipt";
 import { requestBluetoothPrinter, clearBluetoothPrinter } from "@/lib/bluetooth";
 
@@ -43,6 +43,12 @@ export default function DeviceSettings() {
   };
   const [btBusy, setBtBusy] = useState(false);
   const [selftestBusy, setSelftestBusy] = useState(false);
+  // Tes buka laci kasir — verifikasi tanpa harus transaksi (butuh APK v2.10+).
+  const doOpenDrawer = () => {
+    const r = openCashDrawer();
+    if (r.ok) toast.success("Perintah buka laci dikirim — pastikan laci terbuka");
+    else toast.error("Gagal buka laci: " + (r.reason || "tidak diketahui"), { duration: 9000 });
+  };
   const doSelfTest = () => {
     try {
       const sp = window.SunmiInnerPrinter || window.sunmiInnerPrinter || window.sunmi || window.SunmiPrinterBridge;
@@ -203,8 +209,13 @@ export default function DeviceSettings() {
           )}
           <label className="flex items-center gap-2.5 mt-1 cursor-pointer" data-testid="dev-cashdrawer">
             <input type="checkbox" checked={cfg.cashDrawer} onChange={(e) => upd({ cashDrawer: e.target.checked })} className="h-4 w-4 accent-[#E63946]" />
-            <span className="text-sm font-bold">Buka laci kasir otomatis saat transaksi tunai</span>
+            <span className="text-sm font-bold">Buka laci kasir otomatis setiap cetak struk</span>
           </label>
+          {getPrinterStatus().sunmiDrawer === false && (
+            <p data-testid="dev-drawer-hint" className="text-[11px] text-[#B45309] -mt-1">
+              APK yang terpasang belum mendukung buka laci — pasang <b>APK v2.10</b> atau lebih baru.
+            </p>
+          )}
           <label className="flex items-center gap-2.5 cursor-pointer" data-testid="dev-autoprint">
             <input type="checkbox" checked={cfg.autoPrint} onChange={(e) => upd({ autoPrint: e.target.checked })} className="h-4 w-4 accent-[#E63946]" />
             <span className="text-sm font-bold">Cetak struk otomatis saat pembayaran selesai</span>
@@ -212,6 +223,7 @@ export default function DeviceSettings() {
           <div className="flex gap-2 pt-1">
             <button data-testid="dev-save" onClick={save} className="tap h-11 px-5 rounded-xl bg-[#0A0A0A] text-white font-bold flex items-center gap-2"><Save size={16} /> Simpan</button>
             <button data-testid="dev-testprint" onClick={testPrint} className="tap h-11 px-5 rounded-xl bg-[#F4F5F7] border font-bold flex items-center gap-2"><Printer size={16} /> Cetak Struk Uji</button>
+            <button data-testid="dev-opendrawer" onClick={doOpenDrawer} className="tap h-11 px-5 rounded-xl bg-[#F4F5F7] border font-bold flex items-center gap-2"><Wallet size={16} /> Tes Buka Laci</button>
             <button data-testid="dev-selftest" onClick={doSelfTest} disabled={selftestBusy} className="tap h-11 px-5 rounded-xl bg-[#F4F5F7] border font-bold flex items-center gap-2 disabled:opacity-50"><Loader2 size={16} className={selftestBusy ? "animate-spin" : ""} /> Tes Mandiri</button>
           </div>
         </Card>

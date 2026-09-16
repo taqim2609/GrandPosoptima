@@ -171,6 +171,27 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception e) { lastBindError = "cutPaper: " + e; return false; }
         }
 
+        /**
+         * Buka laci kasir (RJ11/RJ12 tersambung ke printer Sunmi).
+         * Dipakai struk (receipt.js) & tombol "Tes Buka Laci" di Pengaturan → Perangkat.
+         * Perintah ESC/POS `ESC p 0 25 250` dikirim sebagai CADANGAN bila openDrawer()
+         * gagal — sebagian laci hanya bereaksi pada perintah mentah.
+         */
+        @JavascriptInterface
+        public boolean openDrawer() {
+            try {
+                if (printerService == null) return false;
+                try {
+                    printerService.openDrawer(resultCallback);
+                    return true;
+                } catch (Exception e1) {
+                    byte[] raw = new byte[]{0x1b, 0x70, 0x00, 0x19, (byte) 0xfa};
+                    printerService.sendRAWData(raw, resultCallback);
+                    return true;
+                }
+            } catch (Exception e) { lastBindError = "openDrawer: " + e; return false; }
+        }
+
         @JavascriptInterface
         public boolean selfTest() {
             try {

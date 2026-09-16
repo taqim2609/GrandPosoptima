@@ -155,39 +155,43 @@ function buildEscPos(order, cfg) {
   return concat(...L);
 }
 
-export async function printViaBluetooth(order) {
-  const cfg = getDeviceConfig();
+/** Ambil karakteristik tulis printer (pakai cache, atau minta sambung ulang sesuai config). */
+async function ensureCharacteristic() {
+  if (cachedCharacteristic) return cachedCharacteristic;
   if (!escapeBluetoothSupported()) throw new Error("Web Bluetooth tidak didukung browser ini");
-  let ch = cachedCharacteristic;
-  // Coba sambungkan ulang ke device yang tersimpan di config
-  if (!ch && cfg.bluetoothDevice) {
-    try {
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: CANDIDATE_SERVICES,
-        // tidak bisa filter nama di semua browser; requestDevice menampilkan pilihan
-      });
-      const server = await device.gatt.connect();
-      for (const svc of CANDIDATE_SERVICES) {
-        try {
-          const service = await server.getPrimaryService(svc);
-          const chars = await service.getCharacteristics();
-          for (const cc of chars) {
-            if (WRITE_PROPS.some((p) => cc[p])) { ch = cc; break; }
-          }
-        } catch (_) {}
-        if (ch) break;
-      }
-      if (!ch) throw new Error("Tidak menemukan karakteristik tulis");
-      cachedCharacteristic = ch;
-      cachedDevice = device;
-      device.addEventListener("gattserverdisconnected", () => { cachedCharacteristic = null; cachedDevice = null; });
-    } catch (e) {
-      throw new Error("Gagal konek printer Bluetooth: " + (e.message || e));
+  const cfg = getDeviceConfig();
+  if (!cfg.bluetoothDevice) throw new Error("Printer Bluetooth belum dipasang — pilih di Pengaturan > Perangkat");
+  let ch = null;
+  let device = null;
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: CANDIDATE_SERVICES,
+      // tidak bisa filter nama di semua browser; requestDevice menampilkan pilihan
+    });
+    const server = await device.gatt.connect();
+    for (const svc of CANDIDATE_SERVICES) {
+      try {
+        const service = await server.getPrimaryService(svc);
+        const chars = await service.getCharacteristics();
+        for (const cc of chars) {
+          if (WRITE_PROPS.some((p) => cc[p])) { ch = cc; break; }
+        }
+      } catch (_) {}
+      if (ch) break;
     }
+    if (!ch) throw new Error("Tidak menemukan karakteristik tulis");
+  } catch (e) {
+    throw new Error("Gagal konek printer Bluetooth: " + (e.message || e));
   }
-  if (!ch) throw new Error("Printer Bluetooth belum dipasang — pilih di Pengaturan > Perangkat");
-  const data = buildEscPos(order, cfg);
+  cachedCharacteristic = ch;
+  cachedDevice = device;
+  device.addEventListener("gattserverdisconnected", () => { cachedCharacteristic = null; cachedDevice = null; });
+  return ch;
+}
+
+async function writeBytes(data) {
+  const ch = await ensureCharacteristic();
   try {
     if (ch.writeValueWithoutResponse) await ch.writeValueWithoutResponse(data);
     else if (ch.writeValue) await ch.writeValue(data);
@@ -196,6 +200,21 @@ export async function printViaBluetooth(order) {
     throw new Error("Gagal kirim ke printer: " + (e.message || e));
   }
   return true;
+}
+
+export async function printViaBluetooth(order) {
+  if (!escapeBluetoothSupported()) throw new Error("Web Bluetooth tidak didukung browser ini");
+  return writeBytes(buildEscPos(order, getDeviceConfig()));
+}
+
+/** Cetak TEKS laporan (sudah dibungkus per baris oleh lib/print.js) via ESC/POS Bluetooth. */
+export async function printPlainViaBluetooth(lines) {
+  if (!escapeBluetoothSupported()) throw new Error("Web Bluetooth tidak didukung browser ini");
+  const L = [cmd(ESC, 0x40), cmd(ESC, 0x61, 0)]; // init + rata kiri
+  (lines || []).forEach((l) => L.push(text(`${l}\n`)));
+  L.push(text("\n\n"));
+  L.push(cmd(GS, 0x56, 0)); // potong kertas
+  return writeBytes(concat(...L));
 }
 
 export { escapeBluetoothSupported };

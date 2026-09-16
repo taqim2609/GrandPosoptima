@@ -76,13 +76,13 @@
       <li><b>Promo &amp; Kupon digabung</b> · <b>Resep &amp; HPP</b> di dalam Produk &amp; Stok · laporan tutup shift bisa dicetak</li>
       <li><b>Cek Integritas Data</b> — periksa relasi data, angka transaksi, stok, akun, indeks database &amp; backup; temuan yang aman bisa diperbaiki langsung dari halaman (Pengaturan → Fitur &amp; Integrasi → Integritas), bisa dijadwalkan mingguan, plus skrip <code style="display:inline;padding:1px 6px">./check-integrity-pi.sh</code> di server</li>
       <li><b>Berkas proyek tanpa kompresi</b> — halaman <b>Berkas proyek</b> menampilkan seluruh berkas proyek apa adanya (bisa dicari, dibaca langsung, dan diunduh satu per satu); arsip <b>.tar.gz</b> hanya untuk update otomatis di server</li>
-      <li><b>APK Android tersedia</b> (minSdk 23 = Android 6.0+, termasuk Android 7) — lihat bagian bawah</li>
+      <li><b>APK Android v2.10</b> (minSdk 23 = Android 6.0+, termasuk Android 7) — lihat bagian bawah</li>
     </ul>
     <a class="btn" href="files.php">📂 Berkas proyek (tanpa kompresi) — lihat &amp; unduh satu per satu</a>
     <a class="btn ghost" href="archive.php?f=pos-grand.tar.gz" download>⬇ pos-grand.tar.gz (khusus update otomatis server)</a>
     <a class="btn ghost" href="dl.php?f=update-vibecoder-pi.sh" download>⬇ Unduh update-vibecoder-pi.sh</a>
     <a class="btn ghost" href="dl.php?f=check-integrity-pi.sh" download>🛡 Unduh check-integrity-pi.sh</a>
-    <a class="btn ghost" href="apk/Grand-Aceh-Kuliner-POS-v2.9.apk" download>📱 Unduh APK Android</a>
+    <a class="btn ghost" href="apk/Grand-Aceh-Kuliner-POS-v2.10.apk" download>📱 Unduh APK Android v2.10 (buka laci otomatis)</a>
     <p style="color:#635F82;font-size:13px;margin-bottom:6px">Di server Pi (sekali saja untuk beralih):</p>
     <code>cd ~/grand-aceh-pos
 curl -fsSL "https://taqim258.vibecoder.co.id/pos-grand-update/dl.php?f=update-vibecoder-pi.sh" -o update-vibecoder-pi.sh

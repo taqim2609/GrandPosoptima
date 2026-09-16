@@ -119,9 +119,19 @@ if [ "$GOT_REPORT" = "0" ]; then
   DBNAME="$(grep -E '^DB_NAME=' backend/.env.docker 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r' | xargs || true)"
   DBNAME="${DBNAME:-grandpos}"
   JS="var d=db.getSiblingDB('$DBNAME').settings.findOne({_id:'integrity'}); print(JSON.stringify(d && d.last ? d.last : null));"
+  # PENTING: fungsi compose() di atas menggabungkan stderr (2>&1), sehingga pada MongoDB 4.4
+  # (yang TIDAK punya 'mongosh') percobaan pertama menghasilkan pesan galat
+  # "OCI runtime exec failed ... mongosh: executable file not found" — dulu itu ikut diterima
+  # sebagai laporan lalu loop berhenti sebelum mencoba shell 'mongo' yang sebenarnya ada.
+  # Sekarang hanya keluaran yang benar-benar laporan (JSON memuat "summary") yang diterima.
   for SH in mongosh mongo; do
-    OUT="$(compose exec -T mongo $SH --quiet --eval "$JS" | tr -d '\r' | tail -1)"
-    if [ -n "$OUT" ] && [ "$OUT" != "null" ]; then printf '%s' "$OUT" > "$TMP_REP"; GOT_REPORT=1; break; fi
+    RAW="$(compose exec -T mongo $SH --quiet --eval "$JS" | tr -d '\r')"
+    CAND="$(printf '%s\n' "$RAW" | grep -E '^\{.*"summary"' | tail -1)"
+    if [ -n "$CAND" ]; then
+      printf '%s' "$CAND" > "$TMP_REP"
+      GOT_REPORT=1
+      break
+    fi
   done
 fi
 

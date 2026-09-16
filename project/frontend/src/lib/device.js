@@ -120,9 +120,11 @@ export function getPrinterStatus() {
   let debug = "";
   // Cek bridge Sunmi (untuk mode sunmi/auto) — status koneksi AIDL
   let sunmiConnected = null;
+  let sunmiDrawer = null; // bridge mendukung buka laci (APK v2.10+)
   try {
     const sp = window.SunmiInnerPrinter || window.sunmiInnerPrinter || window.sunmi || window.SunmiPrinterBridge;
     if (sp && typeof sp.isConnected === "function") sunmiConnected = !!sp.isConnected();
+    if (sp) sunmiDrawer = typeof sp.openDrawer === "function";
     if (sp && typeof sp.getDebugInfo === "function" && sunmiConnected === false) debug = sp.getDebugInfo();
   } catch (e) {}
   switch (mode) {
@@ -150,5 +152,28 @@ export function getPrinterStatus() {
     default:
       label = mode;
   }
-  return { mode, label, level, bluetoothSupported, deviceName: cfg.bluetoothDevice || cfg.epsonIp || "", sunmiConnected, debug };
+  return { mode, label, level, bluetoothSupported, deviceName: cfg.bluetoothDevice || cfg.epsonIp || "",
+           sunmiConnected, sunmiDrawer, debug };
+}
+
+/**
+ * Buka laci kasir lewat bridge printer Sunmi (APK). Dipakai tombol "Tes Buka Laci"
+ * di Pengaturan → Perangkat (verifikasi tanpa harus transaksi).
+ * @returns {{ok: boolean, reason?: string}}
+ */
+export function openCashDrawer() {
+  try {
+    const sp = window.SunmiInnerPrinter || window.sunmiInnerPrinter || window.sunmi || window.SunmiPrinterBridge;
+    if (!sp) return { ok: false, reason: "Printer Sunmi tidak tersedia (APK belum tersambung ke printer)" };
+    if (typeof sp.openDrawer !== "function") {
+      return { ok: false, reason: "APK ini belum mendukung buka laci — pasang APK v2.10 atau lebih baru" };
+    }
+    if (typeof sp.isConnected === "function" && !sp.isConnected()) {
+      return { ok: false, reason: "Layanan printer Sunmi belum tersambung" };
+    }
+    const done = !!sp.openDrawer();
+    return done ? { ok: true } : { ok: false, reason: "Printer menolak perintah buka laci" };
+  } catch (e) {
+    return { ok: false, reason: String((e && e.message) || e) };
+  }
 }

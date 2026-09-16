@@ -17,10 +17,10 @@ import {
   Tags, ShieldAlert,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { printText } from "@/lib/print";
 
 const nf = (n) => (n == null ? "0" : Number(n).toLocaleString("id-ID", { maximumFractionDigits: 2 }));
 const fmtRp = (n) => "Rp" + Math.round(Number(n || 0)).toLocaleString("id-ID");
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export default function IngredientsPage() {
   const { user } = useAuth();
@@ -218,25 +218,40 @@ export default function IngredientsPage() {
       toast.success(`Daftar belanja ${date} tersimpan (${items.length} item)`);
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); } finally { setSaving(false); }
   };
+  /* Cetak daftar belanja — jalur printer thermal (Sunmi/Bluetooth) lewat printText(),
+     jadi bisa dicetak dari APK; di web tetap membuka jendela cetak browser.
+     Format teks monospace (bukan tabel HTML) supaya muat kertas 80mm. */
+  const buildListText = (items) => {
+    const total = items.reduce((s2, i) => s2 + Number(i.cost || 0) * Number(i.qty || 0), 0);
+    const W = 42;
+    const line = (l, r) => {
+      const left = String(l);
+      const right = String(r == null ? "" : r);
+      const pad = Math.max(1, W - left.length - right.length);
+      return left + " ".repeat(pad) + right;
+    };
+    const out = [];
+    out.push("DAFTAR BELANJA BAHAN");
+    out.push(`Tanggal: ${date}`);
+    out.push(`${items.length} item`);
+    out.push("--------------------------------");
+    out.push(line("#  BAHAN", "JUMLAH"));
+    out.push("--------------------------------");
+    items.forEach((i, n) => {
+      const qty = `${nf(i.qty)} ${i.unit || ""}`.trim();
+      out.push(line(`${n + 1}. ${i.name}`, qty));
+      if (i.cost) out.push(line("   perkiraan", fmtRp(Number(i.cost) * Number(i.qty))));
+      if (i.note) out.push(`   catatan: ${i.note}`);
+    });
+    out.push("--------------------------------");
+    if (total) out.push(line("ESTIMASI TOTAL", fmtRp(total)));
+    out.push("");
+    return out.join("\n");
+  };
   const doPrint = () => {
     const items = (list?.items || []).filter((i) => (i.name || "").trim() && Number(i.qty) > 0);
     if (!items.length) return toast.error("Belum ada item");
-    const total = items.reduce((s, i) => s + Number(i.cost || 0) * Number(i.qty || 0), 0);
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Daftar Belanja ${esc(date)}</title><style>
-      @page { size: A5; margin: 12mm } body{font-family:system-ui,sans-serif;color:#111;font-size:13px}
-      h1{font-size:17px;margin:0 0 2px}.sub{color:#666;font-size:11px;margin-bottom:12px}
-      table{width:100%;border-collapse:collapse}th{text-align:left;background:#f1f1f4;font-size:11px;text-transform:uppercase;padding:6px}
-      td{border-bottom:1px solid #eee;padding:6px 4px}td.r,th.r{text-align:right}
-      .tot{margin-top:10px;font-weight:700}.print{margin:14px 0 0;padding:8px 18px;border:0;border-radius:8px;background:#111;color:#fff;font-size:13px}
-      @media print{.print{display:none}}</style></head><body>
-      <h1>Daftar Belanja Bahan</h1><div class="sub">Tanggal: ${esc(date)} · ${items.length} item</div>
-      <table><thead><tr><th>#</th><th>Bahan</th><th class="r">Jumlah</th><th class="r">Perkiraan</th></tr></thead><tbody>
-      ${items.map((i, n) => `<tr><td>${n + 1}</td><td>${esc(i.name)}</td><td class="r">${nf(i.qty)} ${esc(i.unit || "")}</td><td class="r">${i.cost ? fmtRp(Number(i.cost) * Number(i.qty)) : "—"}</td></tr>`).join("")}
-      </tbody></table>
-      <div class="tot">Total item: ${items.length}${total ? ` · Estimasi: ${fmtRp(total)}` : ""}</div>
-      <button class="print" onclick="window.print()">Cetak</button></body></html>`;
-    const w = window.open("", "_blank", "width=640,height=800");
-    if (w) { w.document.write(html); w.document.close(); }
+    printText(buildListText(items), `Daftar Belanja ${date}`);
   };
   const sendWa = async () => {
     const items = (list?.items || []).filter((i) => (i.name || "").trim() && Number(i.qty) > 0);

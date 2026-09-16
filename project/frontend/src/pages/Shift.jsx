@@ -736,7 +736,7 @@ export default function Shift() {
             <pre className="rounded-xl bg-[#FAFAFB] border p-4 text-xs leading-relaxed whitespace-pre-wrap font-mono max-h-[50vh] overflow-y-auto">{printText}</pre>
           )}
           <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <button onClick={doPrintText} disabled={printText == null} className="tap w-full h-12 rounded-xl bg-[#0A0A0A] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+            <button data-testid="shift-print-do" onClick={doPrintText} disabled={printText == null} className="tap w-full h-12 rounded-xl bg-[#0A0A0A] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
               <Printer size={17} /> Cetak Sekarang
             </button>
           </DialogFooter>
