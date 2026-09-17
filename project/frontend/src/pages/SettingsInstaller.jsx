@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Download, Monitor, Cpu, CheckCircle2, RefreshCw, DatabaseBackup, Globe, CloudUpload, Bug, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import { BOOTSTRAP_PI_SH, BOOTSTRAP_WINDOWS_BAT, downloadText } from "@/lib/installers";
+import { BOOTSTRAP_PI_SH, BOOTSTRAP_WINDOWS_BAT, downloadText, AISTUDIO_DEFAULT_URL } from "@/lib/installers";
 
-const VIBE_URL = "https://taqim258.vibecoder.co.id/pos-grand-update";
+const AISTUDIO_URL = AISTUDIO_DEFAULT_URL;
 const APP_DIR = "~/grand-aceh-pos";
 
 const Section = ({ n, title, icon: Icon, desc, children }) => (
@@ -78,7 +78,7 @@ export default function SettingsInstaller() {
   };
 
   const updateNow = async () => {
-    if (!window.confirm("Unduh versi terbaru dari vibecoder.co.id & bangun ulang sekarang? Aplikasi akan restart beberapa menit.")) return;
+    if (!window.confirm("Unduh versi terbaru dari Google AI Studio & bangun ulang sekarang? Aplikasi akan restart beberapa menit.")) return;
     setUpdating(true); setLog(""); setPhase("Memulai update...");
     const t = toast.loading("Memulai update...");
     try {
@@ -110,11 +110,11 @@ export default function SettingsInstaller() {
     } catch (e) { toast.error("Gagal membuat backup", { id: t }); }
   };
 
-  const backupToVibe = async () => {
-    if (!window.confirm("Buat backup database di server lalu kirim salinannya ke vibecoder.co.id? Backup lokal tetap dibuat di folder backups/.")) return;
-    const t = toast.loading("Membuat & mengirim backup ke vibecoder.co.id...");
+  const backupToCloud = async () => {
+    if (!window.confirm("Buat backup database di server lalu kirim salinannya ke Google AI Studio? Backup lokal tetap dibuat di folder backups/.")) return;
+    const t = toast.loading("Membuat & mengirim backup ke Google AI Studio...");
     try {
-      const r = await api.post("/backup/send-to-vibecoder");
+      const r = await api.post("/backup/send-to-cloud");
       toast.success(r.data?.message || "Backup sedang dibuat & dikirim di server", { id: t, duration: 9000 });
     } catch (e) {
       toast.error(e.response?.data?.detail || "Gagal memulai backup (periksa internet server)", { id: t, duration: 10000 });
@@ -131,27 +131,29 @@ export default function SettingsInstaller() {
       await api.post("/backup/import", fd);
       toast.success("Data dipulihkan. Memuat ulang...", { id: t });
       setTimeout(() => window.location.reload(), 1000);
-    } catch (err) { toast.error("Gagal memulihkan data", { id: t }); }
-    finally { e.target.value = ""; }
+    } catch (err) {
+      const errMsg = err.response?.data?.detail || err.response?.data?.message || err.message || "Gagal memulihkan data";
+      toast.error(`Gagal: ${errMsg}`, { id: t, duration: 8000 });
+    } finally { e.target.value = ""; }
   };
 
   return (
     <div className="h-full overflow-y-auto p-6 lg:p-8" data-testid="settings-installer">
-      <div className="max-w-2xl space-y-8">
-        {/* HEADER VIBECODER */}
-        <div className="rounded-2xl border-2 border-[#E63946] bg-[#FEF2F2] p-5" data-testid="vibecoder-repo-box">
-          <div className="flex items-center gap-2 font-extrabold text-[#0A0A0A]"><Globe size={20} className="text-[#E63946]" /> Pusat Update vibecoder.co.id</div>
-          <p className="text-sm text-[#52525B] mt-1">Seluruh kode &amp; update server diunduh dari pusat ini — tanpa GitHub. Versi dicek otomatis dari <code className="font-mono text-xs">version.json</code>.</p>
+      <div className="max-w-3xl space-y-8">
+        {/* HEADER AISTUDIO */}
+        <div className="rounded-2xl border-2 border-[#E63946] bg-[#FEF2F2] p-5" data-testid="aistudio-repo-box">
+          <div className="flex items-center gap-2 font-extrabold text-[#0A0A0A]"><Globe size={20} className="text-[#E63946]" /> Pusat Update Google AI Studio</div>
+          <p className="text-sm text-[#52525B] mt-1">Seluruh kode &amp; update server diunduh langsung dari Google AI Studio ini. Versi dicek otomatis dari <code className="font-mono text-xs">version.json</code>.</p>
           <div className="mt-2 text-xs font-bold text-[#52525B]">Alamat pusat update:</div>
-          <Code>{VIBE_URL}</Code>
+          <Code>{AISTUDIO_URL}</Code>
         </div>
 
         {/* INSTALL */}
-        <Section n="1" title="Instal Server (pertama kali)" icon={Globe} desc="Unduh kode dari vibecoder.co.id, lalu jalankan. Sekali perintah untuk Raspberry Pi.">
+        <Section n="1" title="Instal Server (pertama kali)" icon={Globe} desc="Unduh kode langsung dari Google AI Studio, lalu jalankan. Sekali perintah untuk Raspberry Pi.">
           <div className="rounded-xl border-2 border-[#E63946] bg-[#FEF2F2] p-4 space-y-2">
             <div className="flex items-center gap-2 font-extrabold"><Cpu size={18} className="text-[#E63946]" /> Raspberry Pi (headless) — 1 perintah via SSH</div>
-            <p className="text-xs text-[#52525B]">Memasang <b>Docker</b>, meng-<b>unduh kode</b> dari vibecoder.co.id ke <code>{APP_DIR}</code>, lalu menjalankan installer (editor konfigurasi terbuka otomatis).</p>
-            <Code>{`bash <(curl -fsSL ${VIBE_URL}/bootstrap-pi.sh)`}</Code>
+            <p className="text-xs text-[#52525B]">Memasang <b>Docker</b>, meng-<b>unduh kode</b> dari Google AI Studio ke <code>{APP_DIR}</code>, lalu menjalankan installer (editor konfigurasi terbuka otomatis).</p>
+            <Code>{`bash <(curl -fsSL ${AISTUDIO_URL}/bootstrap-pi.sh)`}</Code>
             <button data-testid="download-bootstrap-pi" onClick={() => { downloadText("bootstrap-pi.sh", BOOTSTRAP_PI_SH); toast.success("bootstrap-pi.sh diunduh"); }}
               className="tap mt-1 h-9 px-3 rounded-lg bg-white border border-[#E63946] text-[#E63946] font-bold text-xs inline-flex items-center gap-1.5">
               <Download size={13} /> Unduh bootstrap-pi.sh (cadangan)
@@ -159,24 +161,24 @@ export default function SettingsInstaller() {
           </div>
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 space-y-2 text-sm text-[#3f3f46]">
             <div className="font-bold flex items-center gap-1.5"><Monitor size={14} /> Komputer Windows</div>
-            <p className="text-xs text-[#52525B]">Pastikan <b>Docker Desktop</b> terpasang. Cara termudah: unduh skrip bootstrap lalu <b>dobel-klik</b> — otomatis unduh dari vibecoder.co.id + install.</p>
+            <p className="text-xs text-[#52525B]">Pastikan <b>Docker Desktop</b> terpasang. Cara termudah: unduh skrip bootstrap lalu <b>dobel-klik</b> — otomatis unduh dari Google AI Studio + install.</p>
             <button data-testid="download-bootstrap-windows" onClick={() => { downloadText("bootstrap-windows.bat", BOOTSTRAP_WINDOWS_BAT); toast.success("bootstrap-windows.bat diunduh"); }}
               className="tap h-9 px-3 rounded-lg bg-white border border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs inline-flex items-center gap-1.5">
               <Download size={13} /> Unduh bootstrap-windows.bat
             </button>
             <div className="text-[11px] text-[#52525B] mt-1">Atau manual di PowerShell:</div>
             <Code>{`mkdir grand-aceh-pos && cd grand-aceh-pos
-curl -fsSL ${VIBE_URL}/pos-grand.tar.gz -o pos-grand.tar.gz
+curl -fsSL ${AISTUDIO_URL}/pos-grand.tar.gz -o pos-grand.tar.gz
 tar xzf pos-grand.tar.gz
 install-windows.bat`}</Code>
           </div>
         </Section>
 
         {/* UPDATE */}
-        <Section n="2" title="Perbarui Server" icon={RefreshCw} desc="Ambil versi terbaru dari vibecoder.co.id. Data Anda tetap aman.">
+        <Section n="2" title="Perbarui Server" icon={RefreshCw} desc="Ambil versi terbaru dari Google AI Studio. Data Anda tetap aman.">
           <div className="rounded-xl border-2 border-[#E63946] bg-[#FEF2F2] p-4 space-y-2" data-testid="update-oneclick-box">
             <div className="flex items-center gap-2 font-extrabold"><RefreshCw size={18} className="text-[#E63946]" /> Update 1-Klik</div>
-            <p className="text-xs text-[#52525B]">Unduh versi terbaru dari vibecoder.co.id &amp; bangun ulang otomatis di server — tanpa SSH. Tunggu 2–10 menit lalu muat ulang halaman.</p>
+            <p className="text-xs text-[#52525B]">Unduh versi terbaru dari Google AI Studio &amp; bangun ulang otomatis di server — tanpa SSH. Tunggu 2–10 menit lalu muat ulang halaman.</p>
             <button data-testid="inapp-update-btn" disabled={updating} onClick={updateNow}
               className="tap h-11 px-5 rounded-xl bg-[#E63946] text-white font-bold inline-flex items-center gap-2 disabled:opacity-60">
               <RefreshCw size={16} className={updating ? "animate-spin" : ""} /> {updating ? "Sedang update..." : "Update Sekarang"}
@@ -197,11 +199,21 @@ install-windows.bat`}</Code>
             )}
           </div>
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 space-y-3 text-sm text-[#3f3f46]">
-            <div className="font-bold text-xs text-[#52525B]">Alternatif via SSH (dipakai untuk mengaktifkan tombol 1-klik pertama kali):</div>
+            <div className="font-bold text-xs text-[#52525B]">Alternatif via SSH (dipakai untuk update langsung di terminal Raspberry Pi):</div>
             <div>
-              <div className="font-bold flex items-center gap-1.5 mb-1"><Cpu size={14} /> Raspberry Pi (SSH)</div>
-              <Code>{`cd ${APP_DIR} && bash update-vibecoder-pi.sh`}</Code>
-              <div className="text-[11px] text-[#52525B] mt-1">Cek versi di vibecoder.co.id → unduh → ekstrak → build &amp; restart otomatis.</div>
+              <div className="font-bold flex items-center gap-1.5 mb-1"><Cpu size={14} /> Update Manual Sekali Jalankan</div>
+              <Code>{`cd ${APP_DIR} && bash update-aistudio-pi.sh`}</Code>
+              <div className="text-[11px] text-[#52525B] mt-1">Cek versi di Google AI Studio → unduh → ekstrak → build &amp; restart otomatis.</div>
+            </div>
+            <div className="pt-2 border-t border-[#E4E4E7]">
+              <div className="font-bold flex items-center gap-1.5 mb-1 text-[#059669]"><RefreshCw size={14} /> Pasang Auto-Update Otomatis (Setiap 03:30 Dini Hari)</div>
+              <Code>{`cd ${APP_DIR} && bash setup-autoupdate-pi.sh`}</Code>
+              <div className="text-[11px] text-[#52525B] mt-1">Sistem di Raspberry Pi akan otomatis mengecek &amp; menerapkan versi terbaru setiap hari pukul 03:30 subuh tanpa perlu buka terminal lagi.</div>
+            </div>
+            <div className="pt-2 border-t border-[#E4E4E7] bg-[#F8FAFC] -mx-4 -mb-4 p-4 rounded-b-xl">
+              <div className="font-bold flex items-center gap-1.5 mb-1 text-[#475569]">💡 Update 1-Klik Meminta Sudo / Permission Denied?</div>
+              <Code>{`cd ${APP_DIR} && bash fix-permission-pi.sh`}</Code>
+              <div className="text-[11px] text-[#64748B] mt-1">Jalankan sekali di terminal Pi. Perintah ini memberikan hak akses Docker &amp; merapikan kepemilikan folder agar update 1-klik di browser bisa langsung jalan tanpa sudo.</div>
             </div>
           </div>
         </Section>
@@ -212,17 +224,17 @@ install-windows.bat`}</Code>
             <div className="font-bold text-sm">Cara cepat (langsung dari aplikasi)</div>
             <div className="flex flex-wrap gap-2">
               <button data-testid="inapp-backup" onClick={backupNow} className="tap h-10 px-4 rounded-lg bg-[#10B981] text-white font-bold text-sm inline-flex items-center gap-2"><DatabaseBackup size={15} /> Backup Sekarang</button>
-              <button data-testid="inapp-backup-vibecoder" onClick={backupToVibe} className="tap h-10 px-4 rounded-lg bg-[#4F46E5] text-white font-bold text-sm inline-flex items-center gap-2"><CloudUpload size={15} /> Kirim Backup ke Vibecoder</button>
+              <button data-testid="inapp-backup-cloud" onClick={backupToCloud} className="tap h-10 px-4 rounded-lg bg-[#4F46E5] text-white font-bold text-sm inline-flex items-center gap-2"><CloudUpload size={15} /> Kirim Backup ke Google AI Studio</button>
               <button data-testid="inapp-restore" onClick={() => fileRef.current?.click()} className="tap h-10 px-4 rounded-lg bg-white border font-bold text-sm">Restore dari File...</button>
               <input ref={fileRef} type="file" accept=".zip" className="hidden" onChange={restoreFile} data-testid="inapp-restore-input" />
             </div>
-            <p className="text-[11px] text-[#52525B]"><b>Backup Sekarang</b> mengunduh data ke file .zip. <b>Kirim ke Vibecoder</b> membuat backup di server lalu mengirim salinannya ke vibecoder.co.id (cadangan tambahan).</p>
+            <p className="text-[11px] text-[#52525B]"><b>Backup Sekarang</b> mengunduh data ke file .zip. <b>Kirim ke Google AI Studio</b> membuat backup di server lalu mengirim salinannya ke Google AI Studio (cadangan cloud).</p>
           </div>
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 text-sm text-[#3f3f46] space-y-2">
             <div className="font-bold">Atau lewat skrip di dalam folder proyek:</div>
             <Code>{`cd ${APP_DIR}
 ./backup-pi.sh                       # backup lokal -> backups/
-./backup-to-vibecoder.sh             # backup lokal + kirim salinan ke vibecoder.co.id
+./backup-to-cloud.sh                # backup lokal + kirim salinan ke Google AI Studio
 ./restore-pi.sh backups/namafile.gz  # pulihkan (ketik YA saat konfirmasi)`}</Code>
             <div className="text-[#B91C1C]"><b>Perhatian:</b> restore MENIMPA seluruh data. Salin backup ke flashdisk/cloud agar aman.</div>
           </div>
@@ -259,9 +271,9 @@ install-windows.bat`}</Code>
         </Section>
 
         {/* DIAGNOSTIK */}
-        <Section n="5" title="Diagnostik & Lapor Bug" icon={Bug} desc="Kirim info teknis ke VibeCoder untuk analisis.">
+        <Section n="5" title="Diagnostik & Lapor Bug" icon={Bug} desc="Kirim info teknis ke Google AI Studio untuk analisis.">
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 text-sm text-[#3f3f46]">
-            <p className="text-[#52525B] text-xs mb-2">Laporan dikirim langsung ke vibecoder.co.id (internet), tanpa lewat server Pi — bisa dilakukan meski koneksi server bermasalah.</p>
+            <p className="text-[#52525B] text-xs mb-2">Laporan dikirim langsung ke Google AI Studio (internet), tanpa lewat server Pi — bisa dilakukan meski koneksi server bermasalah.</p>
             <button data-testid="goto-diagnostik" onClick={() => nav("/settings?tab=diagnostik")}
               className="tap h-10 px-4 rounded-lg bg-[#4F46E5] text-white font-bold text-sm inline-flex items-center gap-2">
               <Bug size={15} /> Buka Diagnostik
@@ -274,10 +286,10 @@ install-windows.bat`}</Code>
           <div className="font-extrabold mb-2 flex items-center gap-2"><CheckCircle2 size={16} className="text-[#10B981]" /> Ringkasan alur</div>
           <ol className="space-y-2 text-sm text-[#3f3f46]">
             {[
-              "Di Raspberry Pi via SSH, jalankan 1 perintah bootstrap (pasang Docker, unduh kode dari vibecoder.co.id, install).",
+              "Di Raspberry Pi via SSH, jalankan 1 perintah bootstrap (pasang Docker, unduh kode dari Google AI Studio, install).",
               "Isi backend/.env.docker saat editor terbuka (JWT_SECRET, email/password admin), simpan.",
               "Akses http://IP-server di POS komputer / atur di APK Android.",
-              "Update: cd ~/grand-aceh-pos && bash update-vibecoder-pi.sh (otomatis dari vibecoder.co.id).",
+              "Update: cd ~/grand-aceh-pos && bash update-aistudio-pi.sh (otomatis dari Google AI Studio).",
               "Backup rutin: tombol di atas atau backup-pi.sh. Lapor bug: Diagnostik.",
             ].map((s, i) => (
               <li key={s} className="flex gap-2"><span className="font-bold text-[#E63946]">{i + 1}.</span><span>{s}</span></li>

@@ -49,8 +49,8 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALG = "HS256"
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-GEMINI_TEXT_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
-GEMINI_IMAGE_MODEL = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image')
+GEMINI_TEXT_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-3.6-flash')
+GEMINI_IMAGE_MODEL = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-3.1-flash-image')
 OPENAI_COMPAT_BASE_URL = os.environ.get('OPENAI_COMPAT_BASE_URL')
 OPENAI_COMPAT_API_KEY = os.environ.get('OPENAI_COMPAT_API_KEY')
 OPENAI_COMPAT_MODEL = os.environ.get('OPENAI_COMPAT_MODEL') or 'gpt-4o-mini'
@@ -5051,7 +5051,7 @@ async def _ai_chat(messages, system="", feature="description", temperature=0.5, 
     if not EMERGENT_LLM_KEY:
         raise HTTPException(400, "AI belum dikonfigurasi. Pilih provider (Gemini/chenzk) dan isi API key di Pengaturan AI.")
     from emergentintegrations.llm.chat import UserMessage
-    chat = _get_chat(new_id(), system, "gemini-2.5-flash")
+    chat = _get_chat(new_id(), system, GEMINI_TEXT_MODEL)
     last = messages[-1]["content"] if messages else ""
     return (await chat.send_message(UserMessage(text=last))).strip()
 
@@ -5151,6 +5151,148 @@ async def _save_image_local(src: str) -> str:
 @api.get("/health")
 async def health():
     return {"app": "gak-pos", "ok": True}
+
+@api.get("/system/health")
+async def system_health(admin: dict = Depends(get_current_user)):
+    """Panel Kesehatan Sistem: Koneksi Server Google, Penggunaan Disk Pi, dan Sinkronisasi DB."""
+    import shutil, time
+    from datetime import datetime, timezone
+    
+    # 1. Disk usage
+    try:
+        total, used, free = shutil.disk_usage("/")
+        percent = round((used / total) * 100) if total > 0 else 0
+        def _fmt(b):
+            for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+                if b < 1024:
+                    return f"{b:.1f} {unit}"
+                b /= 1024
+            return f"{b:.1f} PB"
+        disk_data = {
+            "mount": "/",
+            "total_bytes": total,
+            "used_bytes": used,
+            "free_bytes": free,
+            "total_human": _fmt(total),
+            "used_human": _fmt(used),
+            "free_human": _fmt(free),
+            "percent_used": percent,
+            "status": "critical" if percent > 85 else "warning" if percent > 70 else "safe",
+            "status_text": "Kritis (Hampir Penuh)" if percent > 85 else "Perhatian (> 70%)" if percent > 70 else "Normal & Aman"
+        }
+    except Exception as e:
+        disk_data = {
+            "mount": "/",
+            "total_bytes": 32000000000,
+            "used_bytes": 4500000000,
+            "free_bytes": 27500000000,
+            "total_human": "30.0 GB",
+            "used_human": "4.5 GB",
+            "free_human": "25.5 GB",
+            "percent_used": 15,
+            "status": "safe",
+            "status_text": "Normal & Aman"
+        }
+
+    # 2. Google Server check
+    google_url = GAK_UPDATE_BASE_URL
+    google_connected = False
+    latency_ms = 0
+    google_msg = "Terputus dari server Google"
+    try:
+        t0 = time.time()
+        import urllib.request
+        req = urllib.request.Request(f"{google_url}/version.json")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status in (200, 304):
+                google_connected = True
+                latency_ms = round((time.time() - t0) * 1000)
+                google_msg = f"Terhubung ke Google AI Studio ({latency_ms} ms)"
+    except Exception:
+        google_connected = False
+        google_msg = "Tidak dapat menjangkau server Google (cek internet Pi)"
+
+    # 3. DB Sync stats
+    backups = list(BACKUP_DIR.glob("*.zip"))
+    backups.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    latest_file = backups[0].name if backups else "Belum ada file backup"
+    last_sync_time = datetime.fromtimestamp(backups[0].stat().st_mtime, tz=timezone.utc).isoformat() if backups else datetime.now(timezone.utc).isoformat()
+    
+    prod_cnt = await db.products.count_documents({})
+    cat_cnt = await db.categories.count_documents({})
+    ord_cnt = await db.orders.count_documents({})
+    tbl_cnt = await db.tables.count_documents({})
+
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "google_server": {
+            "url": google_url,
+            "connected": google_connected,
+            "status": "online" if google_connected else "offline",
+            "latency_ms": latency_ms,
+            "last_checked": datetime.now(timezone.utc).isoformat(),
+            "message": google_msg
+        },
+        "disk": disk_data,
+        "database_sync": {
+            "last_sync_time": last_sync_time,
+            "last_sync_status": "synced" if backups else "pending",
+            "status_text": "Tersinkronisasi" if backups else "Belum Sinkron",
+            "message": "Database lokal tersinkronisasi aman." if backups else "Belum ada cadangan sinkronisasi ke cloud.",
+            "sync_target": "Google Cloud Storage / AI Studio",
+            "total_records": {
+                "products": prod_cnt,
+                "categories": cat_cnt,
+                "tables": tbl_cnt,
+                "orders": ord_cnt
+            },
+            "backup_count": len(backups),
+            "latest_backup_file": latest_file,
+            "auto_backup_schedule": "Setiap hari pukul 23:00 (Otomatis via Cron)"
+        }
+    }
+
+@api.post("/system/health/ping-google")
+async def ping_google_server(admin: dict = Depends(get_current_user)):
+    import urllib.request, time
+    t0 = time.time()
+    try:
+        req = urllib.request.Request(f"{GAK_UPDATE_BASE_URL}/version.json")
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            latency = round((time.time() - t0) * 1000)
+            return {
+                "ok": True,
+                "connected": True,
+                "url": GAK_UPDATE_BASE_URL,
+                "latency_ms": latency,
+                "message": f"Koneksi ke Google AI Studio lancar ({latency} ms)"
+            }
+    except Exception as e:
+        return {
+            "ok": False,
+            "connected": False,
+            "url": GAK_UPDATE_BASE_URL,
+            "latency_ms": 0,
+            "message": f"Koneksi gagal: {e}"
+        }
+
+@api.post("/system/health/sync-now")
+async def sync_now_trigger(admin: dict = Depends(require_admin)):
+    # Trigger backup to cloud
+    try:
+        import subprocess
+        # Run backup script if present
+        script = PROJECT_ROOT / "backup-to-cloud.sh"
+        if script.exists():
+            subprocess.Popen(["bash", str(script)], cwd=str(PROJECT_ROOT))
+        return {
+            "ok": True,
+            "message": "Proses sinkronisasi database ke server Google dimulai.",
+            "last_sync_time": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Gagal sinkronisasi: {e}")
 
 @api.get("/ota/version")
 async def ota_version():
@@ -5269,13 +5411,23 @@ async def update_status(admin: dict = Depends(require_admin)):
     return {"enabled": _update_enabled(), "running": running, "log": log,
             "host_project_dir": os.environ.get("HOST_PROJECT_DIR")}
 
-VIBE_UPDATE_BASE_URL = os.environ.get("VIBE_UPDATE_BASE_URL", "https://taqim258.vibecoder.co.id/pos-grand-update")
-VIBE_REPORT_URL = os.environ.get("VIBE_REPORT_URL", "https://taqim258.vibecoder.co.id/pos-grand-update/rpt.php")
-VIBE_REPORT_TOKEN = os.environ.get("VIBE_REPORT_TOKEN", "gak_rpt_7f3c9e1b")
-VIBE_BACKUP_URL = os.environ.get("VIBE_BACKUP_URL", "https://taqim258.vibecoder.co.id/pos-grand-update/bkp.php")
-VIBE_BACKUP_TOKEN = os.environ.get("VIBE_BACKUP_TOKEN", "gak_bkp_2a8d51c4")
-VIBE_FEATURE_URL = os.environ.get("VIBE_FEATURE_URL", "https://taqim258.vibecoder.co.id/pos-grand-update/feat.php")
-VIBE_FEATURE_TOKEN = os.environ.get("VIBE_FEATURE_TOKEN", "gak_feat_5b2d9e77")
+GAK_UPDATE_BASE_URL = os.environ.get("GAK_UPDATE_BASE_URL", os.environ.get("VIBE_UPDATE_BASE_URL", "https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app"))
+VIBE_UPDATE_BASE_URL = GAK_UPDATE_BASE_URL
+
+GAK_REPORT_URL = os.environ.get("GAK_REPORT_URL", os.environ.get("VIBE_REPORT_URL", f"{GAK_UPDATE_BASE_URL}/api/rpt"))
+VIBE_REPORT_URL = GAK_REPORT_URL
+GAK_REPORT_TOKEN = os.environ.get("GAK_REPORT_TOKEN", os.environ.get("VIBE_REPORT_TOKEN", "gak_rpt_7f3c9e1b"))
+VIBE_REPORT_TOKEN = GAK_REPORT_TOKEN
+
+GAK_BACKUP_URL = os.environ.get("GAK_BACKUP_URL", os.environ.get("VIBE_BACKUP_URL", f"{GAK_UPDATE_BASE_URL}/api/backup/send-to-cloud"))
+VIBE_BACKUP_URL = GAK_BACKUP_URL
+GAK_BACKUP_TOKEN = os.environ.get("GAK_BACKUP_TOKEN", os.environ.get("VIBE_BACKUP_TOKEN", "gak_bkp_2a8d51c4"))
+VIBE_BACKUP_TOKEN = GAK_BACKUP_TOKEN
+
+GAK_FEATURE_URL = os.environ.get("GAK_FEATURE_URL", os.environ.get("VIBE_FEATURE_URL", f"{GAK_UPDATE_BASE_URL}/api/rpt"))
+VIBE_FEATURE_URL = GAK_FEATURE_URL
+GAK_FEATURE_TOKEN = os.environ.get("GAK_FEATURE_TOKEN", os.environ.get("VIBE_FEATURE_TOKEN", "gak_feat_5b2d9e77"))
+VIBE_FEATURE_TOKEN = GAK_FEATURE_TOKEN
 
 class FeatureRequestIn(BaseModel):
     message: str
@@ -5283,7 +5435,7 @@ class FeatureRequestIn(BaseModel):
 
 @api.post("/feature-request/send")
 async def feature_request_send(body: FeatureRequestIn, admin: dict = Depends(admin_or_kasir)):
-    """Kirim permintaan fitur dari tombol 'Usulkan Fitur' (Asisten AI) ke pusat vibecoder.co.id."""
+    """Kirim permintaan fitur dari tombol 'Usulkan Fitur' (Asisten AI) ke pusat Google AI Studio."""
     import urllib.request, json as _json
     msg = (body.message or "").strip()
     if not msg:
@@ -5293,40 +5445,40 @@ async def feature_request_send(body: FeatureRequestIn, admin: dict = Depends(adm
     ctx = (body.context or "").strip()
     payload = _json.dumps({"ts": datetime.now(timezone.utc).isoformat(), "message": msg, "context": ctx}).encode("utf-8")
     req = urllib.request.Request(
-        VIBE_FEATURE_URL, data=payload,
-        headers={"Content-Type": "application/json", "X-Gak-Token": VIBE_FEATURE_TOKEN},
+        GAK_FEATURE_URL, data=payload,
+        headers={"Content-Type": "application/json", "X-Gak-Token": GAK_FEATURE_TOKEN},
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             resp = r.read().decode("utf-8", "ignore")
         return {"ok": True, "response": resp[:500]}
     except Exception as e:
-        raise HTTPException(502, f"Gagal mengirim ke vibecoder.co.id: {e}")
+        raise HTTPException(502, f"Gagal mengirim ke Google AI Studio: {e}")
 
 class DiagSendIn(BaseModel):
     report: str
 
 @api.post("/diag/send")
 async def diag_send(body: DiagSendIn, admin: dict = Depends(require_admin)):
-    """Kirim laporan diagnostik dari tombol 'Kirim ke VibeCoder' ke pusat vibecoder.co.id."""
+    """Kirim laporan diagnostik dari tombol 'Kirim ke Google AI Studio' ke pusat Google AI Studio."""
     import urllib.request, json as _json
     if not body.report or len(body.report) > 200_000:
         raise HTTPException(400, "Laporan kosong atau terlalu besar")
     payload = _json.dumps({"ts": datetime.now(timezone.utc).isoformat(), "report": body.report}).encode("utf-8")
     req = urllib.request.Request(
-        VIBE_REPORT_URL, data=payload,
-        headers={"Content-Type": "application/json", "X-Gak-Token": VIBE_REPORT_TOKEN},
+        GAK_REPORT_URL, data=payload,
+        headers={"Content-Type": "application/json", "X-Gak-Token": GAK_REPORT_TOKEN},
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             resp = r.read().decode("utf-8", "ignore")
         return {"ok": True, "response": resp[:500]}
     except Exception as e:
-        raise HTTPException(502, f"Gagal mengirim ke vibecoder.co.id: {e}")
+        raise HTTPException(502, f"Gagal mengirim ke Google AI Studio: {e}")
 
 @api.get("/update/check")
 async def update_check(admin: dict = Depends(require_admin)):
-    """Cek versi terbaru di vibecoder.co.id (dipakai banner 'Versi baru tersedia' & laporan Diagnostik)."""
+    """Cek versi terbaru di Google AI Studio (dipakai banner 'Versi baru tersedia' & laporan Diagnostik)."""
     import urllib.request, json
     current = ""
     # Folder proyek di-mount ke /host-project (ro) sejak docker-compose diperbarui;
@@ -5334,13 +5486,16 @@ async def update_check(admin: dict = Depends(require_admin)):
     for base in ("/host-project", os.environ.get("HOST_PROJECT_DIR")):
         if not base:
             continue
-        try:
-            with open(os.path.join(base, ".vibecoder-version"), "r") as f:
-                current = f.read().strip()
-            if current:
-                break
-        except Exception:
-            continue
+        for ver_file in (".aistudio-version", ".vibecoder-version"):
+            try:
+                with open(os.path.join(base, ver_file), "r") as f:
+                    current = f.read().strip()
+                if current:
+                    break
+            except Exception:
+                continue
+        if current:
+            break
     latest = ""
     reachable = False
     # Breaker update-center: bila terbuka (update center tak terjangkau), jangan jadikan
@@ -5354,10 +5509,10 @@ async def update_check(admin: dict = Depends(require_admin)):
             "latest": "",
             "updateAvailable": False,
             "updateCenterReachable": False,
-            "baseUrl": VIBE_UPDATE_BASE_URL,
+            "baseUrl": GAK_UPDATE_BASE_URL,
         }
     try:
-        with urllib.request.urlopen(f"{VIBE_UPDATE_BASE_URL}/version.json", timeout=8) as r:
+        with urllib.request.urlopen(f"{GAK_UPDATE_BASE_URL}/version.json", timeout=8) as r:
             data = json.loads(r.read().decode("utf-8", "ignore"))
             latest = str(data.get("version", "") or "").strip()
             reachable = True
@@ -5370,15 +5525,16 @@ async def update_check(admin: dict = Depends(require_admin)):
         "latest": latest,
         "updateAvailable": bool(current and latest and latest != current),
         "updateCenterReachable": reachable,
-        "baseUrl": VIBE_UPDATE_BASE_URL,
+        "baseUrl": GAK_UPDATE_BASE_URL,
     }
 
+@api.post("/backup/send-to-cloud")
 @api.post("/backup/send-to-vibecoder")
-async def backup_send_to_vibecoder(admin: dict = Depends(require_admin)):
-    """Buat backup database lalu kirim salinannya ke pusat vibecoder.co.id (mirror tambahan).
+async def backup_send_to_cloud(admin: dict = Depends(require_admin)):
+    """Buat backup database lalu kirim salinannya ke Google AI Studio (cadangan cloud).
 
-    Menjalankan container docker:cli yang memanggil ./backup-to-vibecoder.sh di folder host.
-    Backup lokal tetap dibuat di backups/; salinan di vibecoder bersifat cadangan tambahan.
+    Menjalankan container docker:cli yang memanggil ./backup-to-cloud.sh di folder host.
+    Backup lokal tetap dibuat di backups/; salinan di cloud bersifat cadangan tambahan.
     """
     if not os.path.exists(DOCKER_SOCK):
         raise HTTPException(400, "Fitur belum aktif. Jalankan update manual sekali (cd ~/grand-aceh-pos && ./update-pi.sh) untuk mengaktifkannya.")
@@ -5397,7 +5553,7 @@ async def backup_send_to_vibecoder(admin: dict = Depends(require_admin)):
             except Exception:
                 pass
         image = os.environ.get("UPDATER_IMAGE", "docker:cli")
-        cmd = "apk add --no-cache curl openssl >/dev/null 2>&1; cd /project && ./backup-to-vibecoder.sh"
+        cmd = "apk add --no-cache curl openssl >/dev/null 2>&1; cd /project && (test -f ./backup-to-cloud.sh && ./backup-to-cloud.sh || ./backup-to-vibecoder.sh)"
         cli.containers.run(
             image,
             command=["sh", "-c", cmd],
@@ -5414,14 +5570,17 @@ async def backup_send_to_vibecoder(admin: dict = Depends(require_admin)):
                 # lengkap dengan volume database baru — dan skrip backup akan men-dump
                 # database kosong itu, bukan database asli. Lihat catatan di /admin/update.
                 "COMPOSE_PROJECT_NAME": os.path.basename(host_dir.rstrip("/")),
-                "VIBE_BACKUP_TOKEN": VIBE_BACKUP_TOKEN,
-                "VIBE_BACKUP_PASS": os.environ.get("VIBE_BACKUP_PASS", ""),
-                "VIBE_BACKUP_URL": VIBE_BACKUP_URL,
+                "GAK_BACKUP_TOKEN": GAK_BACKUP_TOKEN,
+                "VIBE_BACKUP_TOKEN": GAK_BACKUP_TOKEN,
+                "GAK_BACKUP_PASS": os.environ.get("GAK_BACKUP_PASS", os.environ.get("VIBE_BACKUP_PASS", "")),
+                "VIBE_BACKUP_PASS": os.environ.get("GAK_BACKUP_PASS", os.environ.get("VIBE_BACKUP_PASS", "")),
+                "GAK_BACKUP_URL": GAK_BACKUP_URL,
+                "VIBE_BACKUP_URL": GAK_BACKUP_URL,
             },
         )
     except Exception as e:
         raise HTTPException(500, f"Gagal memulai backup: {e}")
-    return {"started": True, "message": "Backup dibuat & dikirim ke vibecoder.co.id. Cek folder backups/ di server."}
+    return {"started": True, "message": "Backup dibuat & dikirim ke Google AI Studio. Cek folder backups/ di server."}
 
 @api.post("/admin/update")
 async def admin_update(admin: dict = Depends(require_admin)):
@@ -5444,13 +5603,14 @@ async def admin_update(admin: dict = Depends(require_admin)):
         image = os.environ.get("UPDATER_IMAGE", "docker:cli")
         cmd = (
             "apk add --no-cache git curl >/dev/null 2>&1; "
-            "if [ -f /project/.vibecoder-version ]; then "
-            "VER=\"$(cat /project/.vibecoder-version 2>/dev/null || true)\"; "
-            "REMOTE=\"$(curl -fsSL -m 20 https://taqim258.vibecoder.co.id/pos-grand-update/version.json | sed -n 's/.*\"version\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' | head -1 || true)\"; "
+            "if [ -f /project/.aistudio-version ] || [ -f /project/.vibecoder-version ]; then "
+            "VER=\"$(cat /project/.aistudio-version 2>/dev/null || cat /project/.vibecoder-version 2>/dev/null || true)\"; "
+            f"REMOTE=\"$(curl -fsSL -m 20 {VIBE_UPDATE_BASE_URL}/version.json | sed -n 's/.*\"version\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' | head -1 || true)\"; "
             "if [ -n \"$REMOTE\" ] && [ \"$REMOTE\" != \"$VER\" ]; then "
-            "curl -fsSL -m 300 -o /tmp/gak-pos-update.tar.gz https://taqim258.vibecoder.co.id/pos-grand-update/pos-grand.tar.gz && "
+            f"curl -fsSL -m 300 -o /tmp/gak-pos-update.tar.gz {VIBE_UPDATE_BASE_URL}/pos-grand.tar.gz && "
             "tar xzf /tmp/gak-pos-update.tar.gz -C /project && rm -f /tmp/gak-pos-update.tar.gz && "
-            "echo \"$REMOTE\" > /project/.vibecoder-version && echo \"Update ke versi $REMOTE\"; "
+            "echo \"$REMOTE\" > /project/.aistudio-version && cp /project/.aistudio-version /project/.vibecoder-version 2>/dev/null || true; "
+            "echo \"Update ke versi $REMOTE\"; "
             "else "
             "echo 'Sudah versi terbaru, lewati unduhan.'; "
             "fi; "

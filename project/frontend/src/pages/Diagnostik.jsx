@@ -28,24 +28,25 @@ export default function Diagnostik() {
   const copy = async () => {
     if (!report) return toast.error("Belum ada laporan");
     const ok = await copyText(report);
-    if (ok) toast.success("Laporan disalin — tempelkan ke chat VibeCoder");
+    if (ok) toast.success("Laporan disalin — tempelkan ke chat Google AI Studio");
     else toast.error("Gagal menyalin otomatis — blok teks & salin manual");
   };
 
   const send = async () => {
     if (!report) return toast.error("Belum ada laporan");
     setSending(true);
-    const t = toast.loading("Mengirim laporan ke vibecoder.co.id...");
+    const t = toast.loading("Mengirim laporan ke Google AI Studio...");
     try {
-      // Kirim LANGSUNG ke vibecoder.co.id (internet biasa) — TIDAK perlu lewat server Pi,
-      // jadi tetap bisa melapor saat koneksi ke Pi sedang bermasalah.
-      const res = await fetch("https://taqim258.vibecoder.co.id/pos-grand-update/rpt.php", {
+      const endpoint = typeof window !== "undefined" && window.location?.origin
+        ? `${window.location.origin}/api/rpt`
+        : "/api/rpt";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Gak-Token": "gak_rpt_7f3c9e1b" },
         body: JSON.stringify({ ts: new Date().toISOString(), report }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      toast.success("Laporan terkirim ke VibeCoder — sebutkan di chat bahwa Anda sudah mengirimnya", { id: t, duration: 8000 });
+      toast.success("Laporan terkirim ke Google AI Studio — sebutkan di chat bahwa Anda sudah mengirimnya", { id: t, duration: 8000 });
     } catch (e) {
       toast.error(`Gagal mengirim: ${(e && e.message) || e} (butuh internet untuk mengirim)`, { id: t, duration: 10000 });
     } finally {
@@ -58,7 +59,7 @@ export default function Diagnostik() {
       <div className="max-w-3xl space-y-4">
         <div className="rounded-2xl border-2 border-[#E63946] bg-[#FEF2F2] p-5">
           <div className="flex items-center gap-2 font-extrabold text-[#0A0A0A]"><Bug size={18} className="text-[#E63946]" /> Diagnostik &amp; Lapor Bug</div>
-          <p className="text-sm text-[#52525B] mt-1">Kumpulkan info teknis (versi, server, error terakhir) lalu tempel laporannya ke chat VibeCoder untuk analisa &amp; perbaikan.</p>
+          <p className="text-sm text-[#52525B] mt-1">Kumpulkan info teknis (versi, server, error terakhir) lalu kirim laporannya ke Google AI Studio untuk analisa &amp; perbaikan.</p>
           <div className="flex flex-wrap gap-2 mt-3">
             <button data-testid="diag-copy" onClick={copy} disabled={!report}
               className="tap h-10 px-4 rounded-lg bg-[#E63946] text-white font-bold text-sm inline-flex items-center gap-2 disabled:opacity-50">
@@ -66,14 +67,14 @@ export default function Diagnostik() {
             </button>
             <button data-testid="diag-send" onClick={send} disabled={sending || !report}
               className="tap h-10 px-4 rounded-lg bg-[#4F46E5] text-white font-bold text-sm inline-flex items-center gap-2 disabled:opacity-50">
-              <Send size={15} className={sending ? "animate-pulse" : ""} /> {sending ? "Mengirim..." : "Kirim ke VibeCoder"}
+              <Send size={15} className={sending ? "animate-pulse" : ""} /> {sending ? "Mengirim..." : "Kirim ke Google AI Studio"}
             </button>
             <button data-testid="diag-refresh" onClick={() => refresh(false)} disabled={loading}
               className="tap h-10 px-4 rounded-lg bg-white border font-bold text-sm inline-flex items-center gap-2 disabled:opacity-50">
               <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Perbarui Info
             </button>
           </div>
-          <p className="text-xs text-[#52525B] mt-2">Kirim langsung mengunggah laporan ini ke vibecoder.co.id lewat internet — tidak perlu koneksi ke server Pi. Sebutkan di chat bahwa Anda mengirimnya.</p>
+          <p className="text-xs text-[#52525B] mt-2">Kirim langsung mengunggah laporan ini ke Google AI Studio lewat internet — tidak perlu koneksi ke server Pi.</p>
         </div>
         <pre data-testid="diag-report" className="bg-[#0A0A0A] text-[#E4E4E7] text-xs rounded-xl p-4 overflow-auto font-mono whitespace-pre-wrap max-h-[62vh]">
           {report || "Mengumpulkan informasi..."}

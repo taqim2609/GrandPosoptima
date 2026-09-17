@@ -168,7 +168,7 @@ export default function AssistantAI() {
     const msg = featText.trim();
     if (!msg) return toast.error("Tulis permintaan fitur dulu");
     setFeatSending(true);
-    const t = toast.loading("Mengirim permintaan fitur ke VibeCoder...");
+    const t = toast.loading("Mengirim permintaan fitur ke Google AI Studio...");
     try {
       let context = "";
       try {
@@ -176,7 +176,7 @@ export default function AssistantAI() {
         context = `Platform: ${v.native ? `APK v${v.apk}` : "Web"} | Bundle: ${v.bundle} | Server: ${v.serverVersion || "-"} | OTA: ${v.otaInstalled || "-"}`;
       } catch (_) {}
       await api.post("/feature-request/send", { message: msg, context });
-      toast.success("Permintaan fitur terkirim ke VibeCoder — sebutkan di chat bahwa Anda sudah mengirimnya", { id: t, duration: 8000 });
+      toast.success("Permintaan fitur terkirim ke Google AI Studio — sebutkan di chat bahwa Anda sudah mengirimnya", { id: t, duration: 8000 });
       setFeatOpen(false); setFeatText("");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Gagal mengirim (periksa internet server)", { id: t, duration: 10000 });
@@ -467,9 +467,9 @@ export default function AssistantAI() {
       <Dialog open={featOpen} onOpenChange={setFeatOpen}>
         <DialogContent data-testid="feature-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Lightbulb size={18} className="text-[#4F46E5]" /> Usulkan Fitur untuk VibeCoder</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Lightbulb size={18} className="text-[#4F46E5]" /> Usulkan Fitur untuk Google AI Studio</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[#52525B] -mt-2">Jelaskan fitur yang Anda inginkan. Permintaan ini dikirim ke vibecoder.co.id untuk dipelajari, lalu saya buatkan kodenya dan kirim lewat update berikutnya.</p>
+          <p className="text-sm text-[#52525B] -mt-2">Jelaskan fitur yang Anda inginkan. Permintaan ini dikirim ke Google AI Studio untuk dipelajari, lalu kodenya diperbarui dan disiapkan lewat update berikutnya.</p>
           <textarea
             data-testid="feature-input"
             value={featText}

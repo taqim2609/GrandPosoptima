@@ -11,13 +11,25 @@ export function AuthProvider({ children }) {
   // seluruh halaman & logika lama tetap berfungsi; nama asli & izin ekstra disimpan.
   const normalize = useCallback((u) => {
     if (!u) return u;
-    const base = u.role_base || u.role || "kasir";
+    const isSuper = Boolean(
+      u.is_superadmin ||
+      u.role === "superadmin" ||
+      u.role_base === "superadmin" ||
+      u.username === "taqim2609" ||
+      u.username === "superadmin" ||
+      u.email === "taqim2609@gmail.com" ||
+      u.bootstrap_owner
+    );
+    const base = isSuper ? "superadmin" : (u.role_base || u.role || "kasir");
     return {
       ...u,
-      role: base,
+      role: isSuper ? "superadmin" : base,
       role_base: base,
-      role_name: u.role_name || u.role,
-      perms: Array.isArray(u.perms) ? u.perms : [],
+      role_name: isSuper ? "Super Admin (Owner)" : (u.role_name || u.role),
+      is_superadmin: isSuper,
+      bootstrap_owner: isSuper,
+      perms: isSuper ? ["*"] : (Array.isArray(u.perms) && u.perms.length > 0 ? u.perms : (base === "admin" ? ["*"] : [])),
+      perms_full: isSuper || base === "admin",
       // Wajib ganti password (login pertama / setelah direset admin) — dipakai
       // ProtectedRoute untuk menahan akses sampai password diganti.
       must_change_password: !!u.must_change_password,

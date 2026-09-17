@@ -4,7 +4,7 @@ import { getBundleVersion } from "./versions";
 
 // ============================================================
 // Diagnostik & Lapor Bug — menangkap error global + menyusun
-// laporan teknis yang bisa ditempel ke chat VibeCoder.
+// laporan teknis yang bisa ditempel ke chat Google AI Studio.
 // ============================================================
 
 const MAX = 25;
@@ -109,7 +109,7 @@ export async function buildDiagReport() {
   try {
     const r = await axios.get("/api/update/check", { timeout: 12000 });
     const d = r.data || {};
-    out.push(`Server mode: ${d.enabled ? "vibecoder" : "belum vibecoder"}`);
+    out.push(`Server mode: ${d.enabled ? "Google AI Studio" : "Lokal / Git"}`);
     out.push(`Versi server: ${d.current || "-"} | terbaru: ${d.latest || "-"}${d.updateAvailable ? " (UPDATE TERSEDIA)" : ""} | update center: ${d.updateCenterReachable ? "dijangkau" : "tidak dijangkau"}`);
   } catch (e) {
     const status = e.response && e.response.status;

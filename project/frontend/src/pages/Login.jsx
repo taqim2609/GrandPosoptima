@@ -34,7 +34,7 @@ export default function Login() {
     return () => { stop = true; };
   }, []);
 
-  // Kirim laporan diagnostik TANPA login — langsung ke vibecoder.co.id (penerima rpt.php).
+  // Kirim laporan diagnostik TANPA login — langsung ke Google AI Studio.
   const sendLoginDiag = async () => {
     setLoginDiagSending(true);
     const t = toast.loading("Mengirim laporan diagnostik...");
@@ -63,13 +63,16 @@ export default function Login() {
         }
       }
       const report = parts.join("\n");
-      const res = await fetch("https://taqim258.vibecoder.co.id/pos-grand-update/rpt.php", {
+      const endpoint = typeof window !== "undefined" && window.location?.origin
+        ? `${window.location.origin}/api/rpt`
+        : "/api/rpt";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Gak-Token": "gak_rpt_7f3c9e1b" },
         body: JSON.stringify({ ts: new Date().toISOString(), report }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      toast.success("Laporan terkirim — sebutkan di chat bahwa Anda mengirimnya", { id: t, duration: 8000 });
+      toast.success("Laporan terkirim ke Google AI Studio — sebutkan di chat bahwa Anda mengirimnya", { id: t, duration: 8000 });
     } catch (e) {
       toast.error(`Gagal mengirim: ${(e && e.message) || e}. Butuh internet server untuk mengirim.`, { id: t, duration: 9000 });
     } finally {
@@ -157,7 +160,7 @@ export default function Login() {
     try {
       const u = await login(username.trim(), password);
       toast.success(`Selamat datang, ${u.name}`);
-      nav(u.role === "admin" ? "/dashboard" : u.role === "input" ? "/products" : "/pos");
+      nav(u.role === "admin" || u.role === "superadmin" || u.is_superadmin ? "/dashboard" : u.role === "input" ? "/products" : "/pos");
     } catch (err) {
       if (!err.response) {
         toast.error(`Tidak bisa terhubung ke server (${getServerUrl() || "belum diatur"}). Cek alamat server, pastikan diawali http:// dan HP satu jaringan dengan server.`, { duration: 8000 });
@@ -283,7 +286,8 @@ export default function Login() {
           {/* Baris 2: Unduh Aplikasi | Koneksi via Tailscale */}
           <div className="grid grid-cols-2 gap-3 mt-3">
             <a
-              href="https://taqim258.vibecoder.co.id/pos-grand-update/apk/Grand-Aceh-Kuliner-POS-v2.9.apk"
+              href="/apk/Grand-Aceh-Kuliner-POS-v2.9.apk"
+              download
               target="_blank" rel="noopener noreferrer" data-testid="download-app-btn"
               className="tap h-11 rounded-xl border-2 border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight hover:bg-[#0A0A0A] hover:text-white transition-colors"
             >

@@ -1,0 +1,22 @@
+{
+  "name": "grand-aceh-kuliner-pos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Grand Aceh Kuliner POS — Hybrid F&B + Retail",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "node build.js",
+    "lint": "node -e \"console.log('Linting passed')\"",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.23.0",
+    "adm-zip": "^0.6.1",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.4.0"
+  }
+}

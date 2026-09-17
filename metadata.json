@@ -1,0 +1,6 @@
+{
+  "name": "Grand Aceh Kuliner POS",
+  "description": "Sistem POS hybrid F&B dan Retail untuk restoran Grand Aceh Kuliner dengan manajemen meja, produk, shift, kasir, dan laporan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

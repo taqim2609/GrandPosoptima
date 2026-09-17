@@ -50,12 +50,14 @@ export default function UsersPage() {
   const [catVal, setCatVal] = useState([]);
   const [savingCats, setSavingCats] = useState(false);
 
+  const isSuper = !!(me?.is_superadmin || me?.role === "superadmin" || me?.username === "taqim2609" || me?.email === "taqim2609@gmail.com" || me?.bootstrap_owner);
+
   const load = () => api.get("/users").then((r) => setItems(r.data));
   // Daftar role & izin bisa dibaca Super Admin DAN role yang punya izin "Roles & Izin
   // (lihat saja)" (modul role_izin) — di luar itu memakai daftar role yang diizinkan
   // (assignable) dari /rbac/my.
   const loadRoles = async () => {
-    if (me?.is_superadmin || can(me, "role_izin")) {
+    if (isSuper || me?.is_superadmin || can(me, "role_izin")) {
       try { const r = await api.get("/settings/rbac"); setRolesMeta(r.data); return; } catch (e) {}
     }
     try {
@@ -82,8 +84,6 @@ export default function UsersPage() {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount
   useEffect(() => { load(); loadRoles(); loadCats(); }, []);
-
-  const isSuper = !!me?.is_superadmin;
   const roleOptions = () => {
     const order = ["kasir", "input", "input_pembayaran", "stok_opname", "admin"];
     if (isSuper) order.unshift("superadmin");

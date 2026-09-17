@@ -1,42 +1,25 @@
 #!/usr/bin/env bash
 # ============================================================
-# Update Grand Aceh Kuliner POS dari vibecoder.co.id
-# (pengganti alur "git pull dari GitHub" — cukup internet biasa)
-#
-# Pakai:
-#   bash update-vibecoder-pi.sh                 # update manual
-#   bash update-vibecoder-pi.sh 62811687783     # + notifikasi WA ke nomor
-#   bash update-vibecoder-pi.sh --test          # diagnosa koneksi ke vibecoder.co.id
-#
-# Aman: bila versi remote sama dengan versi terpasang, TIDAK melakukan apa-apa
-# (tidak unduh, tidak rebuild). Dijalankan juga oleh cron auto-update
-# (lihat check-update-pi.sh) dan oleh tombol "Update Sekarang" 1-klik.
-#
-# File lokal yang TIDAK ada di arsip (jadi TIDAK ikut ditimpa):
-#   .env, backend/.env.docker, backups/, .git, update-auto.log, .vibecoder-version
+# Update Grand Aceh Kuliner POS dari Google AI Studio
 # ============================================================
 set -e
 cd "$(dirname "$0")"
 
-BASE_URL="https://taqim258.vibecoder.co.id/pos-grand-update"
-VER_FILE=".vibecoder-version"
+BASE_URL="${AISTUDIO_URL:-https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}"
+VER_FILE=".aistudio-version"
+[ -f .vibecoder-version ] && [ ! -f "$VER_FILE" ] && cp .vibecoder-version "$VER_FILE" 2>/dev/null || true
 CURL_ERR="/tmp/gak-curl-err.txt"
 
 TS() { date "+%Y-%m-%d %H:%M:%S"; }
 
 # ---------- mode diagnosa ----------
 if [ "${1:-}" = "--test" ]; then
-  echo "=== Diagnosa koneksi ke vibecoder.co.id ==="
+  echo "=== Diagnosa koneksi ke Google AI Studio ==="
   echo "Jam Pi          : $(date '+%Y-%m-%d %H:%M:%S %Z')"
   echo "curl            : $(command -v curl >/dev/null 2>&1 && curl --version | head -1 || echo TIDAK ADA)"
-  echo "DNS vibecoder   : $(getent hosts taqim258.vibecoder.co.id | head -1 || echo 'TIDAK RESOLVE')"
+  echo "URL Pusat Update: $BASE_URL"
   echo "--- coba HTTPS (lihat baris terakhir) ---"
   curl -v --connect-timeout 15 -m 30 "$BASE_URL/version.json" -o /dev/null 2>&1 | tail -6 || true
-  echo "--- penjelasan cepat ---"
-  echo "1) Kalau ada 'Could not resolve host'       -> DNS/ISP memblokir domain. Cek: getent hosts vibecoder.co.id"
-  echo "2) Kalau ada 'unable to get local issuer'   -> CA lama. Jalankan: sudo apt update && sudo apt install -y ca-certificates && sudo update-ca-certificates"
-  echo "3) Kalau ada 'certificate is not yet/expired' -> jam Pi salah. Jalankan: sudo date -s '$(date +%F\ %T)' atau pasang NTP"
-  echo "4) Kalau ada 'Connection timed out'         -> jaringan/firewall memblokir port 443 ke vibecoder.co.id"
   exit 0
 fi
 
@@ -47,7 +30,7 @@ if [ "${1:-}" = "--applied" ]; then
   echo "[$(TS)] Ekstraksi selesai — membangun versi $REMOTE_VER ..."
 else
   NOTIFY="${1:-}"
-  echo "[$(TS)] Cek update dari vibecoder.co.id ..."
+  echo "[$(TS)] Cek update dari Google AI Studio ($BASE_URL) ..."
 
   # --- versi remote vs versi lokal (dengan pesan error asli bila gagal) ---
   REMOTE_VER="$(curl -fsSL --connect-timeout 15 -m 30 "$BASE_URL/version.json" 2>"$CURL_ERR" \
@@ -56,12 +39,7 @@ else
     echo "[$(TS)] GAGAL membaca versi dari $BASE_URL"
     echo "[$(TS)] Penyebab dari curl:"
     sed 's/^/[curl] /' "$CURL_ERR" 2>/dev/null | tail -5 || true
-    echo "[$(TS)] Solusi cepat:"
-    echo "   - DNS:   getent hosts vibecoder.co.id  (harus ada alamat IP)"
-    echo "   - CA:    sudo apt update && sudo apt install -y ca-certificates && sudo update-ca-certificates"
-    echo "   - Jam:   cek 'date' — kalau salah: sudo date -s '$(date +%F\ %T)'"
-    echo "   - Jaringan memblokir 443 ke vibecoder.co.id (VPN/proxy/firewall?)"
-    echo "   - Diagnosa lengkap: bash update-vibecoder-pi.sh --test"
+    echo "   - Cek internet atau jalankan: bash update-aistudio-pi.sh --test"
     exit 0
   fi
 

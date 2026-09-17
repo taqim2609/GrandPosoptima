@@ -2,14 +2,12 @@
 set -e
 cd "$(dirname "$0")"
 echo "=== Update Grand Aceh Kuliner POS (Pi/Linux) ==="
-# Bila update sudah dialihkan ke Google AI Studio (ada file .aistudio-version atau .vibecoder-version),
+# Bila update sudah dialihkan ke Google AI Studio (ada file .aistudio-version),
 # gunakan jalur Google AI Studio.
-if [ -f .aistudio-version ] || [ -f .vibecoder-version ]; then
+if [ -f .aistudio-version ]; then
   echo "Mode update Google AI Studio terdeteksi..."
   if [ -f update-aistudio-pi.sh ]; then
     exec bash update-aistudio-pi.sh "$@"
-  elif [ -f update-vibecoder-pi.sh ]; then
-    exec bash update-vibecoder-pi.sh "$@"
   else
     echo "Mengunduh update-aistudio-pi.sh dari Google AI Studio..."
     BASE_URL="${AISTUDIO_URL:-https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}"

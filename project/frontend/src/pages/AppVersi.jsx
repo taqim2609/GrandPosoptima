@@ -59,7 +59,7 @@ export default function AppVersi() {
             </>
           )}
           <Row icon={Globe} label="Bundle frontend" value={v?.bundle} />
-          <Row icon={Server} label="Versi server (vibecoder)" value={v?.serverVersion} />
+          <Row icon={Server} label="Versi server (Google AI Studio)" value={v?.serverVersion} />
           {v?.serverVersion && v.latestVersion && (
             <Row icon={RefreshCw} label="Versi terbaru tersedia" value={v.latestVersion} />
           )}
@@ -85,7 +85,7 @@ export default function AppVersi() {
         <p className="text-[11px] text-[#8b87a8]">
           OTA terpasang diisi saat APK menerima update dari server; bila kosong berarti APK memakai bundle bawaan.
           {v?.native && v.otaServer && v.otaInstalled && v.otaServer <= v.otaInstalled && (
-            <span className="block mt-1">ℹ️ Server masih menyajikan OTA yang sama/lebih lama dari APK — pastikan server Pi sudah di-update (<code>bash update-vibecoder-pi.sh</code>) agar OTA baru tersedia.</span>
+            <span className="block mt-1">ℹ️ Server masih menyajikan OTA yang sama/lebih lama dari APK — pastikan server Pi sudah di-update (<code>bash update-aistudio-pi.sh</code>) agar OTA baru tersedia.</span>
           )}
         </p>
       </div>

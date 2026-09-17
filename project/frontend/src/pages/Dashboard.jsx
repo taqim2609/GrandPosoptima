@@ -54,21 +54,23 @@ const WStat = ({ icon: Icon, label, value, accent }) => (
 );
 
 function WidgetKpi({ data, view, lb }) {
-  const viewTotal = view === "fnb" ? (data.fnb_total || 0) : (data.retail_total || 0);
+  const byType = data?.by_type || { dine_in: { count: 0, total: 0 }, take_away: { count: 0, total: 0 }, retail: { count: 0, total: 0 } };
+  const viewTotal = view === "fnb" ? (data?.fnb_total || 0) : (data?.retail_total || 0);
   const viewOrder = view === "fnb"
-    ? (data.by_type.dine_in.count + data.by_type.take_away.count)
-    : (data.by_type.retail.count || 0);
+    ? ((byType.dine_in?.count || 0) + (byType.take_away?.count || 0))
+    : (byType.retail?.count || 0);
   return (
     <div className="grid md:grid-cols-4 gap-4">
       <WStat icon={TrendingUp} label={`Total Penjualan ${view === "fnb" ? lb.fnb : lb.retail}`} value={rupiah(viewTotal)} accent />
       <WStat icon={Receipt} label={`Order ${view === "fnb" ? lb.fnb : lb.retail}`} value={viewOrder} />
       <WStat icon={Percent} label={`Rata-rata / Order ${view === "fnb" ? lb.fnb : lb.retail}`} value={rupiah(viewOrder ? viewTotal / viewOrder : 0)} />
-      <WStat icon={Coins} label={`Laba ${view === "fnb" ? lb.fnb : lb.retail}`} value={rupiah(view === "fnb" ? (data.gross_profit_fnb || 0) : (data.gross_profit_retail || 0))} />
+      <WStat icon={Coins} label={`Laba ${view === "fnb" ? lb.fnb : lb.retail}`} value={rupiah(view === "fnb" ? (data?.gross_profit_fnb || 0) : (data?.gross_profit_retail || 0))} />
     </div>
   );
 }
 
 function WidgetJenis({ data, view }) {
+  const byType = data?.by_type || { dine_in: { count: 0, total: 0 }, take_away: { count: 0, total: 0 }, retail: { count: 0, total: 0 } };
   const cards = view === "fnb"
     ? [{ key: "dine_in", icon: Utensils, cls: "ot-dine_in" }, { key: "take_away", icon: ShoppingBag, cls: "ot-take_away" }]
     : [{ key: "retail", icon: Store, cls: "ot-retail" }];
@@ -80,8 +82,8 @@ function WidgetJenis({ data, view }) {
             <t.icon size={22} />
             <span className="text-xs font-bold uppercase tracking-wider">{ORDER_TYPE_LABEL[t.key]}</span>
           </div>
-          <div className="font-num text-2xl font-extrabold mt-3">{rupiah(data.by_type[t.key].total)}</div>
-          <div className="text-xs font-bold mt-1">{data.by_type[t.key].count} order</div>
+          <div className="font-num text-2xl font-extrabold mt-3">{rupiah(byType[t.key]?.total || 0)}</div>
+          <div className="text-xs font-bold mt-1">{byType[t.key]?.count || 0} order</div>
         </div>
       ))}
     </div>
@@ -89,10 +91,11 @@ function WidgetJenis({ data, view }) {
 }
 
 function WidgetFinansial({ data, view, lb }) {
-  const viewTotal = view === "fnb" ? (data.fnb_total || 0) : (data.retail_total || 0);
+  const byType = data?.by_type || { dine_in: { count: 0, total: 0 }, take_away: { count: 0, total: 0 }, retail: { count: 0, total: 0 } };
+  const viewTotal = view === "fnb" ? (data?.fnb_total || 0) : (data?.retail_total || 0);
   const viewOrder = view === "fnb"
-    ? (data.by_type.dine_in.count + data.by_type.take_away.count)
-    : (data.by_type.retail.count || 0);
+    ? ((byType.dine_in?.count || 0) + (byType.take_away?.count || 0))
+    : (byType.retail?.count || 0);
   return (
     <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
       <div className="rounded-2xl border-2 border-[#10B981] bg-[#ECFDF5] p-5" data-testid="stat-gross-profit">
@@ -442,7 +445,7 @@ export default function Dashboard() {
   }, [role]);
 
   const startUpdate = async () => {
-    if (!window.confirm("Unduh versi terbaru dari vibecoder.co.id & bangun ulang sekarang? Aplikasi akan restart beberapa menit.")) return;
+    if (!window.confirm("Unduh versi terbaru dari Google AI Studio & bangun ulang sekarang? Aplikasi akan restart beberapa menit.")) return;
     setUpdState("starting");
     const t = toast.loading("Memulai update...");
     try {

@@ -8,11 +8,11 @@ import {
 } from "lucide-react";
 
 const FEATURE_META = {
-  description: { label: "Deskripsi Produk", icon: FileText, hint: "Model teks (chat) untuk menulis deskripsi produk.", modelPh: "claude-sonnet-5" },
-  image: { label: "Gambar Produk", icon: ImageIcon, hint: "Model gambar (image generation, mis. dall-e-3). Kosongkan bila ingin pakai Gemini/bawaan.", modelPh: "dall-e-3" },
-  summary: { label: "Analisis Laporan", icon: BarChart3, hint: "Model teks (chat) untuk ringkasan & analisis penjualan.", modelPh: "claude-sonnet-5" },
-  vision: { label: "Baca Faktur (Vision)", icon: FileText, hint: "Model yang mendukung GAMBAR/vision (mis. claude-sonnet-5, gpt-4o) untuk membaca foto faktur pembelian.", modelPh: "claude-sonnet-5" },
-  assistant: { label: "Asisten Admin AI", icon: Sparkles, hint: "Model teks untuk Asisten AI (tanya soal data, usulan aksi terapkan).", modelPh: "claude-sonnet-5" },
+  description: { label: "Deskripsi Produk", icon: FileText, hint: "Model teks untuk menulis deskripsi produk (default: gemini-3.6-flash).", modelPh: "gemini-3.6-flash" },
+  image: { label: "Gambar Produk", icon: ImageIcon, hint: "Model gambar AI (default: gemini-3.1-flash-image). Kosongkan bila ingin pakai default Gemini.", modelPh: "gemini-3.1-flash-image" },
+  summary: { label: "Analisis Laporan", icon: BarChart3, hint: "Model teks untuk ringkasan & analisis penjualan (default: gemini-3.6-flash).", modelPh: "gemini-3.6-flash" },
+  vision: { label: "Baca Faktur (Vision)", icon: FileText, hint: "Model vision untuk membaca foto faktur pembelian (default: gemini-3.6-flash).", modelPh: "gemini-3.6-flash" },
+  assistant: { label: "Asisten Admin AI", icon: Sparkles, hint: "Model percakapan cerdas untuk Asisten AI (default: gemini-3.6-flash).", modelPh: "gemini-3.6-flash" },
 };
 
 export default function SettingsAI() {

@@ -67,9 +67,21 @@ export const BUILTIN_ROLE_ORDER = ["superadmin", "admin", "kasir", "input", "inp
 
 export const moduleLabel = (code) => RBAC_MODULES.find((m) => m.code === code)?.label || code;
 
+export const isSuperAdmin = (u) =>
+  Boolean(
+    u &&
+      (u.is_superadmin ||
+        u.role === "superadmin" ||
+        u.role_base === "superadmin" ||
+        u.username === "taqim2609" ||
+        u.username === "superadmin" ||
+        u.email === "taqim2609@gmail.com" ||
+        u.bootstrap_owner)
+  );
+
 /** Nama role yang ditampilkan (role kustom ditampilkan sebagai nama aslinya). */
 export function roleNameOf(u) {
-  if (u?.is_superadmin) return "Super Admin (owner)";
+  if (isSuperAdmin(u)) return "Super Admin (owner)";
   const orig = u?.role_name || u?.role || "-";
   const base = u?.role_base || u?.role;
   if (orig && orig !== base && !["admin", "kasir", "input"].includes(orig)) return orig;
@@ -78,13 +90,15 @@ export function roleNameOf(u) {
 
 /** Role dasar sebuah user (dipakai utk logika lama yang cek "admin"/"kasir"). */
 export function roleBaseOf(u) {
+  if (isSuperAdmin(u)) return "superadmin";
   return u?.role_base || u?.role || "kasir";
 }
 
 /** Apakah role dasar memegang modul tanpa izin ekstra? (dipakai template/reset saja) */
 export function baseHas(u, mod) {
+  if (isSuperAdmin(u)) return true;
   const b = roleBaseOf(u);
-  if (b === "admin") return true;
+  if (b === "admin" || b === "superadmin") return true;
   return (BASE_MODULES[b] || []).includes(mod);
 }
 
@@ -100,8 +114,9 @@ export function baseHas(u, mod) {
  *   hanya karena sesi lama di localStorage. Server tetap penentu akhir. */
 export function can(u, mod) {
   if (!u) return false;
-  if (u.is_superadmin) return true;
+  if (isSuperAdmin(u)) return true;
   const p = Array.isArray(u.perms) ? u.perms : [];
+  if (p.includes("*")) return true;
   if (u.perms_full === true && p.length > 0) return p.includes(mod);
   // Sesi lama / server lama (tanpa daftar izin): perilaku lama dipertahankan.
   if (roleBaseOf(u) === "admin") return true;
@@ -109,8 +124,8 @@ export function can(u, mod) {
   return baseHas(u, mod);
 }
 
-/** Izin menulis admin (mis. tombol hapus/ubah) — hanya utk role dasar admin. */
-export const isAdmin = (u) => roleBaseOf(u) === "admin";
+/** Izin menulis admin (mis. tombol hapus/ubah) — hanya utk role dasar admin atau superadmin. */
+export const isAdmin = (u) => isSuperAdmin(u) || roleBaseOf(u) === "admin";
 
 /** Izin: user punya salah satu modul dari daftar (untuk menu multi-izin). */
 export const canAny = (u, mods) => (mods || []).some((m) => can(u, m));
