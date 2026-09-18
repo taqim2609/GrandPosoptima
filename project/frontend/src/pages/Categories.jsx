@@ -13,7 +13,7 @@ export default function Categories() {
   const [form, setForm] = useState(empty);
   const [editId, setEditId] = useState(null);
 
-  const load = () => api.get("/categories").then((r) => setItems(r.data));
+  const load = () => api.get("/categories").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch(() => setItems([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount
   useEffect(() => { load(); }, []);
 

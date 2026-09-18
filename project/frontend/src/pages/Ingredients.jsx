@@ -256,14 +256,14 @@ export default function IngredientsPage() {
   const sendWa = async () => {
     const items = (list?.items || []).filter((i) => (i.name || "").trim() && Number(i.qty) > 0);
     if (!items.length) return toast.error("Belum ada item");
-    if (!shopSet.recipients.length) return toast.error("Atur nomor WhatsApp tujuan belanja di Pengaturan → WhatsApp & Laporan dulu");
+    if (!(shopSet.recipients || []).length) return toast.error("Atur nomor WhatsApp tujuan belanja di Pengaturan → WhatsApp & Laporan dulu");
     setSaving(true);
     try {
       const { data } = await api.post("/shopping-list/send-wa", {
         date,
         items: items.map((i) => ({ ingredient_id: i.ingredient_id, name: i.name, unit: i.unit, qty: i.qty, cost: i.cost, note: i.note })),
       });
-      toast.success(`Daftar belanja terkirim ke WhatsApp (${data.sent.filter((s) => s.ok).length} nomor)`);
+      toast.success(`Daftar belanja terkirim ke WhatsApp (${(data?.sent || []).filter((s) => s.ok).length} nomor)`);
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); } finally { setSaving(false); }
   };
   const estTotal = (list?.items || []).filter((i) => i.name?.trim() && Number(i.qty) > 0).reduce((s, i) => s + Number(i.cost || 0) * Number(i.qty || 0), 0);
@@ -302,8 +302,8 @@ export default function IngredientsPage() {
         rd.readAsDataURL(file);
       });
       const { data } = await api.post("/ai/ingredient-vision", { image: b64 });
-      toast.success(`AI membaca ${data.items.length} item — periksa lalu simpan`, { id: t, duration: 6000 });
-      setScanRows((data.items || []).map((x) => ({ ...x })));
+      toast.success(`AI membaca ${(data?.items || []).length} item — periksa lalu simpan`, { id: t, duration: 6000 });
+      setScanRows((data?.items || []).map((x) => ({ ...x })));
     } catch (e) { toast.error(apiError(e.response?.data?.detail), { id: t, duration: 9000 }); }
     finally { setScanBusy(false); }
   };
@@ -313,7 +313,7 @@ export default function IngredientsPage() {
     setSaving(true);
     try {
       const { data } = await api.post("/ingredients/vision-commit", { items });
-      const created = data.created || [], updated = data.updated || [];
+      const created = data?.created || [], updated = data?.updated || [];
       toast.success(`Tersimpan: ${created.length} bahan baru, ${updated.length} stok bertambah`);
       setScanRows(null); await loadIngs(); await loadPur(purDate);
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); } finally { setSaving(false); }
@@ -342,8 +342,8 @@ export default function IngredientsPage() {
   // allowed_opname dikirim server per bahan. Backend lama belum punya field itu →
   // dianggap boleh (jangan sampai layar kosong hanya karena server belum di-update).
   const opAllowed = (b) => b.allowed_opname !== false;
-  const myCatOpts = catMeta.allow_all ? cats : cats.filter((c) => catMeta.mine.includes(c.id));
-  const noCatPerm = catMeta.loaded && !catMeta.allow_all && catMeta.mine.length === 0;
+  const myCatOpts = catMeta.allow_all ? cats : cats.filter((c) => (catMeta.mine || []).includes(c.id));
+  const noCatPerm = catMeta.loaded && !catMeta.allow_all && (catMeta.mine || []).length === 0;
   const opIngs = ings.filter((b) => opAllowed(b) && (!opCat || (b.categories || []).includes(opCat)));
   const opBlockedCount = ings.filter((b) => !opAllowed(b)).length;
   const opCatName = (b) => (b.category_names || []).join(", ");
@@ -360,7 +360,7 @@ export default function IngredientsPage() {
     fd.append("file", file);
     try {
       const { data } = await api.post("/ingredients/import", fd);
-      toast.success(`Import selesai: ${data.created.length} bahan baru, ${data.updated.length} diperbarui`);
+      toast.success(`Import selesai: ${(data?.created || []).length} bahan baru, ${(data?.updated || []).length} diperbarui`);
       await loadIngs();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
     finally { setImpBusy(false); }
@@ -521,7 +521,7 @@ export default function IngredientsPage() {
             <button onClick={doPrint} disabled={!itemCount} className="tap h-12 px-5 rounded-xl bg-white border font-bold flex items-center gap-2 disabled:opacity-50"><Printer size={17} /> Cetak</button>
             <button data-testid="belanja-wa" onClick={sendWa} disabled={saving || !itemCount} className="tap h-12 px-5 rounded-xl bg-[#25D366] hover:bg-[#1EBE5B] text-white font-bold flex items-center gap-2 disabled:opacity-50"><MessageCircle size={17} /> Kirim WA</button>
             <div className="self-center text-xs text-[#a1a1aa] max-w-sm">
-              Tujuan WA: {shopSet.recipients.length ? <b>{shopSet.recipients.join(", ")}</b> : "belum diatur"}
+              Tujuan WA: {(shopSet?.recipients || []).length ? <b>{shopSet.recipients.join(", ")}</b> : "belum diatur"}
               {listDirty && <span className="text-[#B45309] font-bold block">Perubahan belum disimpan.</span>}
             </div>
           </div>

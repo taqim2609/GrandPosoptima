@@ -3,23 +3,103 @@ apply plugin: 'com.android.application'
 android {
     namespace "host.emergent.hybridposaceh"
     compileSdk rootProject.ext.compileSdkVersion
+    
     defaultConfig {
         applicationId "host.emergent.hybridposaceh"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 21
-        versionName "2.10"
+        versionCode 22
+        versionName "2.11"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Build timestamp and POS defaults
+        buildConfigField "long", "BUILD_TIME", "${System.currentTimeMillis()}L"
+        buildConfigField "String", "TARGET_HARDWARE", "\"SUNMI_GENERIC\""
+
+        // Optimasi resource packaging & aset web POS
         aaptOptions {
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            cruncherEnabled = true
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+
+        // Sunmi T2 (Qualcomm Snapdragon / RK3399) arsitektur utama arm64-v8a & armeabi-v7a
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
     }
+
+    // Konfigurasi khusus perangkat kasir (Sunmi T2 & Universal)
+    flavorDimensions "device"
+    productFlavors {
+        sunmiT2 {
+            dimension "device"
+            applicationIdSuffix ".sunmit2"
+            versionNameSuffix "-sunmiT2"
+            
+            // Konfigurasi hardware Sunmi T2 (Dual Screen / Single Screen FHD, Built-in Seiko 80mm Printer)
+            buildConfigField "String", "TARGET_HARDWARE", "\"SUNMI_T2\""
+            buildConfigField "boolean", "IS_SUNMI_T2", "true"
+            buildConfigField "int", "PRINTER_PAPER_WIDTH_MM", "80"
+            buildConfigField "boolean", "HAS_AUTO_CUTTER", "true"
+            buildConfigField "boolean", "SUPPORT_CUSTOMER_DISPLAY", "true"
+            
+            // Hanya simpan resource resolusi xhdpi/xxhdpi dan bahasa ID/EN untuk memperkecil ukuran APK
+            resourceConfigurations += ['in', 'id', 'en', 'xhdpi', 'xxhdpi']
+            
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a"
+            }
+        }
+        
+        universal {
+            dimension "device"
+            buildConfigField "String", "TARGET_HARDWARE", "\"UNIVERSAL\""
+            buildConfigField "boolean", "IS_SUNMI_T2", "false"
+            buildConfigField "int", "PRINTER_PAPER_WIDTH_MM", "58"
+            buildConfigField "boolean", "HAS_AUTO_CUTTER", "false"
+            buildConfigField "boolean", "SUPPORT_CUSTOMER_DISPLAY", "false"
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
+            // Optimasi R8 Proguard & Resource Shrinking untuk APK kasir native yang ringan & cepat
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            
+            // Konfigurasi signing config jika tersedia
+            signingConfig signingConfigs.debug
+        }
+        debug {
+            minifyEnabled false
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+
+    packagingOptions {
+        resources {
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE',
+                'META-INF/LICENSE.txt',
+                'META-INF/license.txt',
+                'META-INF/NOTICE',
+                'META-INF/NOTICE.txt',
+                'META-INF/notice.txt',
+                'META-INF/ASL2.0',
+                'META-INF/*.kotlin_module'
+            ]
         }
     }
 }

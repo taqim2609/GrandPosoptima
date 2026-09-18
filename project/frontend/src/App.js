@@ -1,5 +1,5 @@
 import "@/App.css";
-import { useEffect } from "react";
+import { useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { checkOtaUpdate } from "@/lib/ota";
@@ -11,36 +11,47 @@ import { OfflineProvider } from "@/context/OfflineContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
 import OtaIndicator from "@/components/OtaIndicator";
-import Login from "@/pages/Login";
-import POS from "@/pages/POS";
-import Shift from "@/pages/Shift";
-import Dashboard from "@/pages/Dashboard";
-import Products from "@/pages/Products";
-import Categories from "@/pages/Categories";
-import Tables from "@/pages/Tables";
-import Orders from "@/pages/Orders";
-import VoidRefund from "@/pages/VoidRefund";
-import UsersPage from "@/pages/Users";
-import Inventory from "@/pages/Inventory";
-import Cash from "@/pages/Cash";
-import SettingsAI from "@/pages/SettingsAI";
-import SettingsData from "@/pages/SettingsData";
-import Settings from "@/pages/Settings";
-import WhatsApp from "@/pages/WhatsApp";
-import DeviceSettings from "@/pages/DeviceSettings";
-import Catalog from "@/pages/Catalog";
-import Ingredients from "@/pages/Ingredients";
-import AssistantAI from "@/pages/AssistantAI";
-import Reports from "@/pages/Reports";
-import Members from "@/pages/Members";
-import Reservations from "@/pages/Reservations";
-import VendorSettlement from "@/pages/VendorSettlement";
-import PromosCoupons from "@/pages/PromosCoupons";
+
+const Login = lazy(() => import("@/pages/Login"));
+const POS = lazy(() => import("@/pages/POS"));
+const Shift = lazy(() => import("@/pages/Shift"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Products = lazy(() => import("@/pages/Products"));
+const Categories = lazy(() => import("@/pages/Categories"));
+const Tables = lazy(() => import("@/pages/Tables"));
+const Orders = lazy(() => import("@/pages/Orders"));
+const VoidRefund = lazy(() => import("@/pages/VoidRefund"));
+const UsersPage = lazy(() => import("@/pages/Users"));
+const Inventory = lazy(() => import("@/pages/Inventory"));
+const Cash = lazy(() => import("@/pages/Cash"));
+const SettingsAI = lazy(() => import("@/pages/SettingsAI"));
+const SettingsData = lazy(() => import("@/pages/SettingsData"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const WhatsApp = lazy(() => import("@/pages/WhatsApp"));
+const DeviceSettings = lazy(() => import("@/pages/DeviceSettings"));
+const Catalog = lazy(() => import("@/pages/Catalog"));
+const Ingredients = lazy(() => import("@/pages/Ingredients"));
+const AssistantAI = lazy(() => import("@/pages/AssistantAI"));
+const Reports = lazy(() => import("@/pages/Reports"));
+const Members = lazy(() => import("@/pages/Members"));
+const Reservations = lazy(() => import("@/pages/Reservations"));
+const VendorSettlement = lazy(() => import("@/pages/VendorSettlement"));
+const PromosCoupons = lazy(() => import("@/pages/PromosCoupons"));
+
+const LoadingFallback = () => (
+  <div className="flex h-full w-full items-center justify-center p-8 bg-[#F4F5F7] lg:bg-transparent">
+    <div className="animate-spin h-8 w-8 border-4 border-[#E63946] border-t-transparent rounded-full"></div>
+  </div>
+);
 
 // roles = role dasar yang boleh; mod = modul izin dinamis (RBAC) bila role dasar belum cukup.
 const wrap = (el, roles, mod) => (
   <ProtectedRoute roles={roles} mod={mod}>
-    <Layout>{el}</Layout>
+    <Layout>
+      <Suspense fallback={<LoadingFallback />}>
+        {el}
+      </Suspense>
+    </Layout>
   </ProtectedRoute>
 );
 
@@ -65,7 +76,7 @@ function App() {
           <OtaIndicator />
           <BrowserRouter>
             <Routes>
-              <Route path="/login" element={<Login />} />
+              <Route path="/login" element={<Suspense fallback={<LoadingFallback />}><Login /></Suspense>} />
               <Route path="/pos" element={wrap(<POS />, ["admin", "kasir"], "pos")} />
               <Route path="/shift" element={wrap(<Shift />, ["admin", "kasir"], "shift")} />
               <Route path="/cash" element={wrap(<Cash />, ["admin", "kasir"], "pengeluaran")} />

@@ -67,7 +67,7 @@ export default function Shift() {
     const t = toast.loading("Mengirim laporan shift ke WhatsApp...");
     try {
       const { data } = await api.post(`/shifts/${latestShiftId}/send-wa`);
-      toast.success(`Laporan terkirim ke ${data.recipients.length} nomor`, { id: t });
+      toast.success(`Laporan terkirim ke ${(data?.recipients || []).length} nomor`, { id: t });
     } catch (e) { toast.error(apiError(e.response?.data?.detail), { id: t, duration: 9000 }); }
     finally { setSendingWa(false); }
   };

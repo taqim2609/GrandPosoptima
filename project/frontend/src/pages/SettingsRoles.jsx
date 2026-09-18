@@ -107,7 +107,7 @@ export default function SettingsRoles() {
     // validasi: tiap role yang bisa diubah minimal 1 modul (hindari kunci total)
     for (const [name, r] of Object.entries(roles)) {
       if (LOCKED_ROLES.includes(name)) continue;
-      if (!r.perms.length) {
+      if (!(r.perms || []).length) {
         toast.error(`Role "${name}" tidak punya modul sama sekali — centang minimal 1.`);
         return;
       }
@@ -117,7 +117,7 @@ export default function SettingsRoles() {
       const payload = {};
       for (const [name, r] of Object.entries(roles)) {
         if (LOCKED_ROLES.includes(name)) continue;
-        payload[name] = { base: r.base || "kasir", perms: [...r.perms], full: r.full === true };
+        payload[name] = { base: r.base || "kasir", perms: [...(r.perms || [])], full: r.full === true };
       }
       await api.put("/settings/rbac", { roles: payload, assignable });
       toast.success("Roles & izin disimpan — berlaku sekarang (menu & server)");
@@ -129,7 +129,7 @@ export default function SettingsRoles() {
     () => (meta?.modules || RBAC_MODULES).filter((m) => isGrantable(m.code)),
     [meta?.modules]
   );
-  const countRole = (r) => r.perms.length;
+  const countRole = (r) => (r.perms || []).length;
 
   if (!roles || !meta) return <div className="h-full grid place-items-center"><Loader2 className="animate-spin text-[#E63946]" /></div>;
   const rowNames = sortRoles(roles);

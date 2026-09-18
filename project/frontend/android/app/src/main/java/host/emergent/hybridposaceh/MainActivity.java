@@ -226,5 +226,68 @@ public class MainActivity extends BridgeActivity {
                 return true;
             } catch (Exception e) { lastBindError = "printBitmap: " + e; return false; }
         }
+
+        /**
+         * Deteksi Device ID Unik Perangkat (Sunmi Serial Number / Android ID)
+         */
+        @JavascriptInterface
+        public String getDeviceId() {
+            try {
+                String serial = android.os.Build.SERIAL;
+                if (serial != null && !serial.equalsIgnoreCase("unknown") && !serial.isEmpty()) {
+                    return serial;
+                }
+            } catch (Exception ignored) {}
+            try {
+                String androidId = android.provider.Settings.Secure.getString(
+                    getContentResolver(),
+                    android.provider.Settings.Secure.ANDROID_ID
+                );
+                if (androidId != null && !androidId.isEmpty()) {
+                    return androidId;
+                }
+            } catch (Exception ignored) {}
+            return "POS-DEVICE-" + android.os.Build.MODEL.replaceAll("\\s+", "-");
+        }
+
+        /**
+         * Deteksi Model Perangkat & Brand (Contoh: SUNMI T2, T2mini, V2, dll.)
+         */
+        @JavascriptInterface
+        public String getDeviceModel() {
+            return android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL;
+        }
+
+        /**
+         * Verifikasi apakah perangkat adalah Sunmi T2 Native
+         */
+        @JavascriptInterface
+        public boolean isSunmiT2() {
+            String model = (android.os.Build.MODEL != null ? android.os.Build.MODEL.toUpperCase() : "");
+            String brand = (android.os.Build.BRAND != null ? android.os.Build.BRAND.toUpperCase() : "");
+            return (brand.contains("SUNMI") || model.contains("SUNMI")) && (model.contains("T2") || model.contains("T2_") || BuildConfig.IS_SUNMI_T2);
+        }
+
+        /**
+         * Informasi Hardware Lengkap dalam format JSON untuk Diagnostics POS
+         */
+        @JavascriptInterface
+        public String getHardwareProfile() {
+            org.json.JSONObject obj = new org.json.JSONObject();
+            try {
+                obj.put("device_id", getDeviceId());
+                obj.put("model", getDeviceModel());
+                obj.put("brand", android.os.Build.BRAND);
+                obj.put("product", android.os.Build.PRODUCT);
+                obj.put("sdk_int", android.os.Build.VERSION.SDK_INT);
+                obj.put("is_sunmi_t2", isSunmiT2());
+                obj.put("target_hardware", BuildConfig.TARGET_HARDWARE);
+                obj.put("paper_width_mm", BuildConfig.PRINTER_PAPER_WIDTH_MM);
+                obj.put("has_cutter", BuildConfig.HAS_AUTO_CUTTER);
+                obj.put("support_customer_display", BuildConfig.SUPPORT_CUSTOMER_DISPLAY);
+                obj.put("printer_connected", isConnected());
+            } catch (Exception ignored) {}
+            return obj.toString();
+        }
     }
 }

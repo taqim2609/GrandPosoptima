@@ -18,7 +18,7 @@ export default function Members() {
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const load = () => api.get("/members", { params: { q } }).then((r) => setItems(r.data)).catch((e) => toast.error(apiError(e.response?.data?.detail)));
+  const load = () => api.get("/members", { params: { q } }).then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch((e) => toast.error(apiError(e.response?.data?.detail)));
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [q]);
 
   const save = async () => {
@@ -57,7 +57,7 @@ export default function Members() {
             <tr><th className="text-left p-3">Nama</th><th className="text-left p-3">No. WA</th><th className="text-right p-3">Total Belanja</th><th className="text-right p-3">Poin</th><th className="text-center p-3">Nilai Poin</th><th className="p-3"></th></tr>
           </thead>
           <tbody>
-            {items.map((m) => (
+            {(items || []).map((m) => (
               <tr key={m.id} className="border-t" data-testid={`member-row-${m.id}`}>
                 <td className="p-3 font-bold">{m.name}</td>
                 <td className="p-3 font-num text-[#52525B]">{m.phone || "-"}</td>
@@ -74,7 +74,7 @@ export default function Members() {
                 </td>
               </tr>
             ))}
-            {items.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-[#a1a1aa]">Belum ada member.</td></tr>}
+            {(items || []).length === 0 && <tr><td colSpan={6} className="p-8 text-center text-[#a1a1aa]">Belum ada member.</td></tr>}
           </tbody>
         </table>
       </div>

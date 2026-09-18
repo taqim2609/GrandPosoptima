@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Printer, Server, Store, Save, ReceiptText, Upload, Loader2, Bluetooth, Wifi, Wallet } from "lucide-react";
+import { Printer, Server, Store, Save, ReceiptText, Upload, Loader2, Bluetooth, Wifi, Wallet, Cpu, CheckCircle2 } from "lucide-react";
 import api, { apiError } from "@/lib/api";
-import { getDeviceConfig, setDeviceConfig, getServerUrl, setServerUrl, sampleOrder, getPrinterStatus, openCashDrawer } from "@/lib/device";
+import { getDeviceConfig, setDeviceConfig, getServerUrl, setServerUrl, sampleOrder, getPrinterStatus, openCashDrawer, getSunmiHardwareProfile } from "@/lib/device";
 import { printReceipt } from "@/lib/receipt";
 import { requestBluetoothPrinter, clearBluetoothPrinter } from "@/lib/bluetooth";
 
@@ -11,7 +11,16 @@ export default function DeviceSettings() {
   const [srv, setSrv] = useState(getServerUrl());
   const [outlet, setOutlet] = useState(null); // data global server (outlet & logo)
   const [upLogo, setUpLogo] = useState(false);
+  const [hwProfile, setHwProfile] = useState(null);
   const upd = (patch) => setCfg((c) => ({ ...c, ...patch }));
+
+  useEffect(() => {
+    // Deteksi profil hardware native jika berjalan di APK
+    const profile = getSunmiHardwareProfile();
+    if (profile) {
+      setHwProfile(profile);
+    }
+  }, []);
 
   useEffect(() => {
     api.get("/settings/outlet")
@@ -255,6 +264,51 @@ export default function DeviceSettings() {
             <input data-testid="dev-server-url" value={srv} onChange={(e) => setSrv(e.target.value)} placeholder="http://192.168.1.100" className={`${inp} font-mono`} />
           </Field>
           <button data-testid="dev-server-save" onClick={saveServer} className="tap h-11 px-5 rounded-xl bg-[#0A0A0A] text-white font-bold flex items-center gap-2 w-fit"><Save size={16} /> Simpan & Hubungkan</button>
+        </Card>
+
+        {/* PROFIL HARDWARE & DEVICE ID NATIVE (Sunmi T2 / Android) */}
+        <Card icon={Cpu} title="Hardware & Device ID Kasir Native">
+          {hwProfile ? (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-[#F0FDF4] border border-[#BBF7D0] flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-[#166534] flex items-center gap-1.5">
+                    <CheckCircle2 size={15} /> Perangkat Native Terdeteksi
+                  </div>
+                  <div className="text-sm font-extrabold text-[#14532D] mt-0.5">{hwProfile.model || "Sunmi Device"}</div>
+                </div>
+                {hwProfile.is_sunmi_t2 && (
+                  <span className="px-2.5 py-1 rounded-full bg-[#DCFCE7] text-[#15803D] text-[11px] font-black border border-[#86EFAC]">
+                    Sunmi T2 Native
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="bg-[#F8FAFC] p-2.5 rounded-lg border border-[#E2E8F0]">
+                  <div className="text-[#64748B] font-bold text-[10px]">DEVICE ID / SERIAL:</div>
+                  <div className="font-mono font-bold text-[#0F172A] mt-0.5 truncate" title={hwProfile.device_id}>
+                    {hwProfile.device_id || "N/A"}
+                  </div>
+                </div>
+                <div className="bg-[#F8FAFC] p-2.5 rounded-lg border border-[#E2E8F0]">
+                  <div className="text-[#64748B] font-bold text-[10px]">TARGET BUILD:</div>
+                  <div className="font-mono font-bold text-[#0F172A] mt-0.5">
+                    {hwProfile.target_hardware || "SUNMI_T2"}
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-[#71717A]">
+                Device ID otomatis digunakan sebagai pengenal unik kasir dan stempel transaksi struk POS.
+              </p>
+            </div>
+          ) : (
+            <div className="text-xs text-[#71717A] bg-[#FAFAFA] p-3.5 rounded-xl border border-[#F4F4F5]">
+              <div className="font-bold text-[#3F3F46]">Mode Web Browser / PWA</div>
+              <p className="mt-1">
+                Aplikasi saat ini berjalan di browser web. Ketika dipasang melalui <b>APK Native Sunmi T2</b> (v2.11+), ID unik perangkat, status sensor pemotong otomatis Seiko 80mm, dan layar pelanggan sekunder akan langsung terdeteksi otomatis.
+              </p>
+            </div>
+          )}
         </Card>
       </div>
     </div>

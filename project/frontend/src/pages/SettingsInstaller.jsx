@@ -1,9 +1,10 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, Monitor, Cpu, CheckCircle2, RefreshCw, DatabaseBackup, Globe, CloudUpload, Bug, Loader2, ShieldCheck } from "lucide-react";
+import { Download, Monitor, Cpu, CheckCircle2, RefreshCw, DatabaseBackup, Globe, CloudUpload, Bug, Loader2, ShieldCheck, Cloud } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { BOOTSTRAP_PI_SH, BOOTSTRAP_WINDOWS_BAT, downloadText, AISTUDIO_DEFAULT_URL } from "@/lib/installers";
+import GDriveBackupManager from "@/components/GDriveBackupManager";
 
 const AISTUDIO_URL = AISTUDIO_DEFAULT_URL;
 const APP_DIR = "~/grand-aceh-pos";
@@ -219,24 +220,30 @@ install-windows.bat`}</Code>
         </Section>
 
         {/* BACKUP */}
-        <Section n="3" title="Backup & Restore Data" icon={DatabaseBackup} desc="Simpan salinan seluruh data. Sangat disarankan rutin.">
-          <div className="rounded-xl border-2 border-[#10B981] bg-[#F0FDF4] p-4 space-y-2">
-            <div className="font-bold text-sm">Cara cepat (langsung dari aplikasi)</div>
-            <div className="flex flex-wrap gap-2">
-              <button data-testid="inapp-backup" onClick={backupNow} className="tap h-10 px-4 rounded-lg bg-[#10B981] text-white font-bold text-sm inline-flex items-center gap-2"><DatabaseBackup size={15} /> Backup Sekarang</button>
-              <button data-testid="inapp-backup-cloud" onClick={backupToCloud} className="tap h-10 px-4 rounded-lg bg-[#4F46E5] text-white font-bold text-sm inline-flex items-center gap-2"><CloudUpload size={15} /> Kirim Backup ke Google AI Studio</button>
-              <button data-testid="inapp-restore" onClick={() => fileRef.current?.click()} className="tap h-10 px-4 rounded-lg bg-white border font-bold text-sm">Restore dari File...</button>
+        <Section n="3" title="Cloud Backup & Restore Data" icon={DatabaseBackup} desc="Simpan salinan seluruh data secara berkala ke Google Drive dan file lokal.">
+          {/* Integrasi Google Drive Backup */}
+          <GDriveBackupManager />
+
+          <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 space-y-2 mt-4">
+            <div className="font-bold text-sm text-[#18181B] flex items-center gap-2">
+              <DatabaseBackup size={16} className="text-[#10B981]" />
+              Opsi Cadangan Lokal & Manual (.zip)
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button data-testid="inapp-backup" onClick={backupNow} className="tap h-10 px-4 rounded-lg bg-[#10B981] hover:bg-[#059669] text-white font-bold text-sm inline-flex items-center gap-2 shadow-xs"><DatabaseBackup size={15} /> Unduh Backup (.zip)</button>
+              <button data-testid="inapp-backup-cloud" onClick={backupToCloud} className="tap h-10 px-4 rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold text-sm inline-flex items-center gap-2 shadow-xs"><CloudUpload size={15} /> Kirim Backup ke Google AI Studio</button>
+              <button data-testid="inapp-restore" onClick={() => fileRef.current?.click()} className="tap h-10 px-4 rounded-lg bg-white border border-[#CBD5E1] hover:bg-[#F8FAFC] font-bold text-sm text-[#334155] shadow-xs">Restore dari File Lokal (.zip)...</button>
               <input ref={fileRef} type="file" accept=".zip" className="hidden" onChange={restoreFile} data-testid="inapp-restore-input" />
             </div>
-            <p className="text-[11px] text-[#52525B]"><b>Backup Sekarang</b> mengunduh data ke file .zip. <b>Kirim ke Google AI Studio</b> membuat backup di server lalu mengirim salinannya ke Google AI Studio (cadangan cloud).</p>
+            <p className="text-[11px] text-[#52525B]"><b>Unduh Backup</b> membuat dan mengunduh berkas arsip database ke perangkat. <b>Restore</b> memulihkan database dari arsip .zip lokal.</p>
           </div>
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 text-sm text-[#3f3f46] space-y-2">
-            <div className="font-bold">Atau lewat skrip di dalam folder proyek:</div>
+            <div className="font-bold">Atau lewat skrip di dalam folder server Raspberry Pi:</div>
             <Code>{`cd ${APP_DIR}
 ./backup-pi.sh                       # backup lokal -> backups/
-./backup-to-cloud.sh                # backup lokal + kirim salinan ke Google AI Studio
+./backup-to-cloud.sh                # backup lokal + kirim salinan ke cloud
 ./restore-pi.sh backups/namafile.gz  # pulihkan (ketik YA saat konfirmasi)`}</Code>
-            <div className="text-[#B91C1C]"><b>Perhatian:</b> restore MENIMPA seluruh data. Salin backup ke flashdisk/cloud agar aman.</div>
+            <div className="text-[#B91C1C]"><b>Perhatian:</b> restore MENIMPA seluruh data. Pastikan ada salinan cadangan yang aman di Google Drive.</div>
           </div>
         </Section>
 

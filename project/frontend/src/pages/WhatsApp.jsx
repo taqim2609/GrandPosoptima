@@ -120,13 +120,13 @@ export default function WhatsApp() {
             </button>
           </div>
           <p className="text-sm text-[#52525B]">Nomor WhatsApp yang sudah Anda hubungkan (scan QR) di dashboard wacloud.id.</p>
-          {devices.length === 0 ? (
+          {(devices || []).length === 0 ? (
             <div className="text-sm text-[#a1a1aa] border border-dashed rounded-xl p-4 text-center">
               {cfg.api_key_set ? "Klik \"Muat Device\" untuk menampilkan daftar." : "Simpan API Key dulu."}
             </div>
           ) : (
             <div className="space-y-2" data-testid="wa-device-list">
-              {devices.map((d) => (
+              {(devices || []).map((d) => (
                 <button key={d.id} data-testid={`wa-device-${d.id}`} onClick={() => chooseDevice(d)}
                   className={`w-full text-left rounded-xl border-2 p-3 flex items-center gap-3 tap ${cfg.device_id === d.id ? "border-[#10B981] bg-[#F0FDF4]" : "border-[#E4E4E7] hover:border-[#E63946]"}`}>
                   <Smartphone size={18} className={cfg.device_id === d.id ? "text-[#10B981]" : "text-[#52525B]"} />

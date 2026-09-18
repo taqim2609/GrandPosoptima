@@ -29,6 +29,29 @@ app.use((req, res, next) => {
   next();
 });
 
+// URL sanitization & API prefix auto-aliasing for API requests
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/api/')) {
+    req.url = req.url.replace(/^\/api\/api\//, '/api/');
+  }
+  const apiCandidates = [
+    '/users', '/settings', '/reports', '/products', '/orders',
+    '/categories', '/tables', '/cash', '/shifts', '/members',
+    '/promos', '/coupons', '/ingredients', '/recipes', '/rbac',
+    '/auth', '/ingredient-categories', '/payment-methods', '/custom-widgets'
+  ];
+  const isApiCandidate = apiCandidates.some((p) => req.path === p || req.path.startsWith(p + '/'));
+  const isJsonClient = req.xhr ||
+    (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html')) ||
+    req.headers['authorization'] ||
+    req.headers['x-gak-token'];
+
+  if (isApiCandidate && isJsonClient && !req.url.startsWith('/api/')) {
+    req.url = '/api' + req.url;
+  }
+  next();
+});
+
 // In-Memory Data Store (Grand Aceh Kuliner POS)
 const db = {
   platform: {
@@ -66,11 +89,43 @@ const db = {
     rbac: {
       roles: {
         superadmin: { name: 'Super Admin (Owner)', perms: ['*'] },
-        admin: { name: 'Admin Operasional', perms: ['pos', 'shift', 'pengeluaran', 'dashboard', 'produk', 'laporan', 'member', 'promo', 'reservasi', 'settlement', 'ai', 'meja', 'transaksi', 'void', 'pengguna', 'pengaturan'] },
-        kasir: { name: 'Kasir POS', perms: ['pos', 'shift', 'pengeluaran', 'dashboard', 'laporan', 'reservasi', 'void'] },
-        input: { name: 'Staf Input Produk', perms: ['dashboard', 'produk'] },
+        admin: {
+          name: 'Admin Operasional',
+          base: 'admin',
+          perms: [
+            'dashboard', 'pos', 'pengeluaran', 'shift', 'laporan', 'ai', 'reservasi',
+            'produk', 'member', 'promo', 'resep', 'settlement', 'kupon', 'meja',
+            'transaksi', 'void', 'vendor', 'pengguna', 'role_izin', 'whatsapp',
+            'pengaturan', 'belanja_bahan', 'opname_bahan', 'belanja_produk', 'opname_produk'
+          ],
+          full: false,
+        },
+        kasir: {
+          name: 'Kasir POS',
+          base: 'kasir',
+          perms: ['dashboard', 'pos', 'pengeluaran', 'shift', 'laporan', 'ai', 'reservasi', 'settlement', 'void'],
+          full: false,
+        },
+        input: {
+          name: 'Staf Input Produk',
+          base: 'input',
+          perms: ['dashboard', 'produk'],
+          full: false,
+        },
+        input_pembayaran: {
+          name: 'Staf Input Pembayaran',
+          base: 'input_pembayaran',
+          perms: ['dashboard', 'pengeluaran'],
+          full: false,
+        },
+        stok_opname: {
+          name: 'Petugas Stok Opname',
+          base: 'stok_opname',
+          perms: ['dashboard', 'produk', 'opname_bahan', 'opname_produk'],
+          full: false,
+        },
       },
-      assignable: ['admin', 'kasir', 'input'],
+      assignable: ['admin', 'kasir', 'input', 'input_pembayaran', 'stok_opname'],
     },
     report: {
       auto_send_wa: false,
@@ -110,6 +165,18 @@ const db = {
       role_base: 'kasir',
       role_name: 'Kasir',
       perms: ['pos', 'shift', 'pengeluaran', 'dashboard', 'laporan', 'reservasi', 'void'],
+      active: true,
+      must_change_password: false,
+    },
+    {
+      id: 'usr-input',
+      username: 'input',
+      email: 'input@grandacehkuliner.com',
+      name: 'Staf Gudang/Input',
+      role: 'input',
+      role_base: 'input',
+      role_name: 'Staf Input',
+      perms: ['dashboard', 'produk'],
       active: true,
       must_change_password: false,
     },
@@ -1020,8 +1087,8 @@ app.get('/api/dashboard', (req, res) => {
   });
 });
 
-app.get('/api/reports/summary', (req, res) => {
-  const dateStr = req.query.date || new Date().toISOString().slice(0, 10);
+function getReportSummary(dateStr) {
+  const targetDate = dateStr || new Date().toISOString().slice(0, 10);
   const paidOrders = db.orders.filter((o) => o.status === 'completed' || o.status === 'paid');
 
   const by_type = {
@@ -1161,8 +1228,8 @@ app.get('/api/reports/summary', (req, res) => {
     },
   };
 
-  res.json({
-    date: dateStr,
+  return {
+    date: targetDate,
     total_sales,
     order_count: paidOrders.length,
     total_discount: 0,
@@ -1201,9 +1268,179 @@ app.get('/api/reports/summary', (req, res) => {
       { date: '2026-09-14', total: 840000 },
       { date: '2026-09-15', total: 990000 },
       { date: '2026-09-16', total: 1250000 },
-      { date: dateStr, total: total_sales },
+      { date: targetDate, total: total_sales },
     ],
+  };
+}
+
+app.get(['/api/reports/summary', '/reports/summary'], (req, res) => {
+  const dateStr = req.query.date || new Date().toISOString().slice(0, 10);
+  res.json(getReportSummary(dateStr));
+});
+
+// AI Daily Sales Summary
+app.post(['/api/reports/ai-summary', '/reports/ai-summary'], async (req, res) => {
+  try {
+    // 1. Validasi format tanggal (YYYY-MM-DD)
+    let dateStr = req.body?.date || req.query?.date;
+    if (!dateStr || typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
+      dateStr = new Date().toISOString().slice(0, 10);
+    } else {
+      dateStr = dateStr.trim();
+    }
+
+    // 2. Peroleh data agregat ringkasan transaksi
+    const summary = getReportSummary(dateStr);
+    if (!summary) {
+      return res.status(404).json({ detail: `Data penjualan untuk tanggal ${dateStr} tidak ditemukan.` });
+    }
+
+    let summaryText = '';
+    let isAiGenerated = false;
+    let usedModel = null;
+
+    // 3. Pemanggilan Google Gemini API jika GEMINI_API_KEY tersedia
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const { GoogleGenAI } = require('@google/genai');
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const systemInstruction = `Anda adalah analis bisnis F&B dan Retail berpengalaman.
+Tulis LAPORAN ANALITIK penjualan harian dalam Bahasa Indonesia yang lugas, terstruktur rapi, dan actionable untuk pemilik/manajer restoran.
+Struktur wajib:
+1. Ringkasan Kinerja (Total omset, volume transaksi, laba kotor, perbandingan Dine-in vs Take Away vs Retail)
+2. Sorotan Kategori (Makanan, Minuman, Retail)
+3. Insight Operasional & Perputaran Menu (Menu terlaris, metode bayar favorit, produk menipis)
+4. Rekomendasi Taktis (Langkah konkret peningkatan penjualan dan margin)
+Gunakan format markdown yang jelas (judul dan poin) tanpa emoji.`;
+
+        const mk = summary.category_report?.makanan || {};
+        const mn = summary.category_report?.minuman || {};
+        const rt = summary.category_report?.retail || {};
+        const catsStr = (g) => (g.categories || []).slice(0, 5).map((c) => `${c.name} Rp ${Number(c.total || 0).toLocaleString('id-ID')}`).join(', ') || '-';
+
+        const prompt = `Data penjualan Grand Aceh Kuliner tanggal ${dateStr}:
+Total Penjualan: Rp ${Number(summary.total_sales || 0).toLocaleString('id-ID')} dari ${summary.order_count || 0} order selesai.
+Laba Kotor: Rp ${Number(summary.gross_profit || 0).toLocaleString('id-ID')} (HPP: Rp ${Number(summary.total_cost || 0).toLocaleString('id-ID')}).
+Jenis Order: Dine-in Rp ${Number(summary.by_type?.dine_in?.total || 0).toLocaleString('id-ID')} (${summary.by_type?.dine_in?.count || 0} order), Take Away Rp ${Number(summary.by_type?.take_away?.total || 0).toLocaleString('id-ID')} (${summary.by_type?.take_away?.count || 0} order), Retail Rp ${Number(summary.by_type?.retail?.total || 0).toLocaleString('id-ID')} (${summary.by_type?.retail?.count || 0} order).
+Makanan: Rp ${Number(mk.total || 0).toLocaleString('id-ID')} (Rincian: ${catsStr(mk)}).
+Minuman: Rp ${Number(mn.total || 0).toLocaleString('id-ID')} (Rincian: ${catsStr(mn)}).
+Retail: Rp ${Number(rt.total || 0).toLocaleString('id-ID')} (Rincian: ${catsStr(rt)}).
+Metode Pembayaran: ${Object.entries(summary.by_payment || {}).map(([k, v]) => `${k.toUpperCase()}: Rp ${Number(v).toLocaleString('id-ID')}`).join(', ') || 'Belum ada transaksi'}.
+Produk Terlaris: ${(summary.top_products || []).slice(0, 5).map((p) => `${p.name} (${p.qty} terjual, total Rp ${Number(p.total || 0).toLocaleString('id-ID')})`).join(', ') || '-'}.
+Stok Menipis / Perlu Reorder: ${(summary.low_stock || []).length} item.
+Mohon susun laporan penjualan analitis harian ini.`;
+
+        // Daftar model yang diprioritaskan: model flash cepat dan hemat kuota
+        const candidateModels = [
+          process.env.GEMINI_MODEL,
+          'gemini-3.1-flash-lite',
+          'gemini-3.8-flash',
+          'gemini-3.6-flash',
+          'gemini-flash-latest',
+        ].filter(Boolean);
+
+        for (const modelName of candidateModels) {
+          try {
+            // Berikan batas waktu per pemanggilan model agar request tidak menggantung
+            const callPromise = ai.models.generateContent({
+              model: modelName,
+              contents: prompt,
+              config: {
+                systemInstruction,
+              },
+            });
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`Timeout pemanggilan model ${modelName}`)), 12000)
+            );
+            const geminiRes = await Promise.race([callPromise, timeoutPromise]);
+
+            if (geminiRes && geminiRes.text) {
+              summaryText = geminiRes.text.trim();
+              isAiGenerated = true;
+              usedModel = modelName;
+              break;
+            }
+          } catch (mErr) {
+            console.warn(`[Gemini ai-summary] Model ${modelName} error:`, mErr.message);
+          }
+        }
+      } catch (gErr) {
+        console.warn('[Gemini ai-summary] SDK setup error:', gErr.message);
+      }
+    }
+
+    // 4. Fallback generator analitik cerdas jika kuota Gemini habis atau offline
+    if (!summaryText) {
+      const totalSalesRp = Number(summary.total_sales || 0).toLocaleString('id-ID');
+      const grossProfitRp = Number(summary.gross_profit || 0).toLocaleString('id-ID');
+      const marginPct = summary.total_sales ? Math.round(((summary.gross_profit || 0) / summary.total_sales) * 100) : 0;
+      const topProdList = (summary.top_products || []).slice(0, 3).map((p) => `${p.name} (${p.qty} porsi, Rp ${Number(p.total).toLocaleString('id-ID')})`).join(', ');
+
+      summaryText = `LAPORAN ANALISIS PENJUALAN HARIAN (${dateStr})
+Grand Aceh Kuliner POS
+
+1. Ringkasan Kinerja
+Total penjualan tercatat sebesar Rp ${totalSalesRp} dari ${summary.order_count} transaksi berhasil, menghasilkan laba kotor sebesar Rp ${grossProfitRp} dengan margin keuntungan sekitar ${marginPct}%.
+
+2. Sorotan Per Kategori
+- F&B (Makanan & Minuman): Kontributor utama sebesar Rp ${Number(summary.fnb_total || 0).toLocaleString('id-ID')}. Pesanan dine-in membukukan omset Rp ${Number(summary.by_type?.dine_in?.total || 0).toLocaleString('id-ID')} dan take away Rp ${Number(summary.by_type?.take_away?.total || 0).toLocaleString('id-ID')}.
+- Retail: Transaksi retail membukukan total Rp ${Number(summary.retail_total || 0).toLocaleString('id-ID')}.
+
+3. Insight Operasional & Perputaran Menu
+- Menu penggerak omset utama: ${topProdList || 'produk unggulan restoran'}.
+- Dominasi metode pembayaran: ${Object.keys(summary.by_payment || {}).join(' & ') || 'tunai/QRIS'}.
+- Stok menipis: ${(summary.low_stock || []).length} produk mendekati batas minimum stok dan memerlukan pengadaan ulang.
+
+4. Rekomendasi Taktis
+- Siapkan cadangan bahan baku porsi cepat saji untuk menu terlaris sebelum jam sibuk makan siang dan malam.
+- Terapkan upsell minuman khas (seperti Kopi Sanger atau Teh Tarik) pada setiap pesanan makanan dine-in untuk mengoptimalkan rata-rata nilai transaksi (AOV).`;
+      usedModel = 'analitik-pos-internal';
+    }
+
+    res.json({
+      date: dateStr,
+      summary: summaryText,
+      ai_generated: isAiGenerated,
+      model: usedModel,
+      data: summary,
+    });
+  } catch (fatalErr) {
+    console.error('[API /reports/ai-summary fatal error]:', fatalErr);
+    res.status(500).json({
+      detail: 'Gagal memproses data laporan AI: ' + (fatalErr.message || 'Terjadi kesalahan sistem.'),
+    });
+  }
+});
+
+// WhatsApp Report Dispatch
+app.post(['/api/reports/send-whatsapp', '/reports/send-whatsapp'], (req, res) => {
+  const dateStr = req.body?.date || new Date().toISOString().slice(0, 10);
+  const reportSettings = db.settings?.report || {};
+  const recips = req.body?.recipients || reportSettings.recipients || [];
+  if (!recips.length) {
+    return res.status(400).json({ detail: 'Belum ada nomor WhatsApp tujuan. Atur di Pengaturan → WhatsApp & Laporan.' });
+  }
+  res.json({
+    date: dateStr,
+    sent: recips.map((num) => ({ to: num, ok: true })),
   });
+});
+
+// Report File Export
+app.get(['/api/reports/export/:fmt', '/reports/export/:fmt'], (req, res) => {
+  const { fmt } = req.params;
+  const dateStr = req.query.date || new Date().toISOString().slice(0, 10);
+  const summary = getReportSummary(dateStr);
+  if (fmt === 'excel' || fmt === 'csv') {
+    const csvContent = `Laporan Penjualan Grand Aceh Kuliner - ${dateStr}\nTotal Penjualan,Rp ${summary.total_sales}\nJumlah Order,${summary.order_count}\nLaba Kotor,Rp ${summary.gross_profit}\n`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="laporan-${dateStr}.csv"`);
+    return res.send(csvContent);
+  }
+  const textContent = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n180\n%%EOF`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="laporan-${dateStr}.pdf"`);
+  res.send(Buffer.from(textContent, 'utf-8'));
 });
 
 app.get('/api/reports/range', (req, res) => {
@@ -1386,6 +1623,13 @@ app.all(['/api/users/:id/toggle-must-change', '/api/users/:id/must-change-passwo
   res.json(formatUser(user));
 });
 
+app.patch(['/api/users/:id/ingredient-categories', '/users/:id/ingredient-categories'], (req, res) => {
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
+  if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+  user.ingredient_categories = Array.isArray(req.body?.categories) ? req.body.categories : [];
+  res.json({ ok: true, categories: user.ingredient_categories });
+});
+
 app.get('/api/users/:id/delete-check', (req, res) => {
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
@@ -1449,33 +1693,57 @@ app.get('/api/rbac/my', (req, res) => {
   });
 });
 
+const ALL_GRANTABLE_MODULES = [
+  'dashboard', 'pos', 'pengeluaran', 'shift', 'laporan', 'ai', 'reservasi',
+  'produk', 'member', 'promo', 'resep', 'settlement', 'kupon', 'meja',
+  'transaksi', 'void', 'vendor', 'pengguna', 'role_izin', 'whatsapp',
+  'pengaturan', 'belanja_bahan', 'opname_bahan', 'belanja_produk', 'opname_produk'
+];
+
+const RBAC_MODULE_LIST = [
+  { code: 'dashboard', label: 'Dashboard' },
+  { code: 'pos', label: 'POS Kasir' },
+  { code: 'pengeluaran', label: 'Pengeluaran & Kas' },
+  { code: 'shift', label: 'Shift' },
+  { code: 'laporan', label: 'Laporan' },
+  { code: 'ai', label: 'AI / Asisten' },
+  { code: 'reservasi', label: 'Reservasi Meja' },
+  { code: 'produk', label: 'Produk, Kategori & Stok' },
+  { code: 'member', label: 'Member & Poin' },
+  { code: 'promo', label: 'Promo' },
+  { code: 'resep', label: 'Resep & HPP' },
+  { code: 'settlement', label: 'Settlement Vendor (bagi hasil)' },
+  { code: 'kupon', label: 'Kupon' },
+  { code: 'meja', label: 'Manajemen Meja' },
+  { code: 'transaksi', label: 'Riwayat Transaksi' },
+  { code: 'void', label: 'Void & Refund (pembatalan transaksi)' },
+  { code: 'vendor', label: 'Vendor' },
+  { code: 'pengguna', label: 'Akun Pengguna' },
+  { code: 'role_izin', label: 'Roles & Izin (lihat saja)' },
+  { code: 'whatsapp', label: 'WhatsApp' },
+  { code: 'pengaturan', label: 'Pengaturan Aplikasi/Platform' },
+  { code: 'belanja_bahan', label: 'Pembelian Bahan & Daftar Belanja' },
+  { code: 'opname_bahan', label: 'Stok Opname Bahan' },
+  { code: 'belanja_produk', label: 'Belanja / Pembelian Produk Retail' },
+  { code: 'opname_produk', label: 'Stok Opname Produk Retail' },
+];
+
+const BASE_MODULE_DEFAULTS = {
+  superadmin: ALL_GRANTABLE_MODULES,
+  admin: ALL_GRANTABLE_MODULES,
+  kasir: ['dashboard', 'pos', 'pengeluaran', 'shift', 'laporan', 'ai', 'reservasi', 'settlement', 'void'],
+  input: ['dashboard', 'produk'],
+  input_pembayaran: ['dashboard', 'pengeluaran'],
+  stok_opname: ['dashboard', 'produk', 'opname_bahan', 'opname_produk'],
+};
+
 app.get('/api/settings/rbac', (req, res) => {
   res.json({
     ...db.settings.rbac,
     can_manage: true,
-    modules: [
-      { code: 'dashboard', label: 'Dashboard' },
-      { code: 'pos', label: 'POS Kasir' },
-      { code: 'pengeluaran', label: 'Pengeluaran & Kas' },
-      { code: 'shift', label: 'Shift' },
-      { code: 'laporan', label: 'Laporan' },
-      { code: 'ai', label: 'AI / Asisten' },
-      { code: 'reservasi', label: 'Reservasi Meja' },
-      { code: 'produk', label: 'Produk, Kategori & Stok' },
-      { code: 'member', label: 'Member & Poin' },
-      { code: 'promo', label: 'Promo' },
-      { code: 'resep', label: 'Resep & HPP' },
-      { code: 'settlement', label: 'Settlement Vendor' },
-      { code: 'kupon', label: 'Kupon' },
-      { code: 'meja', label: 'Manajemen Meja' },
-      { code: 'transaksi', label: 'Riwayat Transaksi' },
-      { code: 'void', label: 'Void & Refund' },
-      { code: 'vendor', label: 'Vendor' },
-      { code: 'pengguna', label: 'Akun Pengguna' },
-      { code: 'role_izin', label: 'Roles & Izin' },
-      { code: 'whatsapp', label: 'WhatsApp' },
-      { code: 'pengaturan', label: 'Pengaturan Aplikasi' },
-    ],
+    modules: RBAC_MODULE_LIST,
+    base_defaults: BASE_MODULE_DEFAULTS,
+    builtin: ['superadmin', 'admin', 'kasir', 'input', 'input_pembayaran', 'stok_opname'],
   });
 });
 
@@ -1516,8 +1784,33 @@ app.put('/api/settings/wa-templates', (req, res) => { db.settings.wa_templates =
 app.get('/api/settings/shopping', (req, res) => res.json(db.settings.shopping));
 app.put('/api/settings/shopping', (req, res) => { db.settings.shopping = { ...db.settings.shopping, ...req.body }; res.json(db.settings.shopping); });
 
-app.get('/api/settings/dashboard', (req, res) => res.json({ widgets: [] }));
-app.put('/api/settings/dashboard', (req, res) => res.json({ widgets: req.body.widgets || [] }));
+app.get(['/api/settings/dashboard', '/settings/dashboard'], (req, res) => {
+  const defaults = {
+    superadmin: ['kpi', 'jenis', 'finansial', 'trend', 'kategori', 'terlaris', 'metode', 'ai', 'lowstock'],
+    admin: ['kpi', 'jenis', 'finansial', 'trend', 'kategori', 'terlaris', 'metode', 'ai', 'lowstock'],
+    kasir: ['kpi', 'jenis', 'finansial', 'trend', 'terlaris', 'metode'],
+    input: ['lowstock'],
+  };
+  res.json({
+    ...defaults,
+    ...(db.settings.dashboard || {}),
+  });
+});
+
+app.put(['/api/settings/dashboard', '/settings/dashboard'], (req, res) => {
+  const role = req.body?.role;
+  const widgets = req.body?.widgets;
+  db.settings.dashboard = db.settings.dashboard || {
+    superadmin: ['kpi', 'jenis', 'finansial', 'trend', 'kategori', 'terlaris', 'metode', 'ai', 'lowstock'],
+    admin: ['kpi', 'jenis', 'finansial', 'trend', 'kategori', 'terlaris', 'metode', 'ai', 'lowstock'],
+    kasir: ['kpi', 'jenis', 'finansial', 'trend', 'terlaris', 'metode'],
+    input: ['lowstock'],
+  };
+  if (role && Array.isArray(widgets)) {
+    db.settings.dashboard[role] = widgets;
+  }
+  res.json(db.settings.dashboard);
+});
 
 app.get('/api/custom-widgets', (req, res) => res.json(db.customWidgets));
 app.post('/api/custom-widgets', (req, res) => { const w = { id: 'w-' + Date.now(), ...req.body }; db.customWidgets.push(w); res.json(w); });
@@ -1641,6 +1934,77 @@ app.get('/api/rpt/latest', (req, res) => {
 
 app.post(['/api/backup/send-to-vibecoder', '/api/backup/send-to-cloud', '/pos-grand-update/bkp.php'], (req, res) => {
   res.json({ ok: true, message: 'Backup berhasil dikirim ke Google AI Studio.' });
+});
+
+// ==========================================
+// Google Drive Backup Endpoints & History
+// ==========================================
+if (!db.gdrive_backup_config) {
+  db.gdrive_backup_config = {
+    enabled: true,
+    frequency: 'daily', // 'daily', 'shift_close', 'hourly_6', 'weekly'
+    daily_time: '23:00',
+    folder_name: 'Grand Aceh POS Backups',
+    auto_sync_on_shift_close: true,
+    max_retention: 15,
+    last_backup_at: null,
+    last_backup_file: null,
+    last_status: 'ready',
+    last_user_email: null,
+  };
+}
+
+if (!db.gdrive_backup_history) {
+  db.gdrive_backup_history = [];
+}
+
+app.get('/api/backup/gdrive/config', (req, res) => {
+  res.json(db.gdrive_backup_config || {});
+});
+
+app.put('/api/backup/gdrive/config', (req, res) => {
+  db.gdrive_backup_config = {
+    ...(db.gdrive_backup_config || {}),
+    ...req.body,
+    updated_at: new Date().toISOString(),
+  };
+  res.json({ ok: true, config: db.gdrive_backup_config });
+});
+
+app.get('/api/backup/gdrive/history', (req, res) => {
+  res.json(db.gdrive_backup_history || []);
+});
+
+app.post('/api/backup/gdrive/record-sync', (req, res) => {
+  const { file_name, file_id, file_size, user_email, status, notes } = req.body;
+  const record = {
+    id: `gdb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    file_name: file_name || `gak-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+    file_id: file_id || '',
+    file_size: file_size || 'N/A',
+    user_email: user_email || '',
+    status: status || 'success',
+    notes: notes || 'Backup berhasil tersimpan di Google Drive',
+    created_at: new Date().toISOString(),
+  };
+
+  if (!Array.isArray(db.gdrive_backup_history)) {
+    db.gdrive_backup_history = [];
+  }
+  db.gdrive_backup_history.unshift(record);
+  if (db.gdrive_backup_history.length > 50) {
+    db.gdrive_backup_history = db.gdrive_backup_history.slice(0, 50);
+  }
+
+  // Update config last backup
+  if (db.gdrive_backup_config) {
+    db.gdrive_backup_config.last_backup_at = record.created_at;
+    db.gdrive_backup_config.last_backup_file = record.file_name;
+    db.gdrive_backup_config.last_status = status || 'success';
+    if (user_email) db.gdrive_backup_config.last_user_email = user_email;
+  }
+
+  res.json({ ok: true, record });
 });
 
 // Endpoint Download Backup (.zip)
@@ -1822,8 +2186,10 @@ Jawab pertanyaan dengan sopan dan informatif.`;
 
       const candidateModels = [
         process.env.GEMINI_MODEL,
-        'gemini-3.6-flash',
+        'gemini-3.1-flash-lite',
         'gemini-3.8-flash',
+        'gemini-3.6-flash',
+        'gemini-flash-latest',
       ].filter(Boolean);
 
       let response = null;
@@ -1887,17 +2253,23 @@ app.all('/api/*', (req, res) => {
 // ==========================================
 const distPath = path.join(__dirname, 'dist');
 const fallbackBuildPath = path.join(__dirname, 'project', 'frontend', 'build');
-const staticPath = fs.existsSync(path.join(distPath, 'index.html')) ? distPath : fallbackBuildPath;
+const rootHtmlPath = path.join(__dirname, 'index.html');
 
-console.log(`[Server] Serving static files from: ${staticPath}`);
-app.use(express.static(staticPath));
+app.use(express.static(distPath));
+app.use(express.static(fallbackBuildPath));
 
 // Static files fallback
 app.get('*', (req, res) => {
-  const targetHtml = fs.existsSync(path.join(distPath, 'index.html'))
-    ? path.join(distPath, 'index.html')
-    : path.join(fallbackBuildPath, 'index.html');
-  res.sendFile(targetHtml);
+  if (fs.existsSync(path.join(distPath, 'index.html'))) {
+    return res.sendFile(path.join(distPath, 'index.html'));
+  }
+  if (fs.existsSync(path.join(fallbackBuildPath, 'index.html'))) {
+    return res.sendFile(path.join(fallbackBuildPath, 'index.html'));
+  }
+  if (fs.existsSync(rootHtmlPath)) {
+    return res.sendFile(rootHtmlPath);
+  }
+  res.status(200).send('Grand Aceh Kuliner POS is building. Please refresh in a moment.');
 });
 
 // ==========================================

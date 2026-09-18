@@ -18,7 +18,7 @@ export default function Orders() {
   // Dialog void/refund: pratinjau dampak + lepas blokir lintas shift (lihat VoidDialog).
   const [voidTarget, setVoidTarget] = useState(null);
 
-  const load = () => api.get("/orders", { params: { date, order_type: fType || undefined } }).then((r) => setOrders(r.data));
+  const load = () => api.get("/orders", { params: { date, order_type: fType || undefined } }).then((r) => setOrders(Array.isArray(r.data) ? r.data : [])).catch(() => setOrders([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch on filter change
   useEffect(() => { load(); }, [date, fType]);
 
@@ -40,8 +40,8 @@ export default function Orders() {
             <tr><th className="text-left p-3">No Order</th><th className="text-left p-3">Jenis</th><th className="text-left p-3">Waktu</th><th className="text-left p-3">Kasir</th><th className="text-right p-3">Total</th><th className="text-center p-3">Status</th><th className="p-3"></th></tr>
           </thead>
           <tbody>
-            {orders.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-[#a1a1aa]">Tidak ada transaksi</td></tr>}
-            {orders.map((o) => (
+            {(orders || []).length === 0 && <tr><td colSpan={7} className="p-8 text-center text-[#a1a1aa]">Tidak ada transaksi</td></tr>}
+            {(orders || []).map((o) => (
               <tr key={o.id} data-testid={`order-row-${o.id}`} className="border-t">
                 <td className="p-3 font-num font-bold">
                   {o.order_number}

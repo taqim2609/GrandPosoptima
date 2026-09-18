@@ -177,3 +177,25 @@ export function openCashDrawer() {
     return { ok: false, reason: String((e && e.message) || e) };
   }
 }
+
+/**
+ * Membaca profil perangkat hardware native dari bridge Sunmi
+ */
+export function getSunmiHardwareProfile() {
+  try {
+    const sp = window.SunmiInnerPrinter || window.sunmiInnerPrinter || window.sunmi || window.SunmiPrinterBridge;
+    if (sp && typeof sp.getHardwareProfile === "function") {
+      const raw = sp.getHardwareProfile();
+      return raw ? JSON.parse(raw) : null;
+    }
+    if (sp && typeof sp.getDeviceId === "function") {
+      return {
+        device_id: sp.getDeviceId(),
+        model: typeof sp.getDeviceModel === "function" ? sp.getDeviceModel() : "Sunmi Device",
+        is_sunmi_t2: typeof sp.isSunmiT2 === "function" ? sp.isSunmiT2() : false,
+      };
+    }
+  } catch (e) {}
+  return null;
+}
+

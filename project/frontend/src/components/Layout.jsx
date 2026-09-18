@@ -54,6 +54,94 @@ function ChangePasswordDialog({ open, onClose }) {
 }
 
 
+function HeaderConnectionBanner({ onOpenQueue }) {
+  const { online, pendingCount, syncing, syncNow } = useOffline();
+  if (online && pendingCount === 0) return null;
+
+  return (
+    <div
+      data-testid="header-offline-banner"
+      className={`w-full shrink-0 px-4 py-2.5 text-xs font-bold flex flex-wrap items-center justify-between gap-2 transition-all shadow-sm ${
+        !online
+          ? "bg-[#FEF2F2] text-[#991B1B] border-b-2 border-[#EF4444]"
+          : "bg-[#FFFBEB] text-[#92400E] border-b-2 border-[#F59E0B]"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        {!online ? (
+          <div className="flex items-center gap-2 font-extrabold">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+            </span>
+            <WifiOff size={16} className="text-[#DC2626]" />
+            <span>MODE OFFLINE: Terputus dari server. Transaksi baru otomatis disimpan di memori lokal.</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 font-extrabold">
+            <CloudOff size={16} className="text-[#D97706]" />
+            <span>Terhubung kembali: Ada {pendingCount} transaksi lokal menunggu disinkronkan ke server.</span>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 ml-auto">
+        {pendingCount > 0 && (
+          <button
+            data-testid="banner-queue-btn"
+            onClick={onOpenQueue}
+            className="tap px-3 py-1 rounded-lg bg-white border border-current text-xs font-bold hover:bg-black/5 shadow-xs"
+          >
+            Lihat Antrean ({pendingCount})
+          </button>
+        )}
+        {online && pendingCount > 0 && (
+          <button
+            data-testid="banner-sync-btn"
+            onClick={syncNow}
+            disabled={syncing}
+            className="tap px-3.5 py-1.5 rounded-lg bg-[#E63946] hover:bg-[#BE123C] text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
+            {syncing ? "Menyinkronkan..." : "Sinkronkan Sekarang"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HeaderConnectionBadge({ onOpenQueue }) {
+  const { online, pendingCount, syncing, syncNow } = useOffline();
+
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        data-testid="header-conn-status"
+        title={online ? "Koneksi ke server normal" : "Koneksi terputus, data tersimpan di penyimpanan lokal"}
+        className={`h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-colors ${
+          online
+            ? "bg-[#F0FDF4] text-[#166534] border-[#BBF7D0]"
+            : "bg-[#FEF2F2] text-[#991B1B] border-[#FECACA] animate-pulse"
+        }`}
+      >
+        {online ? <Wifi size={14} className="text-[#16A34A]" /> : <WifiOff size={14} className="text-[#DC2626]" />}
+        <span>{online ? "Online" : "Offline (Lokal)"}</span>
+      </div>
+      {pendingCount > 0 && (
+        <button
+          data-testid="header-pending-btn"
+          onClick={onOpenQueue}
+          title={`${pendingCount} transaksi belum disinkron`}
+          className="tap h-9 px-2.5 rounded-lg bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] text-xs font-black flex items-center gap-1 hover:bg-[#FDE68A] shadow-xs"
+        >
+          <CloudOff size={13} className="text-[#D97706]" />
+          <span>{pendingCount} Lokal</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 function OfflineStatus({ onOpenQueue }) {
   const { online, pendingCount, syncing, syncNow, syncLog } = useOffline();
   const cacheAt = localStorage.getItem("gak_pos_cache_at");
@@ -177,9 +265,23 @@ export default function Layout({ children }) {
   };
   return (
     <div className="flex h-screen overflow-hidden bg-[#F4F5F7]">
-      <button data-testid="sidebar-toggle" onClick={() => setSidebarOpen(true)} className="lg:hidden fixed top-3 left-3 z-30 h-11 w-11 rounded-xl bg-[#0A0A0A] text-white grid place-items-center shadow-lg">
-        <Menu size={20} />
-      </button>
+      {/* Mobile Top Header */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-[#E4E4E7] z-30 flex items-center justify-between px-3 shadow-xs">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            data-testid="sidebar-toggle"
+            onClick={() => setSidebarOpen(true)}
+            className="tap h-10 w-10 rounded-xl bg-[#0A0A0A] text-white grid place-items-center shrink-0 shadow-sm"
+          >
+            <Menu size={18} />
+          </button>
+          <div className="font-heading font-extrabold text-sm text-[#0A0A0A] truncate">
+            {platform?.app_name || "Grand Aceh Kuliner"}
+          </div>
+        </div>
+        <HeaderConnectionBadge onOpenQueue={() => setQueueOpen(true)} />
+      </header>
+
       {sidebarOpen && <div data-testid="sidebar-backdrop" onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />}
       <aside className={`fixed lg:static z-50 h-full w-[240px] shrink-0 text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         style={{ backgroundImage: "linear-gradient(180deg, var(--gak-side1), var(--gak-side2) 55%, var(--gak-side3))" }}>
@@ -247,7 +349,10 @@ export default function Layout({ children }) {
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-hidden pt-14 lg:pt-0">{children}</main>
+      <main className="flex-1 overflow-hidden flex flex-col pt-14 lg:pt-0">
+        <HeaderConnectionBanner onOpenQueue={() => setQueueOpen(true)} />
+        <div className="flex-1 overflow-hidden">{children}</div>
+      </main>
       <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
       <SyncQueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
     </div>

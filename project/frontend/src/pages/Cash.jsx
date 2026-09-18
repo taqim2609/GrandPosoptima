@@ -94,7 +94,7 @@ export default function Cash() {
       setEdits({});
       setScanTotal(d.total || 0);
       if (!(d.items || []).length) toast.error("Tidak ada item terbaca — coba foto yang lebih jelas", { id: t });
-      else toast.success(`${d.items.length} pengeluaran terbaca (Rp${(d.total || 0).toLocaleString("id-ID")})`, { id: t });
+      else toast.success(`${(d.items || []).length} pengeluaran terbaca (Rp${(d.total || 0).toLocaleString("id-ID")})`, { id: t });
     } catch (err) {
       toast.error(apiError(err.response?.data?.detail) || "Gagal membaca struk", { id: t, duration: 9000 });
       setScanOpen(false);
@@ -211,8 +211,8 @@ export default function Cash() {
               <tr><th className="text-left p-3">Waktu</th><th className="text-left p-3">Kategori</th><th className="text-left p-3">Scope</th><th className="text-left p-3">Kasir</th><th className="text-right p-3">Nominal</th></tr>
             </thead>
             <tbody>
-              {(!data || data.movements.length === 0) && <tr><td colSpan={5} className="p-8 text-center text-[#a1a1aa]">Belum ada transaksi kas</td></tr>}
-              {data?.movements.map((m) => (
+              {(!data || (data.movements || []).length === 0) && <tr><td colSpan={5} className="p-8 text-center text-[#a1a1aa]">Belum ada transaksi kas</td></tr>}
+              {(data?.movements || []).map((m) => (
                 <tr key={m.id} className="border-t">
                   <td className="p-3 text-[#52525B]">{new Date(m.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</td>
                   <td className="p-3">{m.category}{m.note ? ` · ${m.note}` : ""}</td>

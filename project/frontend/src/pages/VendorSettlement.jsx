@@ -92,7 +92,7 @@ function RekapBayar({ initialDate }) {
     const t = toast.loading("Mengirim bukti pembayaran ke WhatsApp vendor...");
     try {
       const { data } = await api.post(`/vendor-settlements/${sid}/send-wa`, {});
-      toast.success(`Bukti terkirim ke ${data.sent.length} nomor`, { id: t });
+      toast.success(`Bukti terkirim ke ${(data?.sent || []).length} nomor`, { id: t });
     } catch (e) { toast.error(apiError(e.response?.data?.detail), { id: t, duration: 9000 }); }
     finally { setSending(false); }
   };
@@ -175,7 +175,7 @@ function RekapBayar({ initialDate }) {
                           data-testid={`settle-items-${r.vendor_id}`}
                           className="text-[11px] text-[#E63946] font-bold mt-0.5 flex items-center gap-1">
                           {openItems[r.vendor_id] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                          {openItems[r.vendor_id] ? "Sembunyikan" : `${r.items.length} produk terjual`}
+                          {openItems[r.vendor_id] ? "Sembunyikan" : `${(r.items || []).length} produk terjual`}
                         </button>
                       )}
                       {openItems[r.vendor_id] && (
@@ -341,7 +341,7 @@ function Riwayat() {
     const t = toast.loading("Mengirim bukti pembayaran...");
     try {
       const { data: d } = await api.post(`/vendor-settlements/${row.id}/send-wa`, {});
-      toast.success(`Bukti terkirim ke ${d.sent.length} nomor`, { id: t });
+      toast.success(`Bukti terkirim ke ${(d?.sent || []).length} nomor`, { id: t });
     } catch (e) { toast.error(apiError(e.response?.data?.detail), { id: t, duration: 9000 }); }
     finally { setBusy(false); }
   };

@@ -176,18 +176,19 @@ export default function Reports() {
 
           <div className="grid lg:grid-cols-3 gap-4 mb-5">
             {groups.map((g) => {
-              const grp = data.category_report[g.key];
+              const grp = data?.category_report?.[g.key] || { total: 0, categories: [] };
+              const catItems = Array.isArray(grp.categories) ? grp.categories : [];
               return (
                 <div key={g.key} className="bg-white rounded-2xl border overflow-hidden" data-testid={`report-group-${g.key}`}>
                   <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderTopColor: g.color, borderTopWidth: 3 }}>
                     <span className="font-extrabold flex items-center gap-2" style={{ color: g.color }}><g.icon size={18} /> {g.label}</span>
-                    <span className="font-num font-extrabold">{rupiah(grp.total)}</span>
+                    <span className="font-num font-extrabold">{rupiah(grp.total || 0)}</span>
                   </div>
                   <div className="p-4">
-                    {grp.categories.length === 0 ? (
+                    {catItems.length === 0 ? (
                       <div className="text-sm text-[#a1a1aa] py-2">Belum ada penjualan pada periode ini.</div>
-                    ) : grp.categories.map((c) => (
-                      <div key={c.category_id} data-testid={`report-cat-${c.category_id}`} className="flex items-center justify-between text-sm border-b last:border-0 py-2">
+                    ) : catItems.map((c) => (
+                      <div key={c.category_id || c.name} data-testid={`report-cat-${c.category_id}`} className="flex items-center justify-between text-sm border-b last:border-0 py-2">
                         <span className="text-[#52525B]">{c.name} <span className="text-[#a1a1aa] font-num">×{c.qty}</span></span>
                         <span className="font-num font-bold">{rupiah(c.total)}</span>
                       </div>
@@ -206,7 +207,7 @@ export default function Reports() {
                   className="tap h-9 px-3 rounded-lg bg-[#E63946] text-white font-bold text-xs flex items-center gap-1.5"><HandCoins size={14} /> Settlement</button>
                 <button data-testid="vendor-excel-btn" onClick={() => download("/reports/vendors/export/excel", "bagi-hasil-vendor.xlsx")} className="tap h-9 px-3 rounded-lg bg-white border font-bold text-xs flex items-center gap-1.5"><FileDown size={14} /> Excel</button>
                 <button data-testid="vendor-pdf-btn" onClick={() => download("/reports/vendors/export/pdf", "bagi-hasil-vendor.pdf")} className="tap h-9 px-3 rounded-lg bg-white border font-bold text-xs flex items-center gap-1.5"><FileText size={14} /> PDF</button>
-                {user.role === "admin" && (
+                {user?.role === "admin" && (
                   <button data-testid="vendor-wa-btn" onClick={sendVendorWA} disabled={sending} className="tap h-9 px-3 rounded-lg bg-[#25D366] text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50">{sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Kirim WA</button>
                 )}
               </div>
@@ -254,7 +255,7 @@ export default function Reports() {
                               </tr>
                             </thead>
                             <tbody>
-                              {r.items.map((im) => (
+                              {(r.items || []).map((im) => (
                                 <tr key={im.product_id || im.name} className="border-t border-[#F1F1F4]">
                                   <td className="py-1.5 pl-2 font-bold">{im.name}</td>
                                   <td className="py-1.5 text-right font-num">{im.qty}</td>
@@ -281,7 +282,7 @@ export default function Reports() {
                 </tfoot>
               )}
             </table>
-            {vrows.length > 0 && vend.rows?.length !== vrows.length && (
+            {vrows.length > 0 && (vend.rows || []).length !== vrows.length && (
               <div className="text-[11px] text-[#a1a1aa] px-5 pb-3 -mt-2">Tabel &amp; total di atas mengikuti toggle {view === "fnb" ? lb.fnb : lb.retail}. Ekspor Excel/PDF/WA mencakup seluruh toko.</div>
             )}
           </div>
@@ -311,7 +312,7 @@ export default function Reports() {
                 <tr><th className="text-left p-3">Produk</th><th className="text-right p-3">Qty</th><th className="text-right p-3">Pendapatan</th><th className="text-right p-3">Modal</th><th className="text-right p-3">Laba</th><th className="text-right p-3">Margin</th></tr>
               </thead>
               <tbody>
-                {profit.rows.map((r) => (
+                {(profit.rows || []).map((r) => (
                   <tr key={r.product_id} className="border-t">
                     <td className="p-3 font-bold">{r.name}</td>
                     <td className="p-3 text-right font-num">{r.qty}</td>
@@ -321,7 +322,7 @@ export default function Reports() {
                     <td className="p-3 text-right font-num text-[#52525B]">{r.margin}%</td>
                   </tr>
                 ))}
-                {profit.rows.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-[#a1a1aa]">Tidak ada penjualan pada rentang ini.</td></tr>}
+                {(!profit.rows || profit.rows.length === 0) && <tr><td colSpan={6} className="p-6 text-center text-[#a1a1aa]">Tidak ada penjualan pada rentang ini.</td></tr>}
               </tbody>
             </table>
           </div>

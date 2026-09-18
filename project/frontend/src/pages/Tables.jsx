@@ -12,7 +12,7 @@ export default function Tables() {
   const [form, setForm] = useState(empty);
   const [editId, setEditId] = useState(null);
 
-  const load = () => api.get("/tables").then((r) => setItems(r.data));
+  const load = () => api.get("/tables").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch(() => setItems([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount
   useEffect(() => { load(); }, []);
 
@@ -31,7 +31,7 @@ export default function Tables() {
   };
   const toggle = async (t) => { try { await api.put(`/tables/${t.id}`, { ...t, active: !t.active }); load(); } catch (e) { toast.error(apiError(e.response?.data?.detail)); } };
 
-  const areas = [...new Set(items.map((t) => t.area))];
+  const areas = [...new Set((items || []).map((t) => t.area))];
 
   return (
     <div className="h-full overflow-y-auto p-8">

@@ -12,7 +12,7 @@ export default function Vendors() {
   const [form, setForm] = useState(empty);
   const [editId, setEditId] = useState(null);
 
-  const load = () => api.get("/vendors").then((r) => setItems(r.data));
+  const load = () => api.get("/vendors").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch(() => setItems([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount
   useEffect(() => { load(); }, []);
 
@@ -41,11 +41,11 @@ export default function Vendors() {
         </button>
       </div>
       <p className="text-sm text-[#52525B] mb-6">Vendor adalah pemilik produk titipan (bagi hasil). Produk bertipe <b>Vendor</b> dihubungkan ke salah satu vendor di sini.</p>
-      {items.length === 0 ? (
+      {(items || []).length === 0 ? (
         <div className="bg-white rounded-2xl border p-10 text-center text-[#52525B]">Belum ada vendor. Tambahkan vendor lalu buat produk bertipe "Vendor".</div>
       ) : (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {items.map((v) => (
+          {(items || []).map((v) => (
             <div key={v.id} data-testid={`vendor-${v.id}`} className={`bg-white rounded-xl border p-4 ${!v.active && "opacity-60"}`}>
               <div className="font-bold text-lg">{v.name}</div>
               {v.contact && <div className="text-sm text-[#52525B] font-num">{v.contact}</div>}

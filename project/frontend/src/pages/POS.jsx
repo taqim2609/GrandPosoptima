@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, memo } from "react";
 import api, { apiError } from "@/lib/api";
 import { rupiah } from "@/lib/format";
 import { printReceipt } from "@/lib/receipt";
@@ -13,7 +13,8 @@ import {
 import VoidDialog from "@/components/VoidDialog";
 import {
   Utensils, ShoppingBag, Store, Plus, Minus, Trash2, Armchair,
-  Search, Receipt, X, CheckCircle2, Layers, Database, ScanLine, Clock, Play, Printer, WifiOff,
+  Search, Receipt, X, CheckCircle2, Layers, Database, ScanLine, Clock, Play, Printer, Wifi, WifiOff, RefreshCw, CloudOff,
+  ShoppingCart, ChevronUp, ChevronDown,
 } from "lucide-react";
 
 const ORDER_TYPES = [
@@ -22,8 +23,168 @@ const ORDER_TYPES = [
   { key: "retail", label: "Retail", icon: Store, cls: "ot-retail" },
 ];
 
+/* ==========================================================================
+   Memoized Sub-Components for High Performance POS on Android / Sunmi T2
+   ========================================================================== */
+
+const ProductCard = memo(function ProductCard({ product, onAdd }) {
+  const out = product.sold_out || (product.track_stock && product.stock <= 0);
+  const handleClick = useCallback(() => {
+    if (!out) onAdd(product);
+  }, [out, onAdd, product]);
+
+  return (
+    <button
+      data-testid={`product-card-${product.id}`}
+      onClick={handleClick}
+      disabled={out}
+      className={`tap relative text-left rounded-xl border bg-white overflow-hidden hover:border-[#E63946] ${
+        out ? "opacity-50 cursor-not-allowed" : ""
+      }`}
+    >
+      <div className="h-24 bg-[#F4F5F7] overflow-hidden">
+        {product.image ? (
+          <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <div className="h-full grid place-items-center text-[#d4d4d8]">
+            <Store size={28} />
+          </div>
+        )}
+      </div>
+      {out && (
+        <span className="absolute top-2 left-2 bg-[#EF4444] text-white text-[10px] font-bold px-2 py-0.5 rounded">
+          SOLD OUT
+        </span>
+      )}
+      <div className="p-3">
+        <div className="font-bold text-sm leading-tight line-clamp-2 min-h-[2.3em]">{product.name}</div>
+        <div className="font-num text-[#E63946] font-bold mt-1">
+          {rupiah(product.price)}
+          {product.weight_sale ? (
+            <span className="text-[10px] text-[#52525B] font-bold ml-1">/{product.weight_unit || "satuan"}</span>
+          ) : null}
+        </div>
+        {product.track_stock && <div className="text-[11px] text-[#52525B]">Stok: {product.stock}</div>}
+      </div>
+    </button>
+  );
+});
+
+const ProductGrid = memo(function ProductGrid({ products = [], onAdd }) {
+  const safeProducts = Array.isArray(products) ? products : [];
+  if (safeProducts.length === 0) {
+    return <div className="text-center text-[#a1a1aa] mt-20">Tidak ada produk</div>;
+  }
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+      {safeProducts.map((p) => (
+        <ProductCard key={p.id} product={p} onAdd={onAdd} />
+      ))}
+    </div>
+  );
+});
+
+const CartItemRow = memo(function CartItemRow({ item, onMinus, onPlus, onRemove }) {
+  return (
+    <div data-testid={`cart-item-${item.product_id}`} className="rounded-xl border p-2.5 bg-white shadow-xs">
+      <div className="flex justify-between gap-2">
+        <div className="font-bold text-sm leading-tight">
+          {item.name}
+          {item.weight ? (
+            <span className="block text-[11px] text-[#52525B] font-normal">
+              {Number(item.weight).toFixed(2)} {item.weight_unit} × {rupiah(item.base_price || item.price)}
+            </span>
+          ) : null}
+        </div>
+        <button onClick={() => onRemove(item.product_id)} className="text-[#a1a1aa] hover:text-[#EF4444] p-1">
+          <X size={16} />
+        </button>
+      </div>
+      <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center gap-2">
+          <button
+            data-testid={`qty-minus-${item.product_id}`}
+            onClick={() => onMinus(item.product_id)}
+            className="tap h-8 w-8 rounded-lg bg-[#F4F5F7] hover:bg-[#e4e4e7] grid place-items-center"
+          >
+            <Minus size={15} />
+          </button>
+          <span className="font-num font-bold min-w-6 text-center">{item.qty}</span>
+          <button
+            data-testid={`qty-plus-${item.product_id}`}
+            onClick={() => onPlus(item.product_id)}
+            className="tap h-8 w-8 rounded-lg bg-[#F4F5F7] hover:bg-[#e4e4e7] grid place-items-center"
+          >
+            <Plus size={15} />
+          </button>
+        </div>
+        <div className="font-num font-bold">{rupiah(item.price * item.qty)}</div>
+      </div>
+    </div>
+  );
+});
+
+const CategorySidebar = memo(function CategorySidebar({ categories = [], activeCat, onSelectCat }) {
+  const safeCats = Array.isArray(categories) ? categories : [];
+  return (
+    <>
+      {/* Desktop / Landscape: Sidebar Vertikal Kiri */}
+      <div className="hidden lg:block w-[190px] shrink-0 bg-white border-r overflow-y-auto no-scrollbar p-3 space-y-1.5">
+        <button
+          onClick={() => onSelectCat("all")}
+          className={`tap w-full h-12 rounded-xl px-3 text-left font-bold text-sm flex items-center gap-2 transition-colors ${
+            activeCat === "all" ? "bg-[#E63946] text-white" : "bg-[#F4F5F7] hover:bg-[#e9eaee] text-[#18181B]"
+          }`}
+        >
+          <Layers size={16} /> Semua
+        </button>
+        {safeCats.map((c) => (
+          <button
+            key={c.id}
+            data-testid={`cat-${c.id}`}
+            onClick={() => onSelectCat(c.id)}
+            className={`tap w-full min-h-12 rounded-xl px-3 py-2 text-left font-bold text-sm transition-colors ${
+              activeCat === c.id ? "bg-[#E63946] text-white" : "bg-[#F4F5F7] hover:bg-[#e9eaee] text-[#18181B]"
+            }`}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Mobile / Android Portrait: Horizontal Category Scroll Bar */}
+      <div className="lg:hidden flex items-center gap-2 overflow-x-auto no-scrollbar px-3 py-2 bg-white border-b shrink-0">
+        <button
+          onClick={() => onSelectCat("all")}
+          className={`tap shrink-0 h-9 px-4 rounded-full font-bold text-xs flex items-center gap-1.5 border transition-all ${
+            activeCat === "all"
+              ? "bg-[#E63946] text-white border-[#E63946] shadow-xs"
+              : "bg-[#F4F5F7] text-[#52525B] border-transparent hover:bg-[#e9eaee]"
+          }`}
+        >
+          <Layers size={14} /> Semua
+        </button>
+        {safeCats.map((c) => (
+          <button
+            key={c.id}
+            data-testid={`cat-chip-${c.id}`}
+            onClick={() => onSelectCat(c.id)}
+            className={`tap shrink-0 h-9 px-4 rounded-full font-bold text-xs border whitespace-nowrap transition-all ${
+              activeCat === c.id
+                ? "bg-[#E63946] text-white border-[#E63946] shadow-xs"
+                : "bg-[#F4F5F7] text-[#52525B] border-transparent hover:bg-[#e9eaee]"
+            }`}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+});
+
 export default function POS() {
-  const { online, addPending } = useOffline();
+  const { online, addPending, pendingCount, syncing, syncNow } = useOffline();
   const printerStatus = getPrinterStatus();
   // Mode offline (offline-first) per perangkat — default MATI. Saat mati & server tidak
   // terjangkau, POS diblokir total sampai koneksi normal (lihat gate render di bawah).
@@ -53,6 +214,7 @@ export default function POS() {
   // Bill terbuka (dine-in) yang sedang dibatalkan lewat VoidDialog
   const [voidBill, setVoidBill] = useState(null);
   const [barcode, setBarcode] = useState("");
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -107,19 +269,26 @@ export default function POS() {
     });
   }, []);
 
-  const relevantTypes = orderType === "retail" ? ["retail"] : ["makanan", "minuman", "vendor"];
-  const cats = categories.filter((c) => relevantTypes.includes(c.type));
+  const relevantTypes = useMemo(() => {
+    return orderType === "retail" ? ["retail"] : ["makanan", "minuman", "vendor"];
+  }, [orderType]);
+  const cats = useMemo(() => {
+    return (categories || []).filter((c) => relevantTypes.includes(c.type));
+  }, [categories, relevantTypes]);
 
   const visibleProducts = useMemo(() => {
-    return products.filter((p) => {
+    return (products || []).filter((p) => {
+      if (!p) return false;
       if (!relevantTypes.includes(p.type)) return false;
       if (activeCat !== "all" && p.category_id !== activeCat) return false;
-      if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !p.name?.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
   }, [products, relevantTypes, activeCat, search]);
 
-  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const subtotal = useMemo(() => {
+    return (cart || []).reduce((s, i) => s + (i.price || 0) * (i.qty || 0), 0);
+  }, [cart]);
   const discount =
     discType === "percent" ? Math.round((subtotal * discVal) / 100)
     : discType === "amount" ? Math.min(discVal, subtotal) : 0;
@@ -129,10 +298,10 @@ export default function POS() {
   const service = svcRate > 0 ? Math.round(baseTotal * svcRate) / 100 : 0;
   const total = Math.round((baseTotal + service) * 100) / 100;
 
-  const resetSale = () => {
+  const resetSale = useCallback(() => {
     setCart([]); setTable(null); setCurrentOrderId(null);
     setDiscType("none"); setDiscVal(0);
-  };
+  }, []);
 
   // Cetak BILL SEMENTARA (struk pratinjau tanpa pembayaran) — untuk dine-in/open bill.
   const printInterimBill = () => {
@@ -154,14 +323,14 @@ export default function POS() {
     toast.success("Bill sementara dicetak");
   };
 
-  const switchType = (key) => {
+  const switchType = useCallback((key) => {
     if (cart.length && !window.confirm("Ganti jenis transaksi akan mengosongkan keranjang. Lanjut?")) return;
     resetSale();
     setActiveCat("all");
     setOrderType(key);
-  };
+  }, [cart.length, resetSale]);
 
-  const addItem = (p) => {
+  const addItem = useCallback((p) => {
     if (p.sold_out) return;
     if (p.type === "retail" && p.track_stock && p.stock <= 0) {
       toast.error("Stok retail habis");
@@ -177,7 +346,7 @@ export default function POS() {
       if (ex) return prev.map((i) => (i.product_id === p.id ? { ...i, qty: i.qty + 1 } : i));
       return [...prev, { product_id: p.id, name: p.name, price: p.price, qty: 1, type: p.type }];
     });
-  };
+  }, []);
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightProduct, setWeightProduct] = useState(null);
   const [weightVal, setWeightVal] = useState("");
@@ -194,11 +363,17 @@ export default function POS() {
     }]);
     setWeightOpen(false); setWeightProduct(null); setWeightVal("");
   };
-  const changeQty = (id, d) =>
+  const changeQty = useCallback((id, d) => {
     setCart((prev) =>
       prev.map((i) => (i.product_id === id ? { ...i, qty: i.qty + d } : i)).filter((i) => i.qty > 0)
     );
-  const removeItem = (id) => setCart((prev) => prev.filter((i) => i.product_id !== id));
+  }, []);
+  const removeItem = useCallback((id) => {
+    setCart((prev) => prev.filter((i) => i.product_id !== id));
+  }, []);
+  const onMinus = useCallback((id) => changeQty(id, -1), [changeQty]);
+  const onPlus = useCallback((id) => changeQty(id, 1), [changeQty]);
+  const handleSelectCat = useCallback((catId) => setActiveCat(catId), []);
 
   const openShiftInline = async () => {
     try {
@@ -388,75 +563,84 @@ export default function POS() {
   }
 
   return (
-    <div className="h-screen flex flex-col">
-      {/* top bar: order type */}
-      <div className="h-16 shrink-0 bg-white border-b flex items-center px-4 gap-2">
-        {ORDER_TYPES.map((t) => (
-          <button
-            key={t.key}
-            data-testid={`ordertype-${t.key}`}
-            onClick={() => switchType(t.key)}
-            className={`tap h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 border-2 ${
-              orderType === t.key ? `${t.cls}` : "bg-white text-[#52525B] border-transparent hover:bg-[#F4F5F7]"
-            }`}
-          >
-            <t.icon size={18} /> {t.label}
-          </button>
-        ))}
-        <div className="flex-1" />
+    <div className="h-screen flex flex-col overflow-hidden relative">
+      {/* top bar: order type & status (responsive scroll on portrait/mobile) */}
+      <div className="h-14 sm:h-16 shrink-0 bg-white border-b flex items-center px-3 sm:px-4 gap-2 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 shrink-0">
+          {ORDER_TYPES.map((t) => (
+            <button
+              key={t.key}
+              data-testid={`ordertype-${t.key}`}
+              onClick={() => switchType(t.key)}
+              className={`tap h-10 sm:h-11 px-3 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-2 whitespace-nowrap transition-all ${
+                orderType === t.key ? `${t.cls}` : "bg-white text-[#52525B] border-transparent hover:bg-[#F4F5F7]"
+              }`}
+            >
+              <t.icon size={16} /> {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="hidden sm:flex flex-1" />
+        {/* Indikator Status Koneksi & Sinkronisasi */}
+        <div
+          data-testid="pos-connection-status"
+          className={`h-9 sm:h-10 px-2.5 sm:px-3.5 rounded-xl flex items-center gap-1.5 sm:gap-2 text-xs font-bold border-2 shrink-0 transition-all ${
+            !online
+              ? "bg-[#FEF2F2] text-[#991B1B] border-[#EF4444] shadow-xs"
+              : pendingCount > 0
+              ? "bg-[#FFFBEB] text-[#92400E] border-[#F59E0B] shadow-xs"
+              : "bg-[#F0FDF4] text-[#166534] border-[#22C55E]/50"
+          }`}
+        >
+          {online ? (
+            <Wifi size={15} className={pendingCount > 0 ? "text-[#D97706]" : "text-[#16A34A]"} />
+          ) : (
+            <WifiOff size={15} className="text-[#DC2626] animate-pulse" />
+          )}
+          <span className="font-extrabold">{online ? "Online" : "Offline"}</span>
+          {pendingCount > 0 && (
+            <button
+              onClick={() => { if (online) syncNow(); }}
+              disabled={syncing || !online}
+              title={online ? "Klik untuk sinkronkan data transaksi lokal ke server" : "Menunggu koneksi internet untuk sinkron"}
+              className="tap ml-1 px-2 py-0.5 rounded-lg bg-[#D97706] hover:bg-[#B45309] text-white text-[10px] font-black flex items-center gap-1 shadow-xs disabled:opacity-80"
+            >
+              <RefreshCw size={10} className={syncing ? "animate-spin" : ""} />
+              <span>{pendingCount}</span>
+            </button>
+          )}
+        </div>
         {shift?.opened_by && (
           <div data-testid="pos-shift-chip" title="Shift hari ini dipakai bersama semua akun — tidak perlu buka shift baru"
-            className="h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-[#EEF2FF] text-[#3730A3]">
-            <Clock size={13} /> Shift dibuka: {shift.opened_by}
-            {Array.isArray(shift.scopes) ? ` · ${shift.scopes.map((s) => (s === "retail" ? "Retail" : "F&B")).join(" + ")}` : ""}
+            className="hidden md:flex h-9 px-3 rounded-lg items-center gap-1.5 text-xs font-bold bg-[#EEF2FF] text-[#3730A3] shrink-0 whitespace-nowrap">
+            <Clock size={13} /> {shift.opened_by}
           </div>
         )}
         {cacheAt && (
           <div data-testid="cache-indicator" title="Waktu data produk/harga terakhir diperbarui dari server"
-            className={`h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold ${online ? "bg-[#F4F5F7] text-[#52525B]" : "bg-[#FEF3C7] text-[#B45309]"}`}>
-            <Database size={13} /> Data: {new Date(cacheAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-            {!online && " (offline)"}
+            className={`hidden xl:flex h-9 px-3 rounded-lg items-center gap-1.5 text-xs font-bold shrink-0 whitespace-nowrap ${online ? "bg-[#F4F5F7] text-[#52525B]" : "bg-[#FEF3C7] text-[#B45309]"}`}>
+            <Database size={13} /> {new Date(cacheAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
           </div>
         )}
         {orderType === "dine_in" && (
           <button
             data-testid="pick-table-btn"
             onClick={openTablePicker}
-            className="tap h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 bg-[#0A0A0A] text-white"
+            className="tap h-10 sm:h-11 px-3 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 bg-[#0A0A0A] text-white shrink-0 whitespace-nowrap"
           >
-            <Armchair size={18} /> {table ? table.name : "Pilih Meja"}
+            <Armchair size={16} /> {table ? table.name : "Pilih Meja"}
           </button>
         )}
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Layout Area: Category + Products + Cart */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden pb-16 lg:pb-0">
         {/* categories */}
-        <div className="w-[200px] shrink-0 bg-white border-r overflow-y-auto no-scrollbar p-3 space-y-1.5">
-          <button
-            onClick={() => setActiveCat("all")}
-            className={`tap w-full h-14 rounded-xl px-3 text-left font-bold text-sm flex items-center gap-2 ${
-              activeCat === "all" ? "bg-[#E63946] text-white" : "bg-[#F4F5F7] hover:bg-[#e9eaee]"
-            }`}
-          >
-            <Layers size={16} /> Semua
-          </button>
-          {cats.map((c) => (
-            <button
-              key={c.id}
-              data-testid={`cat-${c.id}`}
-              onClick={() => setActiveCat(c.id)}
-              className={`tap w-full min-h-14 rounded-xl px-3 py-2 text-left font-bold text-sm ${
-                activeCat === c.id ? "bg-[#E63946] text-white" : "bg-[#F4F5F7] hover:bg-[#e9eaee]"
-              }`}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
+        <CategorySidebar categories={cats} activeCat={activeCat} onSelectCat={handleSelectCat} />
 
         {/* product grid */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-3 border-b bg-white space-y-2">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <div className="p-2.5 sm:p-3 border-b bg-white space-y-2 shrink-0">
             <div className="relative">
               <ScanLine size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#E63946]" />
               <input
@@ -464,8 +648,8 @@ export default function POS() {
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
                 onKeyDown={handleBarcode}
-                placeholder="Scan / ketik kode produk (SKU) lalu Enter"
-                className="w-full h-12 pl-10 pr-3 rounded-xl border-2 border-[#E63946] outline-none font-num"
+                placeholder="Scan / ketik SKU produk lalu Enter"
+                className="w-full h-11 sm:h-12 pl-10 pr-3 rounded-xl border-2 border-[#E63946] outline-none font-num text-sm"
                 autoFocus
               />
             </div>
@@ -474,95 +658,80 @@ export default function POS() {
               <input
                 data-testid="product-search"
                 value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari produk..."
-                className="w-full h-12 pl-10 pr-3 rounded-xl border border-[#E4E4E7] focus:border-[#E63946] outline-none"
+                placeholder="Cari nama produk..."
+                className="w-full h-10 sm:h-12 pl-10 pr-3 rounded-xl border border-[#E4E4E7] focus:border-[#E63946] outline-none text-sm"
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto no-scrollbar p-3">
-            {visibleProducts.length === 0 && (
-              <div className="text-center text-[#a1a1aa] mt-20">Tidak ada produk</div>
-            )}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-              {visibleProducts.map((p) => {
-                const out = p.sold_out || (p.track_stock && p.stock <= 0);
-                return (
-                  <button
-                    key={p.id}
-                    data-testid={`product-card-${p.id}`}
-                    onClick={() => addItem(p)}
-                    disabled={out}
-                    className={`tap relative text-left rounded-xl border bg-white overflow-hidden hover:border-[#E63946] ${
-                      out ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    <div className="h-24 bg-[#F4F5F7] overflow-hidden">
-                      {p.image ? (
-                        <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full grid place-items-center text-[#d4d4d8]"><Store size={28} /></div>
-                      )}
-                    </div>
-                    {out && (
-                      <span className="absolute top-2 left-2 bg-[#EF4444] text-white text-[10px] font-bold px-2 py-0.5 rounded">
-                        SOLD OUT
-                      </span>
-                    )}
-                    <div className="p-2.5">
-                      <div className="font-bold text-sm leading-tight line-clamp-2 min-h-[2.3em]">{p.name}</div>
-                      <div className="font-num text-[#E63946] font-bold mt-1">{rupiah(p.price)}{p.weight_sale ? <span className="text-[10px] text-[#52525B] font-bold ml-1">/{p.weight_unit || "satuan"}</span> : ""}</div>
-                      {p.track_stock && <div className="text-[11px] text-[#52525B]">Stok: {p.stock}</div>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="flex-1 overflow-y-auto no-scrollbar p-2.5 sm:p-3">
+            <ProductGrid products={visibleProducts} onAdd={addItem} />
           </div>
         </div>
 
-        {/* cart */}
-        <div className="w-[340px] shrink-0 bg-white border-l-2 border-[#E63946] flex flex-col">
-          <div className="p-4 border-b flex items-center justify-between">
-            <div className="font-extrabold flex items-center gap-2"><Receipt size={18} /> Keranjang</div>
-            {cart.length > 0 && (
-              <button data-testid="clear-cart" onClick={resetSale} className="text-xs text-[#EF4444] font-bold flex items-center gap-1">
-                <Trash2 size={14} /> Kosongkan
+        {/* Backdrop for portrait mobile cart drawer */}
+        {mobileCartOpen && (
+          <div
+            onClick={() => setMobileCartOpen(false)}
+            className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-xs transition-opacity"
+          />
+        )}
+
+        {/* cart (Responsive sidebar on landscape / Bottom sheet drawer on portrait) */}
+        <div
+          className={`
+            fixed lg:static inset-x-0 bottom-0 z-50 lg:z-auto
+            w-full lg:w-[320px] xl:w-[350px] shrink-0 bg-white
+            border-t-2 lg:border-t-0 lg:border-l-2 border-[#E63946]
+            flex flex-col shadow-2xl lg:shadow-none
+            transition-transform duration-300 ease-in-out
+            ${mobileCartOpen ? "translate-y-0 max-h-[85vh] h-[85vh]" : "translate-y-full lg:translate-y-0"}
+            lg:max-h-full lg:h-full
+          `}
+        >
+          <div className="p-3 sm:p-4 border-b flex items-center justify-between bg-white shrink-0">
+            <div className="font-extrabold flex items-center gap-2 text-sm sm:text-base">
+              <Receipt size={18} className="text-[#E63946]" /> Keranjang ({cart.reduce((s, i) => s + i.qty, 0)})
+            </div>
+            <div className="flex items-center gap-2">
+              {cart.length > 0 && (
+                <button data-testid="clear-cart" onClick={resetSale} className="text-xs text-[#EF4444] font-bold flex items-center gap-1 hover:underline">
+                  <Trash2 size={13} /> Kosongkan
+                </button>
+              )}
+              <button
+                onClick={() => setMobileCartOpen(false)}
+                className="lg:hidden p-1.5 rounded-lg text-[#71717A] hover:bg-[#F4F5F7]"
+              >
+                <ChevronDown size={20} />
               </button>
-            )}
+            </div>
           </div>
           {orderType === "dine_in" && table && (
-            <div className="px-4 py-2 text-sm font-bold ot-dine_in border-y">
+            <div className="px-4 py-2 text-xs sm:text-sm font-bold ot-dine_in border-y shrink-0">
               Meja: {table.name} {currentOrderId ? "· Open Bill" : ""}
             </div>
           )}
-          <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2 min-h-0 bg-[#FAFAFA]">
             {cart.length === 0 && (
-              <div className="text-center text-[#a1a1aa] mt-16 text-sm">Belum ada item</div>
+              <div className="text-center text-[#a1a1aa] py-12 text-sm">Belum ada item di keranjang</div>
             )}
             {cart.map((i) => (
-              <div key={i.product_id} data-testid={`cart-item-${i.product_id}`} className="rounded-xl border p-2.5">
-                <div className="flex justify-between gap-2">
-                  <div className="font-bold text-sm leading-tight">{i.name}{i.weight ? <span className="block text-[11px] text-[#52525B] font-normal">{Number(i.weight).toFixed(2)} {i.weight_unit} × {rupiah(i.base_price || i.price)}</span> : ""}</div>
-                  <button onClick={() => removeItem(i.product_id)} className="text-[#a1a1aa] hover:text-[#EF4444]"><X size={16} /></button>
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-2">
-                    <button data-testid={`qty-minus-${i.product_id}`} onClick={() => changeQty(i.product_id, -1)} className="tap h-8 w-8 rounded-lg bg-[#F4F5F7] grid place-items-center"><Minus size={15} /></button>
-                    <span className="font-num font-bold w-6 text-center">{i.qty}</span>
-                    <button data-testid={`qty-plus-${i.product_id}`} onClick={() => changeQty(i.product_id, 1)} className="tap h-8 w-8 rounded-lg bg-[#F4F5F7] grid place-items-center"><Plus size={15} /></button>
-                  </div>
-                  <div className="font-num font-bold">{rupiah(i.price * i.qty)}</div>
-                </div>
-              </div>
+              <CartItemRow
+                key={i.product_id}
+                item={i}
+                onMinus={onMinus}
+                onPlus={onPlus}
+                onRemove={removeItem}
+              />
             ))}
           </div>
 
-          <div className="border-t p-4 space-y-3">
+          <div className="border-t p-3 sm:p-4 space-y-2.5 sm:space-y-3 bg-white shrink-0">
             <div className="flex gap-2">
               <select
                 data-testid="discount-type" value={discType}
                 onChange={(e) => { setDiscType(e.target.value); setDiscVal(0); }}
-                className="h-10 rounded-lg border px-2 text-sm bg-white"
+                className="h-10 rounded-lg border px-2 text-xs sm:text-sm bg-white"
               >
                 <option value="none">Tanpa Diskon</option>
                 <option value="percent">Diskon %</option>
@@ -576,33 +745,33 @@ export default function POS() {
                     // Diskon % boleh sampai 100% (gratis); diskon Rp maks = subtotal (dipotong di perhitungan).
                     setDiscVal(discType === "percent" ? Math.min(100, Math.max(0, v)) : Math.max(0, v));
                   }}
-                  className="h-10 rounded-lg border px-2 text-sm flex-1 font-num"
+                  className="h-10 rounded-lg border px-2 text-xs sm:text-sm flex-1 font-num"
                 />
               )}
             </div>
             {discType === "percent" && discVal >= 100 && (
-              <div className="text-[11px] font-bold text-[#E63946] -mt-2">Diskon 100% = gratis. HPP &amp; bagian vendor tetap dihitung penuh (tidak terpotong).</div>
+              <div className="text-[10px] sm:text-[11px] font-bold text-[#E63946] -mt-1">Diskon 100% = gratis. HPP &amp; bagian vendor tetap dihitung penuh.</div>
             )}
-            <div className="space-y-1 text-sm">
+            <div className="space-y-1 text-xs sm:text-sm">
               <div className="flex justify-between text-[#52525B]"><span>Subtotal</span><span className="font-num">{rupiah(subtotal)}</span></div>
               {discount > 0 && <div className="flex justify-between text-[#EF4444]"><span>Diskon</span><span className="font-num">-{rupiah(discount)}</span></div>}
               {service > 0 && <div className="flex justify-between text-[#52525B]"><span>Pajak Layanan {svcRate}%</span><span className="font-num">+{rupiah(service)}</span></div>}
-              <div className="flex justify-between font-extrabold text-lg"><span>Total</span><span className="font-num" data-testid="cart-total">{rupiah(total)}</span></div>
+              <div className="flex justify-between font-extrabold text-base sm:text-lg"><span>Total</span><span className="font-num" data-testid="cart-total">{rupiah(total)}</span></div>
             </div>
             <div className="flex gap-2">
               {orderType === "dine_in" && (
                 <>
                   <button
                     data-testid="save-openbill-btn" onClick={saveOpenBill} disabled={!cart.length || !table}
-                    className="tap flex-1 h-13 py-3 rounded-xl bg-[#0A0A0A] text-white font-bold disabled:opacity-40"
+                    className="tap flex-1 h-12 py-2.5 rounded-xl bg-[#0A0A0A] text-white font-bold text-xs sm:text-sm disabled:opacity-40"
                   >
                     {posLabel(ui, "open_bill", "Simpan Bill")}
                   </button>
                   <button
                     data-testid="interim-bill-btn" onClick={printInterimBill} disabled={!cart.length}
-                    className="tap h-13 px-3 rounded-xl bg-white border-2 border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs disabled:opacity-40"
+                    className="tap h-12 px-3 rounded-xl bg-white border-2 border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs disabled:opacity-40"
                   >
-                    <Receipt size={15} /> {posLabel(ui, "bill", "Bill Sementara")}
+                    <Receipt size={14} /> {posLabel(ui, "bill", "Bill")}
                   </button>
                 </>
               )}
@@ -614,19 +783,54 @@ export default function POS() {
                   setPayOpen(true);
                 }}
                 disabled={!cart.length}
-                className="tap flex-1 h-13 py-3 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold disabled:opacity-40"
+                className="tap flex-1 h-12 py-2.5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold text-sm sm:text-base disabled:opacity-40"
               >
                 {posLabel(ui, "pay", "Bayar")}
               </button>
             </div>
-            <div data-testid="pos-printer-status" className={`mt-2 text-[11px] font-bold flex items-center gap-1 ${printerStatus.level === "error" ? "text-[#B91C1C]" : printerStatus.level === "warn" ? "text-[#B45309]" : "text-[#047857]"}`}>
+            <div data-testid="pos-printer-status" className={`mt-1 text-[10px] sm:text-[11px] font-bold flex items-center gap-1 ${printerStatus.level === "error" ? "text-[#B91C1C]" : printerStatus.level === "warn" ? "text-[#B45309]" : "text-[#047857]"}`}>
               <Printer size={12} /> Printer: {printerStatus.label}
             </div>
-            {printerStatus.debug && (
-              <div className="mt-1 text-[10px] font-mono text-[#B91C1C]">Debug: {printerStatus.debug}</div>
-            )}
           </div>
         </div>
+      </div>
+
+      {/* Floating Bottom Quick-Action Bar for Android Portrait */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-white border-t px-3 py-2.5 flex items-center justify-between gap-3 shadow-lg">
+        <button
+          onClick={() => setMobileCartOpen(true)}
+          className="flex-1 flex items-center gap-2.5 text-left tap"
+        >
+          <div className="relative bg-[#F4F5F7] p-2 rounded-xl text-[#E63946]">
+            <ShoppingCart size={20} />
+            {cart.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[#E63946] text-white text-[10px] font-extrabold h-4.5 min-w-4.5 px-1 rounded-full flex items-center justify-center">
+                {cart.reduce((s, i) => s + i.qty, 0)}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-[#71717A] font-bold flex items-center gap-1">
+              <span>Keranjang</span>
+              <ChevronUp size={13} />
+            </div>
+            <div className="font-num font-extrabold text-sm text-[#0A0A0A] truncate">
+              {rupiah(total)}
+            </div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => {
+            if (!cart.length) return toast.error("Keranjang kosong");
+            if (orderType === "dine_in" && !table) return toast.error("Pilih meja dulu");
+            setPayOpen(true);
+          }}
+          disabled={!cart.length}
+          className="tap h-11 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold text-sm shadow-sm disabled:opacity-40 flex items-center gap-1.5"
+        >
+          <span>{posLabel(ui, "pay", "Bayar")}</span>
+        </button>
       </div>
 
       <TableDialog open={tableOpen} onClose={() => setTableOpen(false)} tables={tables} onSelect={selectTable}
@@ -675,19 +879,20 @@ export default function POS() {
   );
 }
 
-function TableDialog({ open, onClose, tables, onSelect, onCancelBill }) {
-  const areas = [...new Set(tables.filter((t) => t.active).map((t) => t.area))];
+function TableDialog({ open, onClose, tables = [], onSelect, onCancelBill }) {
+  const safeTables = Array.isArray(tables) ? tables : [];
+  const areas = [...new Set(safeTables.filter((t) => t?.active).map((t) => t.area).filter(Boolean))];
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle>Pilih Meja (Dine-In)</DialogTitle></DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto space-y-4">
-          {tables.filter((t) => t.active).length === 0 && <p className="text-sm text-[#52525B]">Belum ada meja aktif. Tambahkan di menu Meja.</p>}
+          {safeTables.filter((t) => t?.active).length === 0 && <p className="text-sm text-[#52525B]">Belum ada meja aktif. Tambahkan di menu Meja.</p>}
           {areas.map((area) => (
             <div key={area}>
               <div className="text-xs uppercase tracking-wider font-bold text-[#52525B] mb-2">{area}</div>
               <div className="grid grid-cols-5 gap-2">
-                {tables.filter((t) => t.active && t.area === area).map((t) => (
+                {safeTables.filter((t) => t?.active && t?.area === area).map((t) => (
                   <div key={t.id} className="flex flex-col gap-1">
                     <button
                       data-testid={`table-opt-${t.id}`} onClick={() => onSelect(t)}
@@ -716,7 +921,7 @@ function TableDialog({ open, onClose, tables, onSelect, onCancelBill }) {
   );
 }
 
-function PayDialog({ open, onClose, pms, total, discountType, discountValue, subtotal, onPay }) {
+function PayDialog({ open, onClose, pms = [], total, discountType, discountValue, subtotal, onPay }) {
   const [biz, setBiz] = useState(bizCache());
   useEffect(() => { if (open) loadBusiness().then(setBiz); }, [open]);
   // selected = hingga 2 metode pembayaran utk SATU transaksi (mis. Tunai + QRIS)

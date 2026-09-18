@@ -15,14 +15,14 @@ export default function Recipes() {
   const [saving, setSaving] = useState(false);
 
   const load = () => {
-    api.get("/recipes").then((r) => setRecipes(r.data.recipes || [])).catch(() => {});
-    api.get("/ingredients", { params: { active_only: true } }).then((r) => setIngredients(r.data || [])).catch(() => {});
-    api.get("/products").then((r) => setProducts((r.data || []).filter((p) => p.type !== "retail"))).catch(() => {});
+    api.get("/recipes").then((r) => setRecipes(r.data?.recipes || (Array.isArray(r.data) ? r.data : []))).catch(() => setRecipes([]));
+    api.get("/ingredients", { params: { active_only: true } }).then((r) => setIngredients(Array.isArray(r.data) ? r.data : (r.data?.items || []))).catch(() => setIngredients([]));
+    api.get("/products").then((r) => setProducts((Array.isArray(r.data) ? r.data : []).filter((p) => p.type !== "retail"))).catch(() => setProducts([]));
   };
   useEffect(() => { load(); }, []);
 
-  const prodName = (id) => products.find((p) => p.id === id)?.name;
-  const ingName = (id) => ingredients.find((b) => b.id === id)?.name;
+  const prodName = (id) => (products || []).find((p) => p.id === id)?.name;
+  const ingName = (id) => (ingredients || []).find((b) => b.id === id)?.name;
   const nameOfRow = (row) => {
     // baris resep dari server: ingredient_id / product_id
     if (row.ingredient_id) return ingName(row.ingredient_id) || "?";
@@ -31,9 +31,9 @@ export default function Recipes() {
   const isIngredientOpt = (val) => String(val).startsWith("ing:");
   const isProductOpt = (val) => String(val).startsWith("p:");
 
-  const addIng = () => setForm((f) => ({ ...f, ingredients: [...f.ingredients, { sel: "", qty: 1, unit: "" }] }));
-  const setIng = (i, patch) => setForm((f) => ({ ...f, ingredients: f.ingredients.map((x, idx) => idx === i ? { ...x, ...patch } : x) }));
-  const rmIng = (i) => setForm((f) => ({ ...f, ingredients: f.ingredients.filter((_, idx) => idx !== i) }));
+  const addIng = () => setForm((f) => ({ ...f, ingredients: [...(f.ingredients || []), { sel: "", qty: 1, unit: "" }] }));
+  const setIng = (i, patch) => setForm((f) => ({ ...f, ingredients: (f.ingredients || []).map((x, idx) => idx === i ? { ...x, ...patch } : x) }));
+  const rmIng = (i) => setForm((f) => ({ ...f, ingredients: (f.ingredients || []).filter((_, idx) => idx !== i) }));
 
   // konversi baris UI → payload backend
   const rowToPayload = (row) => {
@@ -47,8 +47,8 @@ export default function Recipes() {
 
   const save = async () => {
     if (!form.product_id) return toast.error("Pilih produk");
-    if (!form.ingredients.length) return toast.error("Tambahkan minimal 1 bahan");
-    const rows = form.ingredients.map(rowToPayload);
+    if (!(form.ingredients || []).length) return toast.error("Tambahkan minimal 1 bahan");
+    const rows = (form.ingredients || []).map(rowToPayload);
     if (rows.some((r) => !r)) return toast.error("Pilih bahan untuk setiap baris");
     if (rows.some((r) => !(r.qty > 0))) return toast.error("Jumlah bahan harus > 0");
     setSaving(true);
@@ -91,8 +91,8 @@ export default function Recipes() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {recipes.length === 0 && <div className="md:col-span-2 xl:col-span-3 bg-white rounded-2xl border p-10 text-center text-[#a1a1aa]">Belum ada resep. Buat resep pertama untuk menghitung HPP otomatis.</div>}
-        {recipes.map((r) => (
+        {(recipes || []).length === 0 && <div className="md:col-span-2 xl:col-span-3 bg-white rounded-2xl border p-10 text-center text-[#a1a1aa]">Belum ada resep. Buat resep pertama untuk menghitung HPP otomatis.</div>}
+        {(recipes || []).map((r) => (
           <div key={r.id} className="bg-white rounded-2xl border p-5" data-testid={`recipe-${r.id}`}>
             <div className="flex items-start justify-between gap-2">
               <div className="font-extrabold">{prodName(r.product_id) || "?"}</div>
@@ -143,23 +143,23 @@ export default function Recipes() {
                 <label className="text-xs uppercase tracking-wider font-bold text-[#52525B]">Bahan-Bahan (pilih dari Bahan Baku)</label>
                 <button onClick={addIng} className="tap text-xs font-bold text-[#E63946] flex items-center gap-1"><Plus size={13} /> Tambah</button>
               </div>
-              {ingredients.length === 0 && (
+              {(ingredients || []).length === 0 && (
                 <p className="text-[11px] text-[#B45309] bg-[#FEF3C7] border border-[#FCD34D] rounded-lg px-3 py-2 mt-2">
                   Belum ada bahan di master <b>Bahan Baku</b> — buat dulu di menu <b>Bahan &amp; Belanja</b> supaya bisa dipakai resep & daftar belanja.
                 </p>
               )}
               <div className="space-y-2 mt-1.5">
-                {form.ingredients.map((ing, i) => (
+                {(form.ingredients || []).map((ing, i) => (
                   <div key={i} className="flex gap-2 items-center">
                     <select value={ing.sel} onChange={(e) => setIng(i, { sel: e.target.value })} className="flex-1 h-10 rounded-lg border px-2 bg-white text-xs">
                       <option value="">— pilih bahan —</option>
-                      <optgroup label={`Bahan Baku (${ingredients.length})`}>
-                        {ingredients.map((b) => (
+                      <optgroup label={`Bahan Baku (${(ingredients || []).length})`}>
+                        {(ingredients || []).map((b) => (
                           <option key={b.id} value={"ing:" + b.id}>{b.name}{b.unit ? ` (${b.unit})` : ""} — stok {b.stock}</option>
                         ))}
                       </optgroup>
                       <optgroup label="Produk (opsional, tidak ikut daftar belanja)">
-                        {products.map((p) => <option key={p.id} value={"p:" + p.id}>{p.name}</option>)}
+                        {(products || []).map((p) => <option key={p.id} value={"p:" + p.id}>{p.name}</option>)}
                       </optgroup>
                     </select>
                     <input type="number" min="0" step="0.01" value={ing.qty} onChange={(e) => setIng(i, { qty: e.target.value })} placeholder="jml" className="w-20 h-10 rounded-lg border px-2 font-num text-xs" />
@@ -167,7 +167,7 @@ export default function Recipes() {
                     <button onClick={() => rmIng(i)} className="tap h-8 w-8 rounded-lg bg-[#FEE2E2] text-[#EF4444] grid place-items-center shrink-0"><Trash2 size={13} /></button>
                   </div>
                 ))}
-                {form.ingredients.length === 0 && <div className="text-[#a1a1aa] text-xs">Belum ada bahan.</div>}
+                {(form.ingredients || []).length === 0 && <div className="text-[#a1a1aa] text-xs">Belum ada bahan.</div>}
               </div>
             </div>
           </div>

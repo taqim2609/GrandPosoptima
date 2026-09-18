@@ -1,10 +1,12 @@
-import { useState } from "react";
-import Products from "@/pages/Products";
-import Inventory from "@/pages/Inventory";
-import Categories from "@/pages/Categories";
-import Vendors from "@/pages/Vendors";
-import Recipes from "@/pages/Recipes";
+import { useState, useEffect, Suspense, lazy } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Package, Boxes, Tags, Store, FlaskConical } from "lucide-react";
+
+const Products = lazy(() => import("@/pages/Products"));
+const Inventory = lazy(() => import("@/pages/Inventory"));
+const Categories = lazy(() => import("@/pages/Categories"));
+const Vendors = lazy(() => import("@/pages/Vendors"));
+const Recipes = lazy(() => import("@/pages/Recipes"));
 
 const TABS = [
   { k: "produk", l: "Produk", i: Package, C: Products },
@@ -15,14 +17,21 @@ const TABS = [
 ];
 
 export default function Catalog() {
+  const [params] = useSearchParams();
   const [t, setT] = useState(() => {
-    try {
-      const k = new URLSearchParams(window.location.search).get("tab");
-      if (TABS.some((x) => x.k === k)) return k;
-    } catch (e) {}
+    const k = params.get("tab");
+    if (TABS.some((x) => x.k === k)) return k;
     return "produk";
   });
-  const Active = TABS.find((x) => x.k === t).C;
+
+  useEffect(() => {
+    const k = params.get("tab");
+    if (k && TABS.some((x) => x.k === k)) {
+      setT(k);
+    }
+  }, [params]);
+
+  const Active = (TABS.find((x) => x.k === t) || TABS[0]).C;
   return (
     <div className="h-full flex flex-col" data-testid="catalog-page">
       <div className="flex gap-1 p-2 border-b bg-white overflow-x-auto no-scrollbar" data-testid="catalog-tabs">
@@ -33,7 +42,11 @@ export default function Catalog() {
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-hidden"><Active /></div>
+      <div className="flex-1 overflow-hidden">
+        <Suspense fallback={<div className="flex h-full items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-[#E63946] border-t-transparent rounded-full"></div></div>}>
+          <Active />
+        </Suspense>
+      </div>
     </div>
   );
 }

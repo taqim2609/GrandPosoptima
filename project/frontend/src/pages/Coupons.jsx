@@ -53,8 +53,8 @@ export default function Coupons() {
             <tr><th className="text-left p-3">Kode</th><th className="text-left p-3">Diskon</th><th className="text-center p-3">Kuota</th><th className="text-left p-3">Berlaku s.d.</th><th className="text-center p-3">Aktif</th><th className="p-3"></th></tr>
           </thead>
           <tbody>
-            {items.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-[#a1a1aa]">Belum ada kupon.</td></tr>}
-            {items.map((c) => (
+            {(items || []).length === 0 && <tr><td colSpan={6} className="p-10 text-center text-[#a1a1aa]">Belum ada kupon.</td></tr>}
+            {(items || []).map((c) => (
               <tr key={c.id} className="border-t" data-testid={`coupon-${c.id}`}>
                 <td className="p-3 font-extrabold">{c.code}</td>
                 <td className="p-3 font-bold text-[#E63946]">{c.type === "percent" ? `${c.value}%` : rupiah(c.value)}</td>

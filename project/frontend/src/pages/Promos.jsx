@@ -21,7 +21,7 @@ export default function Promos() {
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const load = () => api.get("/promos").then((r) => setItems(r.data)).catch((e) => toast.error(apiError(e.response?.data?.detail)));
+  const load = () => api.get("/promos").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch((e) => toast.error(apiError(e.response?.data?.detail)));
   useEffect(() => { load(); }, []);
 
   const save = async () => {
@@ -57,7 +57,7 @@ export default function Promos() {
           className="tap h-11 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center gap-2"><Plus size={18} /> Tambah Promo</button>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {items.map((p) => {
+        {(items || []).map((p) => {
           const Icon = TYPE_META[p.type]?.icon || Tag;
           return (
             <div key={p.id} className={`rounded-2xl border p-5 bg-white ${p.active ? "" : "opacity-55"}`} data-testid={`promo-${p.id}`}>
@@ -74,7 +74,7 @@ export default function Promos() {
                 {p.type === "min_spend" && <div className="font-bold text-[#E63946]">Min. {rupiah(p.value)} → potong {rupiah(p.bonus)}</div>}
                 {p.type === "package" && <div className="font-num text-xs">Paket {rupiah(p.value)}</div>}
                 {p.type === "bogo" && <div className="font-bold text-[#E63946]">Beli {p.value} gratis 1</div>}
-                {p.days?.length > 0 && <div className="text-xs text-[#8b87a8]">Hari: {["Min","Sen","Sel","Rab","Kam","Jum","Sab"].filter((_, i) => p.days.includes(i)).join(", ")}</div>}
+                {(p.days || []).length > 0 && <div className="text-xs text-[#8b87a8]">Hari: {["Min","Sen","Sel","Rab","Kam","Jum","Sab"].filter((_, i) => p.days.includes(i)).join(", ")}</div>}
               </div>
               <div className="flex gap-1.5 mt-3">
                 <button data-testid={`edit-promo-${p.id}`} onClick={() => { setForm({ name: p.name, type: p.type, value: p.value, bonus: p.bonus, start_time: p.start_time, end_time: p.end_time, days: p.days || [], package_items: (p.package_items || []).map((x) => x.product_name).join(", "), active: p.active }); setEditId(p.id); setOpen(true); }}
@@ -84,7 +84,7 @@ export default function Promos() {
             </div>
           );
         })}
-        {items.length === 0 && <div className="md:col-span-2 xl:col-span-3 bg-white rounded-2xl border p-10 text-center text-[#a1a1aa]">Belum ada promo. Tambahkan untuk diskon otomatis saat transaksi.</div>}
+        {(items || []).length === 0 && <div className="md:col-span-2 xl:col-span-3 bg-white rounded-2xl border p-10 text-center text-[#a1a1aa]">Belum ada promo. Tambahkan untuk diskon otomatis saat transaksi.</div>}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

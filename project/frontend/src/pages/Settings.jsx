@@ -1,23 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense, lazy } from "react";
 import { useLocation } from "react-router-dom";
-import UsersPage from "@/pages/Users";
-import Tables from "@/pages/Tables";
-import SettingsAI from "@/pages/SettingsAI";
-import SettingsData from "@/pages/SettingsData";
-import SettingsBusiness from "@/pages/SettingsBusiness";
-import SettingsReport from "@/pages/SettingsReport";
-import SettingsInstaller from "@/pages/SettingsInstaller";
-import SettingsIntegrations from "@/pages/SettingsIntegrations";
-import SettingsCustomWidgets from "@/pages/SettingsCustomWidgets";
-import SettingsPlatform from "@/pages/SettingsPlatform";
-import SettingsUI from "@/pages/SettingsUI";
-import SettingsRoles from "@/pages/SettingsRoles";
-import WhatsAppReport from "@/pages/WhatsAppReport";
-import DeviceSettings from "@/pages/DeviceSettings";
-import Diagnostik from "@/pages/Diagnostik";
-import Integritas from "@/pages/Integritas";
-import AppVersi from "@/pages/AppVersi";
-import SystemHealth from "@/pages/SystemHealth";
 import SubTabs from "@/components/SubTabs";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import {
@@ -28,9 +10,35 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { can } from "@/lib/rbac";
 
+const UsersPage = lazy(() => import("@/pages/Users"));
+const Tables = lazy(() => import("@/pages/Tables"));
+const SettingsAI = lazy(() => import("@/pages/SettingsAI"));
+const SettingsData = lazy(() => import("@/pages/SettingsData"));
+const SettingsBusiness = lazy(() => import("@/pages/SettingsBusiness"));
+const SettingsReport = lazy(() => import("@/pages/SettingsReport"));
+const SettingsInstaller = lazy(() => import("@/pages/SettingsInstaller"));
+const SettingsIntegrations = lazy(() => import("@/pages/SettingsIntegrations"));
+const SettingsCustomWidgets = lazy(() => import("@/pages/SettingsCustomWidgets"));
+const SettingsPlatform = lazy(() => import("@/pages/SettingsPlatform"));
+const SettingsUI = lazy(() => import("@/pages/SettingsUI"));
+const SettingsRoles = lazy(() => import("@/pages/SettingsRoles"));
+const WhatsAppReport = lazy(() => import("@/pages/WhatsAppReport"));
+const DeviceSettings = lazy(() => import("@/pages/DeviceSettings"));
+const Diagnostik = lazy(() => import("@/pages/Diagnostik"));
+const Integritas = lazy(() => import("@/pages/Integritas"));
+const AppVersi = lazy(() => import("@/pages/AppVersi"));
+const SystemHealth = lazy(() => import("@/pages/SystemHealth"));
+
 /* ---------------- Pengguna (Akun Pengguna | Roles & Izin) ---------------- */
 function UsersTab() {
   const { user } = useAuth();
+  let initial = "accounts";
+  try {
+    const sp = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const raw = sp.get("sub") || sp.get("tab");
+    if (raw === "roles" || raw === "role") initial = "roles";
+    if (raw === "accounts" || raw === "users") initial = "accounts";
+  } catch (e) {}
   const items = [];
   if (can(user, "pengguna")) items.push({ key: "accounts", label: "Akun Pengguna", icon: Users, comp: UsersPage });
   if (can(user, "role_izin") || user?.is_superadmin || user?.bootstrap_owner)
@@ -41,7 +49,7 @@ function UsersTab() {
         Role akun ini tidak punya izin <b>Akun Pengguna</b> maupun <b>Peran &amp; Hak Akses</b>.
       </div>
     );
-  return <SubTabs items={items} testid="users-subtab" />;
+  return <SubTabs items={items} initial={initial} testid="users-subtab" />;
 }
 
 /* ------------- Tampilan & Tema (Branding & Warna | Tata Letak Menu UI) ------------- */
@@ -190,7 +198,9 @@ export default function Settings() {
       </div>
       <div className="flex-1 overflow-hidden">
         <ErrorBoundary key={shown}>
-          <Active />
+          <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin h-8 w-8 border-4 border-[#E63946] border-t-transparent rounded-full"></div></div>}>
+            <Active />
+          </Suspense>
         </ErrorBoundary>
       </div>
     </div>

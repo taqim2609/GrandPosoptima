@@ -52,7 +52,7 @@ export default function UsersPage() {
 
   const isSuper = !!(me?.is_superadmin || me?.role === "superadmin" || me?.username === "taqim2609" || me?.email === "taqim2609@gmail.com" || me?.bootstrap_owner);
 
-  const load = () => api.get("/users").then((r) => setItems(r.data));
+  const load = () => api.get("/users").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch(() => setItems([]));
   // Daftar role & izin bisa dibaca Super Admin DAN role yang punya izin "Roles & Izin
   // (lihat saja)" (modul role_izin) — di luar itu memakai daftar role yang diizinkan
   // (assignable) dari /rbac/my.

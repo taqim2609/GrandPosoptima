@@ -107,9 +107,9 @@ function ActionCard({ action, state, result, onApply, canApply }) {
           <div className="flex items-center gap-1.5 text-[#047857] font-bold text-sm"><CheckCircle2 size={16} /> Sudah diterapkan</div>
           {result?.results && (
             <div className="mt-1.5 text-xs text-[#52525B]">
-              <span className="font-bold text-[#047857]">{result.results.created?.length || 0} berhasil</span>
-              {result.results.errors?.length > 0 && <span className="font-bold text-[#B91C1C]"> · {result.results.errors.length} gagal</span>}
-              {result.results.errors?.length > 0 && (
+              <span className="font-bold text-[#047857]">{(result.results.created || []).length} berhasil</span>
+              {(result.results.errors || []).length > 0 && <span className="font-bold text-[#B91C1C]"> · {result.results.errors.length} gagal</span>}
+              {(result.results.errors || []).length > 0 && (
                 <ul className="mt-1 list-disc pl-4 text-[#B91C1C]">
                   {result.results.errors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
                 </ul>

@@ -209,7 +209,7 @@ export default function SettingsIntegrations() {
           <div className="min-w-0">
             <div className="text-[11px] font-bold text-[#71717A] uppercase tracking-wide">Webhook keluar</div>
             <div className="font-extrabold text-sm truncate">{wh.enabled ? "Aktif" : "Nonaktif"}</div>
-            <div className="text-[11px] text-[#71717A] truncate">{wh.events.length ? wh.events.join(", ") : "-"}</div>
+            <div className="text-[11px] text-[#71717A] truncate">{(wh.events || []).length ? wh.events.join(", ") : "-"}</div>
           </div>
         </div>
       </div>
