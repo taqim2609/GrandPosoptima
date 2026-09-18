@@ -1,5 +1,5 @@
 <?php
-// Penerima backup database dari server POS (backup-to-vibecoder.sh / tombol di app).
+// Penerima backup database dari server POS (backup-to-pos.sh / tombol di app).
 // Menyimpan ke backups/ (maksimal 10 file terbaru, otomatis dipangkas).
 header('Content-Type: application/json');
 

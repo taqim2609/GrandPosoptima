@@ -15,7 +15,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, Boxes,
   Clock, FileSpreadsheet, LogOut, ShieldCheck, Menu, X, Printer,
   Wallet, Wifi, WifiOff, RefreshCw, CloudOff, Database, KeyRound, Settings, Bot, BarChart3,
-  Users, Tag, CalendarCheck, FlaskConical, Ticket,
+  Users, Tag, CalendarCheck, FlaskConical, Ticket, Trash2, ChevronDown, ChevronUp, Info,
 } from "lucide-react";
 
 function ChangePasswordDialog({ open, onClose }) {
@@ -178,38 +178,114 @@ function OfflineStatus({ onOpenQueue }) {
 }
 
 function SyncQueueDialog({ open, onClose }) {
-  const { pending, online, syncNow, retryOne, syncing, syncLog, clearSyncLog } = useOffline();
+  const { pending, online, syncNow, retryOne, removePending, syncing, syncLog, clearSyncLog } = useOffline();
+  const [expandedId, setExpandedId] = useState(null);
+
+  const handleDelete = (temp_id) => {
+    if (window.confirm("Apakah Anda yakin ingin menghapus transaksi lokal ini secara permanen dari antrean?")) {
+      removePending(temp_id);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Antrean Sinkronisasi Offline</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RefreshCw size={20} className={syncing ? "animate-spin text-[#E63946]" : "text-[#E63946]"} />
+            Sync Manager (Antrean Offline)
+          </DialogTitle>
+        </DialogHeader>
         {pending.length === 0 ? (
           <p className="text-sm text-[#52525B] py-6 text-center">Tidak ada transaksi menunggu sinkron.</p>
         ) : (
           <>
-            <div className="max-h-[50vh] overflow-y-auto space-y-2">
-              {pending.map((p) => (
-                <div key={p.temp_id} data-testid={`queue-item-${p.temp_id}`} className="rounded-xl border p-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="overflow-hidden">
-                      <div className="font-bold text-sm">{ORDER_TYPE_LABEL[p.meta?.order_type] || p.meta?.order_type} · {rupiah(p.meta?.total || 0)}</div>
-                      <div className="text-xs text-[#52525B] truncate">{p.meta?.preview}</div>
-                      <div className="text-[11px] text-[#a1a1aa] font-num">{new Date(p.created_at).toLocaleString("id-ID")}</div>
-                      {p.error && <div className="text-[11px] text-[#EF4444] font-bold mt-1">Gagal: {p.error}</div>}
+            <div className="max-h-[50vh] overflow-y-auto space-y-2.5">
+              {pending.map((p) => {
+                const isExpanded = expandedId === p.temp_id;
+                return (
+                  <div key={p.temp_id} data-testid={`queue-item-${p.temp_id}`} className="rounded-xl border border-neutral-200 bg-white p-3.5 transition-all shadow-xs">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="overflow-hidden flex-1">
+                        <div className="font-extrabold text-sm text-neutral-800 flex items-center gap-1.5 flex-wrap">
+                          <span>{ORDER_TYPE_LABEL[p.meta?.order_type] || p.meta?.order_type}</span>
+                          <span className="text-neutral-300 font-normal">·</span>
+                          <span className="text-[#047857] font-num">{rupiah(p.meta?.total || p.payload?.total || 0)}</span>
+                        </div>
+                        <div className="text-xs text-[#52525B] truncate mt-1">{p.meta?.preview || "Tidak ada pratampil"}</div>
+                        <div className="text-[10px] text-[#a1a1aa] font-num mt-0.5">{new Date(p.created_at).toLocaleString("id-ID")}</div>
+                        {p.error && <div className="text-[11px] text-[#EF4444] font-bold mt-1 bg-red-50 p-1 rounded">Gagal: {p.error}</div>}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          data-testid={`expand-${p.temp_id}`}
+                          onClick={() => setExpandedId(isExpanded ? null : p.temp_id)}
+                          className="tap h-8 px-2 rounded-lg bg-[#F4F5F7] hover:bg-[#E4E4E7] text-neutral-600 flex items-center justify-center"
+                          title="Lihat Detail"
+                        >
+                          {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </button>
+                        {online && (
+                          <button
+                            data-testid={`retry-${p.temp_id}`}
+                            onClick={() => retryOne(p.temp_id)}
+                            disabled={syncing}
+                            className="tap h-8 px-2.5 text-xs font-bold bg-[#E6F4EA] hover:bg-[#CEEAD6] text-[#137333] rounded-lg flex items-center gap-1"
+                            title="Coba sinkronisasi transaksi ini"
+                          >
+                            <RefreshCw size={12} className={syncing ? "animate-spin" : ""} />
+                            <span>Retry</span>
+                          </button>
+                        )}
+                        <button
+                          data-testid={`clear-${p.temp_id}`}
+                          onClick={() => handleDelete(p.temp_id)}
+                          className="tap h-8 w-8 text-xs font-bold bg-[#FCE8E6] hover:bg-[#FAD2CF] text-[#C5221F] rounded-lg flex items-center justify-center"
+                          title="Hapus transaksi dari antrean"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                    {online && (
-                      <button data-testid={`retry-${p.temp_id}`} onClick={() => retryOne(p.temp_id)} disabled={syncing} className="tap shrink-0 text-xs font-bold bg-[#F4F5F7] rounded-lg px-2.5 py-1.5 flex items-center gap-1">
-                        <RefreshCw size={12} className={syncing ? "animate-spin" : ""} /> Coba lagi
-                      </button>
+
+                    {isExpanded && (
+                      <div className="mt-3 p-3 bg-neutral-50 rounded-lg border border-neutral-200 text-xs space-y-2 animate-fadeIn">
+                        <div className="font-bold text-neutral-700 flex items-center gap-1">
+                          <Info size={13} className="text-neutral-500" />
+                          <span>Rincian Transaksi:</span>
+                        </div>
+                        <div className="divide-y divide-neutral-100">
+                          {(p.payload?.items || []).map((it, idx) => (
+                            <div key={idx} className="py-1 flex justify-between">
+                              <span>{it.name} <span className="text-neutral-500">x{it.qty}</span></span>
+                              <span className="font-num font-medium">{rupiah(it.price * it.qty)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="pt-2 border-t flex justify-between font-bold text-neutral-800">
+                          <span>Total Tagihan</span>
+                          <span>{rupiah(p.meta?.total || p.payload?.total || 0)}</span>
+                        </div>
+                        {p.payload?.customer_name && (
+                          <div className="text-[11px] text-neutral-500">Pelanggan: <span className="font-semibold text-neutral-700">{p.payload.customer_name}</span></div>
+                        )}
+                        {p.payload?.notes && (
+                          <div className="text-[11px] text-neutral-500">Catatan: <span className="font-medium italic text-neutral-600">"{p.payload.notes}"</span></div>
+                        )}
+                        <div className="text-[10px] text-neutral-400 font-mono">ID Temp: {p.temp_id}</div>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             {online ? (
-              <button data-testid="sync-all-btn" onClick={syncNow} disabled={syncing} className="tap w-full h-11 rounded-xl bg-[#E63946] text-white font-bold mt-3">Sinkron Semua</button>
+              <button data-testid="sync-all-btn" onClick={syncNow} disabled={syncing} className="tap w-full h-11 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold mt-3 shadow-xs flex items-center justify-center gap-2">
+                <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
+                <span>Sinkron Semua Antrean</span>
+              </button>
             ) : (
-              <p className="text-xs text-[#B45309] font-bold text-center mt-3">Masih offline — otomatis sinkron saat online kembali.</p>
+              <p className="text-xs text-[#B45309] font-bold text-center mt-3 bg-amber-50 p-2 rounded-lg border border-amber-200">Perangkat sedang offline — transaksi akan otomatis disinkron saat terhubung kembali.</p>
             )}
           </>
         )}
@@ -265,13 +341,13 @@ export default function Layout({ children }) {
   };
   return (
     <div className="flex h-screen overflow-hidden bg-[#F4F5F7]">
-      {/* Mobile Top Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-[#E4E4E7] z-30 flex items-center justify-between px-3 shadow-xs">
+      {/* Top Header for Mobile & Desktop */}
+      <header className="fixed top-0 left-0 lg:left-[240px] right-0 h-14 bg-white border-b border-[#E4E4E7] z-30 flex items-center justify-between px-3 lg:px-6 shadow-xs">
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             data-testid="sidebar-toggle"
             onClick={() => setSidebarOpen(true)}
-            className="tap h-10 w-10 rounded-xl bg-[#0A0A0A] text-white grid place-items-center shrink-0 shadow-sm"
+            className="lg:hidden tap h-10 w-10 rounded-xl bg-[#0A0A0A] text-white grid place-items-center shrink-0 shadow-sm"
           >
             <Menu size={18} />
           </button>
@@ -349,7 +425,7 @@ export default function Layout({ children }) {
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-hidden flex flex-col pt-14 lg:pt-0">
+      <main className="flex-1 overflow-hidden flex flex-col pt-14">
         <HeaderConnectionBanner onOpenQueue={() => setQueueOpen(true)} />
         <div className="flex-1 overflow-hidden">{children}</div>
       </main>

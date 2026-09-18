@@ -27,6 +27,6 @@ rm -f /tmp/pos-grand.tar.gz
 
 # 3. Jalankan installer
 cd "$APP_DIR"
-chmod +x install-pi.sh update-aistudio-pi.sh update-vibecoder-pi.sh update-pi.sh restart-pi.sh backup-pi.sh restore-pi.sh setup-autobackup-pi.sh setup-autoupdate-pi.sh backup-to-cloud.sh backup-to-vibecoder.sh 2>/dev/null || true
+chmod +x install-pi.sh update-aistudio-pi.sh update-pos-pi.sh update-pi.sh restart-pi.sh backup-pi.sh restore-pi.sh setup-autobackup-pi.sh setup-autoupdate-pi.sh backup-to-cloud.sh backup-to-pos.sh 2>/dev/null || true
 echo "Menjalankan installer..."
 sudo ./install-pi.sh

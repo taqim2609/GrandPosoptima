@@ -80,15 +80,15 @@
     </ul>
     <a class="btn" href="files.php">📂 Berkas proyek (tanpa kompresi) — lihat &amp; unduh satu per satu</a>
     <a class="btn ghost" href="archive.php?f=pos-grand.tar.gz" download>⬇ pos-grand.tar.gz (khusus update otomatis server)</a>
-    <a class="btn ghost" href="dl.php?f=update-vibecoder-pi.sh" download>⬇ Unduh update-vibecoder-pi.sh</a>
+    <a class="btn ghost" href="dl.php?f=update-pos-pi.sh" download>⬇ Unduh update-pos-pi.sh</a>
     <a class="btn ghost" href="dl.php?f=check-integrity-pi.sh" download>🛡 Unduh check-integrity-pi.sh</a>
     <a class="btn ghost" href="apk/Grand-Aceh-Kuliner-POS-v2.10.apk" download>📱 Unduh APK Android v2.10 (buka laci otomatis)</a>
     <p style="color:#635F82;font-size:13px;margin-bottom:6px">Di server Pi (sekali saja untuk beralih):</p>
     <code>cd ~/grand-aceh-pos
-curl -fsSL "https://taqim258.vibecoder.co.id/pos-grand-update/dl.php?f=update-vibecoder-pi.sh" -o update-vibecoder-pi.sh
-chmod +x update-vibecoder-pi.sh
-./update-vibecoder-pi.sh</code>
-    <div class="foot">Update berikutnya cukup: <code style="display:inline;white-space:nowrap;padding:2px 8px">./update-vibecoder-pi.sh</code></div>
+curl -fsSL "https://taqim258.vibecoder.co.id/pos-grand-update/dl.php?f=update-pos-pi.sh" -o update-pos-pi.sh
+chmod +x update-pos-pi.sh
+./update-pos-pi.sh</code>
+    <div class="foot">Update berikutnya cukup: <code style="display:inline;white-space:nowrap;padding:2px 8px">./update-pos-pi.sh</code></div>
     <div class="foot" style="margin-top:8px">Cek kesehatan &amp; integritas data server: <code style="display:inline;white-space:nowrap;padding:2px 8px">./check-integrity-pi.sh</code></div>
   </div>
   <script>

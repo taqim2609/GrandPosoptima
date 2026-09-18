@@ -43,8 +43,8 @@ else
   fi
     echo "   - CA:    sudo apt update && sudo apt install -y ca-certificates && sudo update-ca-certificates"
     echo "   - Jam:   cek 'date' — kalau salah: sudo date -s '$(date +%F\ %T)'"
-    echo "   - Jaringan memblokir 443 ke vibecoder.co.id (VPN/proxy/firewall?)"
-    echo "   - Diagnosa lengkap: bash update-vibecoder-pi.sh --test"
+    echo "   - Jaringan memblokir 443 ke server update (VPN/proxy/firewall?)"
+    echo "   - Diagnosa lengkap: bash update-pos-pi.sh --test"
     exit 0
   fi
 

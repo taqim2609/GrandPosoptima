@@ -3,14 +3,14 @@
 // Server statis tidak menyajikan berkas .sh (404), jadi skrip diunduh lewat berkas PHP ini.
 // Hanya berkas dalam daftar putih berikut yang boleh diunduh (mencegah path traversal).
 $ALLOW = [
-    'update-vibecoder-pi.sh',
+    'update-pos-pi.sh',
     'update-pi.sh',
     'check-integrity-pi.sh',
     'collect-metrics-pi.sh',
     'check-workers-pi.sh',
     'bootstrap-pi.sh',
     'backup-pi.sh',
-    'backup-to-vibecoder.sh',
+    'backup-to-pos.sh',
     'restore-pi.sh',
     'setup-autobackup-pi.sh',
 ];

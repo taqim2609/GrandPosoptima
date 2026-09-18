@@ -137,3 +137,142 @@ export function printText(text, title = "Cetak") {
   printInBrowser(text, title);
   return true;
 }
+
+/**
+ * Cetak Laporan Penutupan Shift ke printer thermal / browser.
+ * @param {object} report Objek data laporan dari backend
+ * @param {object} options Opsi tambahan seperti nama outlet dan operator
+ */
+export function printShiftClosingReport(report, options = {}) {
+  const rp = (val) => {
+    if (val === undefined || val === null) return "Rp 0";
+    return "Rp " + Number(val).toLocaleString("id-ID");
+  };
+
+  const outlet = options.outletName || "KASIR AKUNTANSI";
+  const dateStr = (report.opened_at || "").substring(0, 10) || new Date().toISOString().substring(0, 10);
+  
+  let lines = [];
+  lines.push("==========================================");
+  lines.push(outlet.toUpperCase());
+  lines.push("LAPORAN PENUTUPAN SHIFT");
+  lines.push(`Tanggal: ${dateStr}`);
+  lines.push("==========================================");
+  lines.push(`Dibuka Oleh : ${options.openedBy || report.dibuka_oleh || "-"}`);
+  lines.push(`Ditutup Oleh: ${options.closedBy || report.ditutup_oleh || "-"}`);
+  lines.push(`Total Order : ${report.order_count || 0}`);
+  lines.push(`Total Omzet : ${rp(report.total_sales || 0)}`);
+  lines.push("------------------------------------------");
+  
+  // F&B Breakdown
+  lines.push("RINCIAN F&B:");
+  lines.push(`  Subtotal  : ${rp(report.fnb_total || 0)}`);
+  lines.push(`    Dine-In : ${rp(report.by_type?.dine_in || 0)}`);
+  lines.push(`    TakeAway: ${rp(report.by_type?.take_away || 0)}`);
+  lines.push(`  Kas Awal  : ${rp(report.opening_cash_fnb ?? report.opening_cash ?? 0)}`);
+  lines.push(`  Kas Akhir : ${rp(report.closing_cash_fnb ?? 0)}`);
+  lines.push(`  Laba Kotor: ${rp(report.gross_profit_fnb || 0)}`);
+  lines.push(`  Pengeluar : ${rp(report.cash_out_fnb || 0)}`);
+  if (report.transport > 0) {
+    lines.push(`    Transport : ${rp(report.transport)}`);
+  }
+  lines.push("------------------------------------------");
+
+  // Retail Breakdown
+  lines.push("RINCIAN RETAIL:");
+  lines.push(`  Subtotal  : ${rp(report.retail_total || 0)}`);
+  lines.push(`  Kas Awal  : ${rp(report.opening_cash_retail ?? 0)}`);
+  lines.push(`  Kas Akhir : ${rp(report.closing_cash_retail ?? 0)}`);
+  lines.push(`  Laba Kotor: ${rp(report.gross_profit_retail || 0)}`);
+  lines.push(`  Pengeluar : ${rp(report.cash_out_retail || 0)}`);
+  lines.push("------------------------------------------");
+
+  // Void Info
+  if ((report.void_count || 0) > 0) {
+    lines.push(`VOID & REFUND:`);
+    lines.push(`  Transaksi : ${report.void_count}x`);
+    lines.push(`  Nilai     : ${rp(report.void_amount || 0)}`);
+    lines.push("------------------------------------------");
+  }
+
+  // Payments Breakdown
+  if (report.by_payment && Object.keys(report.by_payment).length > 0) {
+    lines.push("METODE PEMBAYARAN:");
+    Object.entries(report.by_payment).forEach(([k, v]) => {
+      lines.push(`  - ${k}: ${rp(v)}`);
+    });
+    lines.push("------------------------------------------");
+  }
+
+  // Cash Laci / Sisa Tunai
+  lines.push("KAS TUNAI (LACI):");
+  lines.push(`  Penjualan Tunai F&B    : ${rp(report.cash_sales_fnb || 0)}`);
+  lines.push(`  Sisa Kas Tunai F&B     : ${rp(report.sisa_cash_fnb || 0)}`);
+  lines.push(`  Penjualan Tunai Retail : ${rp(report.cash_sales_retail || 0)}`);
+  lines.push(`  Sisa Kas Tunai Retail  : ${rp(report.sisa_cash_retail || 0)}`);
+  lines.push(`  Total Sisa Kas Tunai   : ${rp(report.sisa_cash || 0)}`);
+  lines.push("------------------------------------------");
+
+  // Audit Rekonsiliasi Kas
+  if (report.variance_report) {
+    const vr = report.variance_report;
+    const totalVr = vr.total || {};
+    const v_act = totalVr.actual || 0;
+    const v_exp = totalVr.expected || 0;
+    const v_diff = totalVr.variance || 0;
+    const v_stat = totalVr.status || "match";
+    const v_label = v_stat === "match" ? "SEIMBANG / KLOP" : (v_stat === "surplus" ? "LEBIH / SURPLUS" : "KURANG / SHORTAGE");
+
+    lines.push("REKONSILIASI KAS FISIK (AUDIT AKUNTANSI)");
+    lines.push(`  Kas Fisik Kasir : ${rp(v_act)}`);
+    lines.push(`  Kas Sistem POS  : ${rp(v_exp)}`);
+    lines.push(`  Status Selisih  : ${v_label}`);
+    lines.push(`  Selisih Kas     : ${v_diff >= 0 ? "+" : ""}${rp(v_diff)}`);
+    if (vr.variance_reason) {
+      lines.push(`  Catatan Kasir   : ${vr.variance_reason}`);
+    }
+    
+    if (vr.fnb && vr.retail) {
+      lines.push("Rincian Selisih per Sektor:");
+      lines.push(`  F&B (Sist/Fis/Sel)   : ${rp(vr.fnb.expected)} / ${rp(vr.fnb.actual)} / ${vr.fnb.variance >= 0 ? "+" : ""}${rp(vr.fnb.variance)}`);
+      lines.push(`  Retail (Sist/Fis/Sel): ${rp(vr.retail.expected)} / ${rp(vr.retail.actual)} / ${vr.retail.variance >= 0 ? "+" : ""}${rp(vr.retail.variance)}`);
+    }
+    lines.push("------------------------------------------");
+  }
+
+  // Vendor Share
+  if (report.vendor_share && report.vendor_share.length > 0) {
+    lines.push("RINCIAN BAGI HASIL VENDOR:");
+    report.vendor_share.forEach((v) => {
+      lines.push(`  - ${v.vendor_name || "?"}:`);
+      lines.push(`    Gross: ${rp(v.gross || 0)} | Share: ${rp(v.share || 0)}`);
+      lines.push(`    Paid: ${rp(v.paid || 0)} | Selisih: ${rp(v.difference || 0)}`);
+    });
+    lines.push(`  Total Expected Share   : ${rp(report.vendor_total_share || 0)}`);
+    lines.push(`  Total Real Paid        : ${rp(report.vendor_total_paid || 0)}`);
+    lines.push(`  Total Selisih Vendor   : ${rp(report.vendor_total_difference || 0)}`);
+    lines.push(`  Total Bagian Outlet    : ${rp(report.vendor_total_outlet || 0)}`);
+    lines.push("------------------------------------------");
+  }
+
+  // Expenses Created
+  if (report.expenses_created && report.expenses_created.length > 0) {
+    lines.push("PENGELUARAN YANG TERCATAT:");
+    report.expenses_created.forEach((x, i) => {
+      lines.push(`  ${i + 1}. [${x.scope?.toUpperCase() || "FNB"}] ${x.category}: ${rp(x.amount)}`);
+      if (x.note) lines.push(`     Catatan: ${x.note}`);
+    });
+    lines.push("------------------------------------------");
+  }
+
+  lines.push("LEMBAR VERIFIKASI AKUNTANSI FISIK");
+  lines.push("");
+  lines.push("Kasir Menyerahkan,   Spv/Akunting Menerima,");
+  lines.push("");
+  lines.push("");
+  lines.push("(................)   (................)");
+  lines.push("==========================================");
+
+  const text = lines.join("\n");
+  return printText(text, "Laporan Shift Closed");
+}

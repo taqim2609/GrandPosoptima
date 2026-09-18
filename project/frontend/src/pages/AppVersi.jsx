@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Smartphone, Package, CloudDownload, RefreshCw, Globe, Server, Box, Loader2, CheckCircle2 } from "lucide-react";
+import { Smartphone, Package, CloudDownload, RefreshCw, Globe, Server, Box, Loader2, Download, FileText, Code2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { collectVersions, APK_VERSION } from "@/lib/versions";
 import { checkOtaUpdate } from "@/lib/ota";
@@ -44,12 +44,62 @@ export default function AppVersi() {
 
   return (
     <div className="h-full overflow-y-auto p-6 lg:p-8" data-testid="settings-versi">
-      <div className="max-w-xl space-y-4">
+      <div className="max-w-3xl space-y-6">
         <div className="rounded-2xl border-2 border-[#E63946] bg-[#FEF2F2] p-5">
-          <div className="flex items-center gap-2 font-extrabold text-[#0A0A0A]"><Box size={18} className="text-[#E63946]" /> Versi Aplikasi</div>
-          <p className="text-sm text-[#52525B] mt-1">Info versi APK, bundle frontend, dan update OTA. Dipakai juga untuk laporan Diagnostik.</p>
+          <div className="flex items-center gap-2 font-extrabold text-[#0A0A0A]"><Box size={18} className="text-[#E63946]" /> Versi Aplikasi & File Integrasi Sunmi T2</div>
+          <p className="text-sm text-[#52525B] mt-1">Unduh installer APK Native, dokumen System Instructions, Prompt AI Studio, dan panduan sinkronisasi Sunmi T2.</p>
         </div>
 
+        {/* Card Unduh APK & Instruction Files */}
+        <div className="rounded-2xl border bg-white p-5 space-y-4">
+          <div className="font-extrabold text-[#0A0A0A] text-base flex items-center gap-2">
+            <Smartphone className="text-[#E63946]" size={18} /> File Unduhan APK & Dokumentasi AI Studio
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <a href="/api/installers/download?key=apk_sunmi_t2" download="Grand-Aceh-Kuliner-POS-v2.10.apk" className="block">
+              <div className="p-3.5 rounded-xl border border-[#E63946]/30 bg-[#FEF2F2] hover:bg-[#FEE2E2] transition flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-sm text-[#0A0A0A]">APK Native Sunmi T2</div>
+                  <div className="text-xs text-[#52525B]">Versi {APK_VERSION} (Android 7.0+)</div>
+                </div>
+                <Download size={18} className="text-[#E63946]" />
+              </div>
+            </a>
+
+            <a href="/SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt" download className="block">
+              <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 transition flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-sm text-blue-900">Custom System Instruction</div>
+                  <div className="text-xs text-blue-700">File .txt untuk AI Studio</div>
+                </div>
+                <Code2 size={18} className="text-blue-600" />
+              </div>
+            </a>
+
+            <a href="/PROMPT_AISTUDIO_SUNMI_NATIVE.txt" download className="block">
+              <div className="p-3.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 transition flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-sm text-purple-900">Prompt Siap Pakai</div>
+                  <div className="text-xs text-purple-700">File .txt Chat Prompt AI Studio</div>
+                </div>
+                <Sparkles size={18} className="text-purple-600" />
+              </div>
+            </a>
+
+            <a href="/PANDUAN_APK_SUNMI_T2.txt" download className="block">
+              <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-sm text-emerald-900">Panduan Integrasi APK</div>
+                  <div className="text-xs text-emerald-700">File .txt Panduan & Update</div>
+                </div>
+                <FileText size={18} className="text-emerald-600" />
+              </div>
+            </a>
+          </div>
+        </div>
+
+        {/* System Version Details */}
         <div className="bg-white rounded-2xl border overflow-hidden px-5 py-3">
           <Row icon={Smartphone} label="Platform" value={v ? (v.native ? `APK (Capacitor) v${v.apk}` : "Web (browser)") : "..."} />
           {v?.native && (
@@ -92,3 +142,4 @@ export default function AppVersi() {
     </div>
   );
 }
+

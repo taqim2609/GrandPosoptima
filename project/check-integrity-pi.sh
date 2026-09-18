@@ -107,7 +107,7 @@ else
       GOT_REPORT=1
       [ "$NOTIFY" != "" ] && say "  ${C_DIM}ringkasan dikirim ke WhatsApp $NOTIFY${C_0}"
     else
-      say "  ${C_WARN}CATATAN${C_0} pemeriksaan lewat API gagal (HTTP $CODE) — server mungkin belum di-update (./update-vibecoder-pi.sh). Membaca hasil terakhir dari database."
+      say "  ${C_WARN}CATATAN${C_0} pemeriksaan lewat API gagal (HTTP $CODE) — server mungkin belum di-update (./update-pos-pi.sh). Membaca hasil terakhir dari database."
     fi
   else
     say "  ${C_WARN}CATATAN${C_0} WEBHOOK_CRON_SECRET belum diisi di backend/.env.docker — pemeriksaan ulang lewat API tidak mungkin; membaca hasil terakhir."
@@ -141,7 +141,7 @@ if [ "$GOT_REPORT" = "0" ] || ! grep -q '"summary"' "$TMP_REP" 2>/dev/null; then
   else
     say "  ${C_ERR}BERAT${C_0} belum ada laporan integritas yang bisa dibaca."
     say "       Jalankan dulu pemeriksaan dari aplikasi: Pengaturan → Fitur & Integrasi → Integritas → ${C_B}Cek Sekarang${C_0}"
-    say "       (atau pastikan server sudah di-update: ./update-vibecoder-pi.sh)"
+    say "       (atau pastikan server sudah di-update: ./update-pos-pi.sh)"
   fi
   RC_REPORT=1
 elif ! command -v python3 >/dev/null 2>&1; then

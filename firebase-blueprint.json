@@ -1,0 +1,200 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User account for POS operators and administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "active": { "type": "boolean" },
+        "must_change_password": { "type": "boolean" }
+      },
+      "required": ["id", "username", "role"]
+    },
+    "product": {
+      "title": "Product",
+      "description": "Menu item or retail product sold in POS",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "category_id": { "type": "string" },
+        "type": { "type": "string" },
+        "price": { "type": "number" },
+        "cost_price": { "type": "number" },
+        "stock": { "type": "number" },
+        "active": { "type": "boolean" },
+        "sold_out": { "type": "boolean" }
+      },
+      "required": ["id", "name", "price"]
+    },
+    "category": {
+      "title": "Category",
+      "description": "Product category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "sort_order": { "type": "number" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name"]
+    },
+    "order": {
+      "title": "Order",
+      "description": "Customer order or bill",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "order_number": { "type": "string" },
+        "status": { "type": "string" },
+        "total": { "type": "number" },
+        "payment_method": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "order_number", "total", "status"]
+    },
+    "shift": {
+      "title": "Shift",
+      "description": "Cashier shift record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_name": { "type": "string" },
+        "opened_at": { "type": "string" },
+        "closed_at": { "type": "string" },
+        "total_sales": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "status"]
+    },
+    "cashTransaction": {
+      "title": "CashTransaction",
+      "description": "Cash in or cash out transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "note": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "type", "amount"]
+    },
+    "ingredient": {
+      "title": "Ingredient",
+      "description": "Raw material for kitchen and beverage recipes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "unit": { "type": "string" },
+        "stock": { "type": "number" },
+        "min_stock": { "type": "number" },
+        "buy_price": { "type": "number" }
+      },
+      "required": ["id", "name", "unit"]
+    },
+    "recipe": {
+      "title": "Recipe",
+      "description": "Bill of materials for menu items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "product_id": { "type": "string" },
+        "yield_units": { "type": "number" }
+      },
+      "required": ["id", "product_id"]
+    },
+    "vendor": {
+      "title": "Vendor",
+      "description": "Consignment partner or external food supplier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "share_percent": { "type": "number" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name"]
+    },
+    "vendorSettlement": {
+      "title": "VendorSettlement",
+      "description": "Settlement payment record for a vendor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "settlement_no": { "type": "string" },
+        "vendor_id": { "type": "string" },
+        "paid": { "type": "number" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "vendor_id", "paid"]
+    },
+    "customWidget": {
+      "title": "CustomWidget",
+      "description": "Dynamic custom calculation widget on dashboard",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      },
+      "required": ["id", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Collection of user accounts"
+    },
+    "/products/{productId}": {
+      "schema": "product",
+      "description": "Collection of POS products"
+    },
+    "/categories/{categoryId}": {
+      "schema": "category",
+      "description": "Collection of product categories"
+    },
+    "/orders/{orderId}": {
+      "schema": "order",
+      "description": "Collection of orders"
+    },
+    "/shifts/{shiftId}": {
+      "schema": "shift",
+      "description": "Collection of cashier shifts"
+    },
+    "/cash_transactions/{transactionId}": {
+      "schema": "cashTransaction",
+      "description": "Collection of cash transactions"
+    },
+    "/ingredients/{ingredientId}": {
+      "schema": "ingredient",
+      "description": "Collection of raw ingredients"
+    },
+    "/recipes/{recipeId}": {
+      "schema": "recipe",
+      "description": "Collection of product recipes"
+    },
+    "/vendors/{vendorId}": {
+      "schema": "vendor",
+      "description": "Collection of suppliers and vendors"
+    },
+    "/vendor_settlements/{settlementId}": {
+      "schema": "vendorSettlement",
+      "description": "Collection of vendor settlements"
+    },
+    "/custom_widgets/{widgetId}": {
+      "schema": "customWidget",
+      "description": "Collection of custom dashboard widgets"
+    }
+  }
+}

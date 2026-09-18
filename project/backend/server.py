@@ -3358,6 +3358,7 @@ def _combine_reports(reports):
         "expenses_ack": bool(fnb.get("expenses_ack") or retail.get("expenses_ack")),
         "expenses_fnb": fnb.get("expenses_fnb") or {"count": 0, "total": 0.0},
         "expenses_retail": retail.get("expenses_retail") or {"count": 0, "total": 0.0},
+        "variance_report": fnb.get("variance_report") or retail.get("variance_report") or None,
     }
 
 async def _vendor_share_from_orders(orders):
@@ -3648,6 +3649,31 @@ def _shift_report_lines(r):
         L.append(f"Bagi hasil dibayar via Settlement: Rp{r.get('vendor_settled_paid', 0):,.0f} (termasuk pengeluaran kas)")
         for x in (r.get("vendor_settled_rows") or []):
             L.append(f"   - {x.get('settlement_no', '?')} {x.get('vendor_name', '?')}: Rp{float(x.get('paid') or 0):,.0f}")
+    if r.get("variance_report"):
+        vr = r["variance_report"]
+        vtot = vr.get("total") or {}
+        v_act = float(vtot.get("actual") or 0)
+        v_exp = float(vtot.get("expected") or 0)
+        v_diff = float(vtot.get("variance") or 0)
+        v_stat = vtot.get("status") or ("match" if v_diff == 0 else ("surplus" if v_diff > 0 else "shortage"))
+        v_label = "SEIMBANG / PAS" if v_stat == "match" else ("LEBIH / SURPLUS" if v_stat == "surplus" else "KURANG / SHORTAGE")
+        L.append("")
+        L.append("*REKONSILIASI KAS FISIK & AUDIT LACI*")
+        L.append(f"Kas Fisik Terhitung: Rp{v_act:,.0f}")
+        L.append(f"Kas Diharapkan Sistem: Rp{v_exp:,.0f}")
+        L.append(f"Status: {v_label}")
+        L.append(f"Selisih Kas: Rp{v_diff:+,.0f}")
+        if vr.get("variance_reason"):
+            L.append(f"Catatan/Alasan Kasir: {vr['variance_reason']}")
+
+    L.append("")
+    L.append("------------------------------------------")
+    L.append("LEMBAR VERIFIKASI AKUNTANSI FISIK")
+    L.append("")
+    L.append("Kasir Menyerahkan,   Spv/Akunting Menerima,")
+    L.append("")
+    L.append("")
+    L.append("(................)   (................)")
     return L
 
 @api.post("/shifts/{sid}/send-wa")
@@ -3667,12 +3693,43 @@ async def shift_send_wa(sid: str, admin: dict = Depends(require_admin)):
     return {"sent": result, "recipients": recips}
 
 @api.get("/shifts/{sid}/print")
-async def shift_print_preview(sid: str, admin: dict = Depends(require_admin)):
+async def shift_print_preview(sid: str, admin: dict = Depends(admin_or_kasir)):
     """Pratinjau teks laporan shift utk dicetak — memakai TEMPLATE laporan shift
     (bisa dirancang sendiri di Pengaturan → WhatsApp & Laporan → Template WhatsApp).
     `sid` boleh ID sesi (F&B+Retail) maupun ID satu shift."""
     r, anchor = await _shift_wa_report(sid)
     text = await _tpl_fill("shift", _shift_wa_env(r, r.get("kasir", ""), (anchor.get("opened_at") or "")[:10]))
+    # Pastikan teks cetak memuat blok audit rekonsiliasi akuntansi jika belum ada di template kustom
+    if r.get("variance_report") and "REKONSILIASI KAS" not in text:
+        vr = r["variance_report"]
+        vtot = vr.get("total") or {}
+        v_act = float(vtot.get("actual") or 0)
+        v_exp = float(vtot.get("expected") or 0)
+        v_diff = float(vtot.get("variance") or 0)
+        v_stat = vtot.get("status") or ("match" if v_diff == 0 else ("surplus" if v_diff > 0 else "shortage"))
+        v_label = "SEIMBANG / KLOP" if v_stat == "match" else ("LEBIH / SURPLUS" if v_stat == "surplus" else "KURANG / SHORTAGE")
+        rec_block = [
+            "",
+            "------------------------------------------",
+            "REKONSILIASI KAS FISIK (AUDIT AKUNTANSI)",
+            f"Kas Fisik Kasir : Rp{v_act:,.0f}",
+            f"Kas Sistem POS  : Rp{v_exp:,.0f}",
+            f"Status Selisih  : {v_label}",
+            f"Selisih Kas     : Rp{v_diff:+,.0f}",
+        ]
+        if vr.get("variance_reason"):
+            rec_block.append(f"Catatan Kasir   : {vr['variance_reason']}")
+        rec_block += [
+            "------------------------------------------",
+            "LEMBAR VERIFIKASI AKUNTANSI FISIK",
+            "",
+            "Kasir Menyerahkan,   Spv/Akunting Menerima,",
+            "",
+            "",
+            "(................)   (................)",
+            "==========================================",
+        ]
+        text += "\n" + "\n".join(rec_block)
     return {"text": text, "shift_id": sid,
             "shift_number": anchor.get("shift_number") or (anchor.get("opened_at") or "")[:10]}
 
@@ -5529,7 +5586,7 @@ async def update_check(admin: dict = Depends(require_admin)):
     }
 
 @api.post("/backup/send-to-cloud")
-@api.post("/backup/send-to-vibecoder")
+@api.post("/backup/send-to-pos")
 async def backup_send_to_cloud(admin: dict = Depends(require_admin)):
     """Buat backup database lalu kirim salinannya ke Google AI Studio (cadangan cloud).
 
@@ -5553,7 +5610,7 @@ async def backup_send_to_cloud(admin: dict = Depends(require_admin)):
             except Exception:
                 pass
         image = os.environ.get("UPDATER_IMAGE", "docker:cli")
-        cmd = "apk add --no-cache curl openssl >/dev/null 2>&1; cd /project && (test -f ./backup-to-cloud.sh && ./backup-to-cloud.sh || ./backup-to-vibecoder.sh)"
+        cmd = "apk add --no-cache curl openssl >/dev/null 2>&1; cd /project && (test -f ./backup-to-cloud.sh && ./backup-to-cloud.sh || ./backup-to-pos.sh)"
         cli.containers.run(
             image,
             command=["sh", "-c", cmd],
@@ -7391,6 +7448,197 @@ async def whatsapp_test(body: WATestIn, admin: dict = Depends(require_admin)):
     if not any(x.get("ok") for x in res):
         raise HTTPException(400, f"Gagal kirim: {res[0].get('error') if res else 'tidak diketahui'}")
     return {"sent": res}
+
+# Webhook penerima pesan dari WACloud.id untuk booking otomatis
+def _parse_wacloud_payload(payload: dict):
+    sender = None
+    body = None
+    
+    # 1. Coba dari objek nested 'data'
+    data = payload.get("data")
+    if isinstance(data, dict):
+        sender = data.get("from") or data.get("sender") or data.get("phone") or data.get("phone_number") or data.get("participant")
+        body = data.get("body") or data.get("message") or data.get("text") or data.get("caption")
+        
+    # 2. Coba dari tingkat root
+    if not sender:
+        sender = payload.get("from") or payload.get("sender") or payload.get("phone") or payload.get("phone_number") or payload.get("participant")
+    if not body:
+        body = payload.get("body") or payload.get("message") or payload.get("text") or payload.get("caption")
+        
+    return sender, body
+
+async def _process_whatsapp_webhook(payload: dict):
+    logger.info(f"Menerima webhook WACloud: {payload}")
+    sender, body = _parse_wacloud_payload(payload)
+    if not sender or not body:
+        logger.warning("Webhook tidak memiliki sender atau body.")
+        return
+        
+    body_str = str(body)
+    body_lower = body_str.lower()
+    
+    # Deteksi arah pesan keluar untuk menghindari loop rekursif
+    if payload.get("from_me") is True or payload.get("fromMe") is True:
+        logger.info("Mengabaikan pesan keluar dari diri sendiri (from_me: True).")
+        return
+        
+    event_type = str(payload.get("event") or "").lower()
+    if "sent" in event_type or "outbound" in event_type:
+        logger.info(f"Mengabaikan event keluar: {event_type}")
+        return
+        
+    direction = str(payload.get("direction") or "").lower()
+    if "out" in direction or "sent" in direction:
+        logger.info(f"Mengabaikan arah keluar: {direction}")
+        return
+        
+    # Hindari memproses balasan dari bot itu sendiri
+    bot_keywords = ["booking berhasil", "booking gagal", "mohon kirimkan format booking", "terima kasih telah memilih grand aceh kuliner"]
+    if any(bk in body_lower for bk in bot_keywords):
+        logger.info("Mengabaikan pesan yang mengandung tanda/balasan bot.")
+        return
+
+    # Filter apakah pesan mengandung niat booking/reservasi
+    keywords = ["booking", "reservasi", "meja", "pesan tempat", "pax", "porsi", "makan", "reserv"]
+    if not any(k in body_lower for k in keywords):
+        logger.info("Pesan bukan permintaan booking, mengabaikan.")
+        return
+
+    # Kirim ke Gemini untuk parsing parameter booking
+    try:
+        system_prompt = (
+            "Anda adalah asisten AI restoran Grand Aceh Kuliner. "
+            "Tugas Anda adalah membaca pesan WhatsApp dari pelanggan yang ingin melakukan booking/reservasi meja. "
+            "Ekstrak detail tersebut menjadi objek JSON yang valid dengan kunci: "
+            "'customer_name', 'pax', 'date', 'time', 'table_name', 'note'.\n"
+            "Gunakan aturan parsing berikut:\n"
+            "- 'customer_name': Ekstrak nama pelanggan. Jika tidak ditemukan, gunakan string kosong.\n"
+            "- 'pax': Jumlah orang (integer). Berikan nilai default 1 jika tidak ditentukan.\n"
+            "- 'date': Tanggal reservasi dalam format YYYY-MM-DD. Selesaikan istilah relatif (seperti 'hari ini', 'besok', 'lusa') "
+            f"berdasarkan tanggal hari ini: {wib_today()}.\n"
+            "- 'time': Waktu reservasi dalam format HH:MM (24 jam). Jika tidak ditentukan, berikan nilai default '12:00'.\n"
+            "- 'table_name': Nama atau nomor meja yang diminta (misal: 'Meja 5', '5', 'VIP'). Jika tidak ada, berikan string kosong.\n"
+            "- 'note': Catatan tambahan, permintaan khusus, atau detail lainnya.\n"
+            "Hanya keluarkan JSON yang valid saja, tanpa blok kode markdown atau penjelasan tambahan."
+        )
+        
+        ai_enabled = await _feat("ai.enabled")
+        if not ai_enabled:
+            reply = "Halo, terima kasih telah menghubungi kami. Mohon maaf, sistem reservasi otomatis kami saat ini sedang dinonaktifkan. Silakan hubungi kasir kami secara langsung."
+            await _send_whatsapp([sender], reply)
+            return
+
+        response_text = await _gemini_text(system_prompt, body_str, feature="summary")
+        cleaned_text = response_text.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(cleaned_text)
+    except Exception as e:
+        logger.error(f"Gagal mem-parsing pesan dengan Gemini: {e}")
+        reply = "Halo, maaf kami kesulitan memahami pesan booking Anda secara otomatis. Mohon kirimkan format booking berikut:\n\n*Nama:* [Nama Anda]\n*Jumlah Orang:* [Jumlah]\n*Tanggal:* [YYYY-MM-DD]\n*Waktu:* [Jam]\n*Meja:* [Nomor Meja]"
+        await _send_whatsapp([sender], reply)
+        return
+
+    cust_name = parsed.get("customer_name") or ""
+    try:
+        pax = int(parsed.get("pax") or 1)
+    except Exception:
+        pax = 1
+    res_date = parsed.get("date") or wib_today()
+    res_time = parsed.get("time") or "12:00"
+    req_table = parsed.get("table_name") or ""
+    note = parsed.get("note") or ""
+
+    if not cust_name.strip():
+        cust_name = "Pelanggan WA"
+
+    try:
+        tables = await db.tables.find({"deleted": {"$ne": True}}).to_list(500)
+        matched_table_id = None
+        matched_table_name = None
+        
+        # Cocokkan meja secara presisi jika disebutkan
+        req_table_clean = req_table.lower().replace("meja", "").strip()
+        if req_table_clean:
+            for t in tables:
+                db_table_clean = t["name"].lower().replace("meja", "").strip()
+                if db_table_clean == req_table_clean or t["name"].lower().strip() == req_table.lower().strip():
+                    existing = await db.reservations.find_one({
+                        "table_id": t["id"],
+                        "status": {"$in": ["pending", "confirmed", "arrived"]},
+                        "date": res_date
+                    })
+                    if existing:
+                        reply = f"Maaf Kak {cust_name}, Meja {t['name']} sudah dibooking pada tanggal {res_date}. Silakan pilih meja lain atau kirim pesan baru tanpa menentukan nomor meja agar kami pilihkan meja kosong terbaik."
+                        await _send_whatsapp([sender], reply)
+                        return
+                    matched_table_id = t["id"]
+                    matched_table_name = t["name"]
+                    break
+
+        # Jika tidak ada meja yang cocok atau tidak ditentukan nomor mejanya, pilih meja kosong secara otomatis
+        if not matched_table_id:
+            for t in tables:
+                if t.get("capacity", 4) >= pax:
+                    existing = await db.reservations.find_one({
+                        "table_id": t["id"],
+                        "status": {"$in": ["pending", "confirmed", "arrived"]},
+                        "date": res_date
+                    })
+                    if not existing:
+                        matched_table_id = t["id"]
+                        matched_table_name = t["name"]
+                        break
+                        
+        if not matched_table_id:
+            reply = f"Maaf Kak {cust_name}, tidak ada meja kosong yang tersedia untuk kapasitas {pax} orang pada tanggal {res_date}. Mohon coba tanggal atau waktu yang lain."
+            await _send_whatsapp([sender], reply)
+            return
+
+        # Simpan reservasi ke database
+        doc = {
+            "id": new_id(),
+            "table_id": matched_table_id,
+            "customer_name": cust_name.strip(),
+            "phone": _wa_normalize(sender),
+            "pax": pax,
+            "date": res_date,
+            "time": res_time,
+            "note": f"{note} (Booking Otomatis via WhatsApp)".strip(),
+            "status": "confirmed",
+            "created_by": "WACloud AI",
+            "created_at": now_utc().isoformat()
+        }
+        await db.reservations.insert_one(doc)
+        
+        # Kirim konfirmasi balasan WhatsApp
+        reply_msg = (
+            f"🎉 *BOOKING BERHASIL!*\n\n"
+            f"Halo Kak *{cust_name}*,\n"
+            f"Reservasi Anda telah dikonfirmasi oleh sistem otomatis kami:\n\n"
+            f"📍 *Meja:* {matched_table_name}\n"
+            f"👥 *Jumlah Orang:* {pax} Orang\n"
+            f"📅 *Tanggal:* {res_date}\n"
+            f"⏰ *Waktu:* {res_time} WIB\n"
+            f"📝 *Catatan:* {note or '-'}\n\n"
+            f"Terima kasih telah memilih Grand Aceh Kuliner. Sampai jumpa di lokasi! 😊"
+        )
+        await _send_whatsapp([sender], reply_msg)
+        logger.info(f"Booking sukses disimpan untuk {cust_name} di {matched_table_name}")
+    except Exception as e:
+        logger.error(f"Gagal memproses reservasi otomatis: {e}")
+        reply = f"Mohon maaf Kak, terjadi kesalahan sistem saat memproses reservasi otomatis Anda. Silakan hubungi admin kami secara manual."
+        await _send_whatsapp([sender], reply)
+
+@api.post("/webhook/whatsapp")
+async def wacloud_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Endpoint Webhook publik untuk memproses booking otomatis via WACloud.id."""
+    try:
+        payload = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON payload"}
+        
+    background_tasks.add_task(_process_whatsapp_webhook, payload)
+    return {"ok": True, "message": "Webhook received"}
 
 # ================================================================== MEMBERS (poin loyalitas)
 class MemberIn(BaseModel):
@@ -9625,6 +9873,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
+
+class APIAuthForceMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/api/"):
+            clean_path = path.rstrip("/")
+            exemptions = [
+                "/api/auth/login",
+                "/api/health",
+                "/api/webhook/whatsapp",
+                "/api/ota/version"
+            ]
+            is_exempt = clean_path in exemptions or clean_path.startswith("/api/uploads")
+            if not is_exempt and request.method.upper() != "OPTIONS":
+                auth_header = request.headers.get("Authorization", "")
+                token = auth_header[7:] if auth_header.startswith("Bearer ") else request.cookies.get("access_token")
+                if not token:
+                    return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+                try:
+                    payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+                except jwt.ExpiredSignatureError:
+                    return JSONResponse(status_code=401, content={"detail": "Token expired"})
+                except jwt.InvalidTokenError:
+                    return JSONResponse(status_code=401, content={"detail": "Invalid token"})
+                user = await db.users.find_one({"id": payload["sub"]})
+                if not user or not user.get("active", True):
+                    return JSONResponse(status_code=401, content={"detail": "User not found or inactive"})
+        return await call_next(request)
+
+app.add_middleware(APIAuthForceMiddleware)
 
 # Private Network Access (PNA): Chrome/WebView memblokir panggilan cross-origin ke
 # IP privat (LAN 192.168.x / tailnet 100.x) bila respons tidak menyertakan

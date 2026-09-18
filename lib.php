@@ -6,7 +6,7 @@
 //   - files.php -> memindai folder itu untuk menampilkan daftar berkas
 //   - file.php  -> mengirim satu berkas langsung dari folder itu
 // Arsip `pos-grand.tar.gz` tetap ada HANYA sebagai bahan update otomatis server Pi
-// (satu berkas untuk diunduh skrip update-vibecoder-pi.sh).
+// (satu berkas untuk diunduh skrip update-pos-pi.sh).
 
 // Cache configuration
 // Kunci cache memakai TANDA VERSI RILIS (isi version.json), bukan TTL buta: daftar

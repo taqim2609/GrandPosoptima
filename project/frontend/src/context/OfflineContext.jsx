@@ -105,6 +105,12 @@ export function OfflineProvider({ children }) {
     setSyncLog([]);
   }, []);
 
+  const removePending = useCallback((temp_id) => {
+    const list = JSON.parse(localStorage.getItem(KEY) || "[]").filter((i) => i.temp_id !== temp_id);
+    persist(list);
+    toast.success("Transaksi lokal berhasil dihapus dari antrean");
+  }, []);
+
   useEffect(() => {
     const goOnline = () => { setOnline(true); syncNow(); };
     const goOffline = () => setOnline(false);
@@ -117,9 +123,24 @@ export function OfflineProvider({ children }) {
     };
   }, [syncNow]);
 
+  useEffect(() => {
+    if (pending.length > 0) {
+      toast.warning(`Sync Pending: Ada ${pending.length} transaksi lokal belum tersinkronisasi.`, {
+        id: "sync-pending",
+        duration: Infinity,
+        action: {
+          label: "Sinkron",
+          onClick: () => { syncNow(); }
+        }
+      });
+    } else {
+      toast.dismiss("sync-pending");
+    }
+  }, [pending.length, syncNow]);
+
   const value = useMemo(
-    () => ({ online, pending, pendingCount: pending.length, syncing, addPending, syncNow, retryOne, syncLog, clearSyncLog }),
-    [online, pending, syncing, addPending, syncNow, retryOne, syncLog, clearSyncLog]
+    () => ({ online, pending, pendingCount: pending.length, syncing, addPending, syncNow, retryOne, removePending, syncLog, clearSyncLog }),
+    [online, pending, syncing, addPending, syncNow, retryOne, removePending, syncLog, clearSyncLog]
   );
 
   return (

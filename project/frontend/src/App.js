@@ -11,32 +11,55 @@ import { OfflineProvider } from "@/context/OfflineContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
 import OtaIndicator from "@/components/OtaIndicator";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
-const Login = lazy(() => import("@/pages/Login"));
-const POS = lazy(() => import("@/pages/POS"));
-const Shift = lazy(() => import("@/pages/Shift"));
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const Products = lazy(() => import("@/pages/Products"));
-const Categories = lazy(() => import("@/pages/Categories"));
-const Tables = lazy(() => import("@/pages/Tables"));
-const Orders = lazy(() => import("@/pages/Orders"));
-const VoidRefund = lazy(() => import("@/pages/VoidRefund"));
-const UsersPage = lazy(() => import("@/pages/Users"));
-const Inventory = lazy(() => import("@/pages/Inventory"));
-const Cash = lazy(() => import("@/pages/Cash"));
-const SettingsAI = lazy(() => import("@/pages/SettingsAI"));
-const SettingsData = lazy(() => import("@/pages/SettingsData"));
-const Settings = lazy(() => import("@/pages/Settings"));
-const WhatsApp = lazy(() => import("@/pages/WhatsApp"));
-const DeviceSettings = lazy(() => import("@/pages/DeviceSettings"));
-const Catalog = lazy(() => import("@/pages/Catalog"));
-const Ingredients = lazy(() => import("@/pages/Ingredients"));
-const AssistantAI = lazy(() => import("@/pages/AssistantAI"));
-const Reports = lazy(() => import("@/pages/Reports"));
-const Members = lazy(() => import("@/pages/Members"));
-const Reservations = lazy(() => import("@/pages/Reservations"));
-const VendorSettlement = lazy(() => import("@/pages/VendorSettlement"));
-const PromosCoupons = lazy(() => import("@/pages/PromosCoupons"));
+// Safe lazy import that retries or reloads on ChunkLoadError when a new build changes asset hashes
+function lazyWithRetry(componentImport) {
+  return lazy(async () => {
+    const pageHasAlreadyBeenReloaded = JSON.parse(
+      window.sessionStorage.getItem("retry-lazy-refreshed") || "false"
+    );
+    try {
+      const component = await componentImport();
+      window.sessionStorage.setItem("retry-lazy-refreshed", "false");
+      return component;
+    } catch (error) {
+      if (!pageHasAlreadyBeenReloaded) {
+        window.sessionStorage.setItem("retry-lazy-refreshed", "true");
+        window.location.reload();
+        return { default: () => null };
+      }
+      window.sessionStorage.setItem("retry-lazy-refreshed", "false");
+      throw error;
+    }
+  });
+}
+
+const Login = lazyWithRetry(() => import("@/pages/Login"));
+const POS = lazyWithRetry(() => import("@/pages/POS"));
+const Shift = lazyWithRetry(() => import("@/pages/Shift"));
+const Dashboard = lazyWithRetry(() => import("@/pages/Dashboard"));
+const Products = lazyWithRetry(() => import("@/pages/Products"));
+const Categories = lazyWithRetry(() => import("@/pages/Categories"));
+const Tables = lazyWithRetry(() => import("@/pages/Tables"));
+const Orders = lazyWithRetry(() => import("@/pages/Orders"));
+const VoidRefund = lazyWithRetry(() => import("@/pages/VoidRefund"));
+const UsersPage = lazyWithRetry(() => import("@/pages/Users"));
+const Inventory = lazyWithRetry(() => import("@/pages/Inventory"));
+const Cash = lazyWithRetry(() => import("@/pages/Cash"));
+const SettingsAI = lazyWithRetry(() => import("@/pages/SettingsAI"));
+const SettingsData = lazyWithRetry(() => import("@/pages/SettingsData"));
+const Settings = lazyWithRetry(() => import("@/pages/Settings"));
+const WhatsApp = lazyWithRetry(() => import("@/pages/WhatsApp"));
+const DeviceSettings = lazyWithRetry(() => import("@/pages/DeviceSettings"));
+const Catalog = lazyWithRetry(() => import("@/pages/Catalog"));
+const Ingredients = lazyWithRetry(() => import("@/pages/Ingredients"));
+const AssistantAI = lazyWithRetry(() => import("@/pages/AssistantAI"));
+const Reports = lazyWithRetry(() => import("@/pages/Reports"));
+const Members = lazyWithRetry(() => import("@/pages/Members"));
+const Reservations = lazyWithRetry(() => import("@/pages/Reservations"));
+const VendorSettlement = lazyWithRetry(() => import("@/pages/VendorSettlement"));
+const PromosCoupons = lazyWithRetry(() => import("@/pages/PromosCoupons"));
 
 const LoadingFallback = () => (
   <div className="flex h-full w-full items-center justify-center p-8 bg-[#F4F5F7] lg:bg-transparent">
@@ -48,9 +71,11 @@ const LoadingFallback = () => (
 const wrap = (el, roles, mod) => (
   <ProtectedRoute roles={roles} mod={mod}>
     <Layout>
-      <Suspense fallback={<LoadingFallback />}>
-        {el}
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingFallback />}>
+          {el}
+        </Suspense>
+      </ErrorBoundary>
     </Layout>
   </ProtectedRoute>
 );
