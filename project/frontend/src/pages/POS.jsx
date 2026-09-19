@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, memo } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { apiError } from "@/lib/api";
 import { rupiah } from "@/lib/format";
 import { printReceipt } from "@/lib/receipt";
@@ -6,6 +7,7 @@ import { getDeviceConfig, setDeviceConfig, getPrinterStatus } from "@/lib/device
 import { bizCache, loadBusiness } from "@/lib/business";
 import { useUI, posLabel } from "@/lib/ui";
 import { useOffline } from "@/context/OfflineContext";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -14,7 +16,7 @@ import VoidDialog from "@/components/VoidDialog";
 import {
   Utensils, ShoppingBag, Store, Plus, Minus, Trash2, Armchair,
   Search, Receipt, X, CheckCircle2, Layers, Database, ScanLine, Clock, Play, Printer, Wifi, WifiOff, RefreshCw, CloudOff,
-  ShoppingCart, ChevronUp, ChevronDown,
+  ShoppingCart, ChevronUp, ChevronDown, Lock, ArrowRight, Wallet, LayoutDashboard,
 } from "lucide-react";
 
 const ORDER_TYPES = [
@@ -184,6 +186,8 @@ const CategorySidebar = memo(function CategorySidebar({ categories = [], activeC
 });
 
 export default function POS() {
+  const { user } = useAuth();
+  const nav = useNavigate();
   const { online, addPending, pendingCount, syncing, syncNow } = useOffline();
   const printerStatus = getPrinterStatus();
   // Mode offline (offline-first) per perangkat — default MATI. Saat mati & server tidak
@@ -211,6 +215,7 @@ export default function POS() {
   const [shift, setShift] = useState(undefined);
   const [openingCash, setOpeningCash] = useState("");
   const [openingCashRetail, setOpeningCashRetail] = useState("");
+  const [openingShiftLoading, setOpeningShiftLoading] = useState(false);
   // Bill terbuka (dine-in) yang sedang dibatalkan lewat VoidDialog
   const [voidBill, setVoidBill] = useState(null);
   const [barcode, setBarcode] = useState("");
@@ -263,10 +268,21 @@ export default function POS() {
 
   // Shift gate: POS is only usable after opening a shift (offline is allowed).
   useEffect(() => {
-    api.get("/shifts/current").then((r) => setShift(r.data || null)).catch(() => {
-      if (getDeviceConfig().offlineMode) setShift({ offline: true });
-      else setServerDown(true); // mode offline mati -> blokir sampai server normal
-    });
+    api.get("/shifts/current")
+      .then((r) => {
+        if (r.data && r.data.id && r.data.status !== "closed") {
+          setShift(r.data);
+        } else {
+          setShift(null);
+        }
+      })
+      .catch(() => {
+        if (getDeviceConfig().offlineMode) {
+          setShift({ offline: true });
+        } else {
+          setServerDown(true); // mode offline mati -> blokir sampai server normal
+        }
+      });
   }, []);
 
   const relevantTypes = useMemo(() => {
@@ -376,15 +392,21 @@ export default function POS() {
   const handleSelectCat = useCallback((catId) => setActiveCat(catId), []);
 
   const openShiftInline = async () => {
+    setOpeningShiftLoading(true);
     try {
       // Shift harian bersama: satu tombol membuka F&B & Retail (kas awal terpisah).
       const { data } = await api.post("/shifts/open", {
         opening_cash_fnb: Number(openingCash || 0),
         opening_cash_retail: Number(openingCashRetail || 0),
+        user_name: user?.name || "Kasir",
       });
       setShift(data);
       toast.success("Shift hari ini dibuka. POS siap digunakan.");
-    } catch (e) { toast.error(apiError(e.response?.data?.detail), { duration: 9000 }); }
+    } catch (e) {
+      toast.error(apiError(e.response?.data?.detail), { duration: 9000 });
+    } finally {
+      setOpeningShiftLoading(false);
+    }
   };
   const handleBarcode = (e) => {
     if (e.key !== "Enter") return;
@@ -434,7 +456,11 @@ export default function POS() {
       toast.success(`Open bill tersimpan untuk ${table.name}`);
       resetSale();
       load();
-    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+    } catch (e) {
+      const msg = apiError(e.response?.data?.detail);
+      if (msg.toLowerCase().includes("shift")) setShift(null);
+      toast.error(msg);
+    }
   };
 
   const doPay = async (pm, amountPaid, opts = {}) => {
@@ -509,11 +535,15 @@ export default function POS() {
       resetSale();
       load();
       toast.success("Pembayaran berhasil");
-    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+    } catch (e) {
+      const msg = apiError(e.response?.data?.detail);
+      if (msg.toLowerCase().includes("shift")) setShift(null);
+      toast.error(msg);
+    }
   };
 
   if (shift === undefined) {
-    return <div className="h-screen grid place-items-center"><div className="animate-pulse text-[#E63946] font-bold">Memuat…</div></div>;
+    return <div className="h-screen grid place-items-center"><div className="animate-pulse text-[#E63946] font-bold">Memuat status shift…</div></div>;
   }
   // Mode offline MATI (default): bila server tidak terjangkau / koneksi putus, POS diblokir total.
   if (!offlineEnabled && (serverDown || !online)) {
@@ -537,26 +567,140 @@ export default function POS() {
       </div>
     );
   }
-  if (shift === null) {
+  if (shift === null || !shift.id || shift.status === "closed") {
     return (
-      <div className="h-screen grid place-items-center bg-[#F4F5F7] p-6" data-testid="shift-gate">
-        <div className="w-full max-w-md bg-white rounded-2xl border p-7 text-center">
-          <div className="h-14 w-14 rounded-2xl bg-[#FEF2F2] grid place-items-center mx-auto mb-4"><Clock className="text-[#E63946]" /></div>
-          <h2 className="text-2xl font-extrabold">Buka Shift Dulu</h2>
-          <p className="text-sm text-[#52525B] mt-1 mb-5">
-            Satu shift per hari untuk F&amp;B &amp; Retail. Isi kas awal tiap toko, lalu semua akun
-            bisa langsung memakai shift ini (tidak perlu buka shift baru).
+      <div className="h-screen grid place-items-center bg-[#F4F5F7] p-4 sm:p-6 overflow-y-auto" data-testid="shift-gate">
+        <div className="w-full max-w-lg bg-white rounded-2xl border border-[#E4E4E7] shadow-xl p-6 sm:p-8 text-center my-auto">
+          <div className="h-16 w-16 rounded-2xl bg-amber-50 border border-amber-200 grid place-items-center mx-auto mb-4 text-amber-600 shadow-sm">
+            <Lock size={30} />
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold mb-2">
+            <Clock size={13} />
+            <span>POS Terkunci — Shift Kasir Belum Dibuka</span>
+          </div>
+
+          <h2 className="text-2xl sm:text-3xl font-heading font-extrabold text-[#0A0A0A]">
+            Buka Shift Terlebih Dahulu
+          </h2>
+
+          <p className="text-sm text-[#52525B] mt-2 mb-5 leading-relaxed">
+            Sistem POS kasir tidak dapat digunakan tanpa membuka shift harian.
+            Isi kas awal tiap toko di bawah untuk mulai melayani transaksi.
           </p>
-          <label className="text-xs uppercase tracking-wider font-bold text-[#52525B] text-left block">Kas Awal F&amp;B</label>
-          <input data-testid="gate-opening-cash" type="number" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)}
-            placeholder="0" className="w-full h-12 rounded-xl border px-3 mt-1.5 font-num text-lg" autoFocus />
-          <label className="text-xs uppercase tracking-wider font-bold text-[#52525B] text-left block mt-3">Kas Awal Retail</label>
-          <input data-testid="gate-opening-cash-retail" type="number" value={openingCashRetail} onChange={(e) => setOpeningCashRetail(e.target.value)}
-            placeholder="0" className="w-full h-12 rounded-xl border px-3 mt-1.5 font-num text-lg" />
-          <button data-testid="gate-open-shift-btn" onClick={openShiftInline}
-            className="tap w-full py-3 mt-4 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center justify-center gap-2">
-            <Play size={16} /> Buka Shift F&amp;B &amp; Retail
-          </button>
+
+          <div className="bg-[#F8F9FA] rounded-xl p-3 border border-[#E4E4E7] text-left mb-5 flex items-center justify-between">
+            <div className="text-xs text-[#52525B]">
+              <div>Petugas Kasir:</div>
+              <div className="font-bold text-sm text-[#0A0A0A]">{user?.name || "Kasir"}</div>
+            </div>
+            <div className="text-right text-xs text-[#52525B]">
+              <div>Tanggal &amp; Waktu:</div>
+              <div className="font-mono font-semibold text-xs text-[#0A0A0A]">{new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" })}</div>
+            </div>
+          </div>
+
+          <div className="space-y-4 text-left">
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs uppercase tracking-wider font-extrabold text-[#52525B] flex items-center gap-1.5">
+                  <Utensils size={14} className="text-[#E63946]" />
+                  <span>Kas Awal F&amp;B</span>
+                </label>
+                <span className="text-xs font-mono font-bold text-[#E63946]">
+                  {rupiah(Number(openingCash) || 0)}
+                </span>
+              </div>
+              <input
+                data-testid="gate-opening-cash"
+                type="number"
+                value={openingCash}
+                onChange={(e) => setOpeningCash(e.target.value)}
+                placeholder="0"
+                className="w-full h-12 rounded-xl border border-[#E4E4E7] px-3.5 mt-1.5 font-num text-lg focus:ring-2 focus:ring-[#E63946] focus:border-transparent outline-none"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {[0, 50000, 100000, 200000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setOpeningCash(String(amt))}
+                    className="tap px-2 py-0.5 rounded-md bg-[#F4F5F7] hover:bg-[#E4E4E7] text-[11px] font-bold text-[#52525B]"
+                  >
+                    {amt === 0 ? "Rp 0" : rupiah(amt)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs uppercase tracking-wider font-extrabold text-[#52525B] flex items-center gap-1.5">
+                  <Store size={14} className="text-[#E63946]" />
+                  <span>Kas Awal Retail</span>
+                </label>
+                <span className="text-xs font-mono font-bold text-[#E63946]">
+                  {rupiah(Number(openingCashRetail) || 0)}
+                </span>
+              </div>
+              <input
+                data-testid="gate-opening-cash-retail"
+                type="number"
+                value={openingCashRetail}
+                onChange={(e) => setOpeningCashRetail(e.target.value)}
+                placeholder="0"
+                className="w-full h-12 rounded-xl border border-[#E4E4E7] px-3.5 mt-1.5 font-num text-lg focus:ring-2 focus:ring-[#E63946] focus:border-transparent outline-none"
+              />
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {[0, 50000, 100000, 200000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setOpeningCashRetail(String(amt))}
+                    className="tap px-2 py-0.5 rounded-md bg-[#F4F5F7] hover:bg-[#E4E4E7] text-[11px] font-bold text-[#52525B]"
+                  >
+                    {amt === 0 ? "Rp 0" : rupiah(amt)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-2.5">
+            <button
+              data-testid="gate-open-shift-btn"
+              onClick={openShiftInline}
+              disabled={openingShiftLoading}
+              className="tap w-full py-3.5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-50 text-base"
+            >
+              {openingShiftLoading ? (
+                <RefreshCw size={18} className="animate-spin" />
+              ) : (
+                <Play size={18} />
+              )}
+              <span>Buka Shift &amp; Masuk POS Kasir</span>
+            </button>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => nav("/shift")}
+                className="tap py-2.5 px-3 rounded-xl border border-[#E4E4E7] bg-white hover:bg-[#F4F5F7] text-xs font-bold text-[#0A0A0A] flex items-center justify-center gap-1.5"
+              >
+                <Clock size={14} className="text-[#E63946]" />
+                <span>Menu Shift</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => nav("/dashboard")}
+                className="tap py-2.5 px-3 rounded-xl border border-[#E4E4E7] bg-white hover:bg-[#F4F5F7] text-xs font-bold text-[#52525B] flex items-center justify-center gap-1.5"
+              >
+                <LayoutDashboard size={14} />
+                <span>Dashboard</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -112,9 +112,43 @@ function HeaderConnectionBanner({ onOpenQueue }) {
 
 function HeaderConnectionBadge({ onOpenQueue }) {
   const { online, pendingCount, syncing, syncNow } = useOffline();
+  const [shift, setShift] = useState(undefined);
+
+  useEffect(() => {
+    if (!online) return;
+    api.get("/shifts/current")
+      .then((r) => setShift(r.data && r.data.id && r.data.status !== "closed" ? r.data : null))
+      .catch(() => setShift(null));
+  }, [online]);
 
   return (
     <div className="flex items-center gap-2">
+      {shift !== undefined && (
+        <NavLink
+          to="/shift"
+          data-testid="header-shift-badge"
+          title={shift ? `Shift aktif sejak ${new Date(shift.opened_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}` : "Shift belum dibuka - klik untuk buka shift"}
+          className={`tap h-9 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-colors ${
+            shift
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+              : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+          }`}
+        >
+          {shift ? (
+            <>
+              <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+              <span className="hidden sm:inline">Shift Aktif</span>
+              <span className="sm:hidden">Shift</span>
+            </>
+          ) : (
+            <>
+              <Clock size={13} className="text-amber-600" />
+              <span className="hidden sm:inline">Shift Belum Buka</span>
+              <span className="sm:hidden">Buka Shift</span>
+            </>
+          )}
+        </NavLink>
+      )}
       <div
         data-testid="header-conn-status"
         title={online ? "Koneksi ke server normal" : "Koneksi terputus, data tersimpan di penyimpanan lokal"}

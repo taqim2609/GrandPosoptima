@@ -5,7 +5,7 @@
   "description": "Grand Aceh Kuliner POS — Hybrid F&B + Retail",
   "scripts": {
     "dev": "node server.js",
-    "build": "cd project/frontend && npm run build && cd ../.. && node build.js",
+    "build": "cd project/frontend && npm install --legacy-peer-deps --production=false && npm run build && cd ../.. && node build.js",
     "lint": "node -e \"console.log('Linting passed')\"",
     "start": "node server.js"
   },

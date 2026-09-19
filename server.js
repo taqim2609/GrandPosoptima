@@ -342,18 +342,7 @@ const db = {
       created_at: new Date(Date.now() - 1800000).toISOString(),
     },
   ],
-  currentShift: {
-    id: 's-active',
-    user_id: 'usr-kasir',
-    user_name: 'Kasir 1',
-    start_cash: 200000,
-    opened_at: new Date().toISOString(),
-    status: 'open',
-    cash_sales: 88000,
-    non_cash_sales: 43000,
-    total_sales: 131000,
-    orders_count: 2,
-  },
+  currentShift: null,
   shiftHistory: [],
   cashTransactions: [
     { id: 'c-1', type: 'out', category: 'Operasional', amount: 50000, note: 'Beli es batu kristal', created_at: new Date().toISOString() },
@@ -1014,11 +1003,75 @@ app.put('/api/tables/:id', (req, res) => {
   res.status(404).json({ detail: 'Meja tidak ditemukan' });
 });
 
-app.get('/api/orders', (req, res) => {
+app.get(['/api/orders', '/orders'], (req, res) => {
   res.json(db.orders);
 });
 
-app.post('/api/orders', (req, res) => {
+app.get(['/api/orders/:id', '/orders/:id'], (req, res) => {
+  const order = db.orders.find((o) => o.id === req.params.id || o.order_number === req.params.id);
+  if (order) return res.json(order);
+  res.status(404).json({ detail: 'Order tidak ditemukan' });
+});
+
+app.patch(['/api/orders/:id/items', '/orders/:id/items'], (req, res) => {
+  if (!db.currentShift || db.currentShift.status !== 'open') {
+    return res.status(400).json({ detail: 'POS Kasir terkunci: Shift belum dibuka. Buka shift terlebih dahulu sebelum melayani transaksi.' });
+  }
+  const idx = db.orders.findIndex((o) => o.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ detail: 'Order tidak ditemukan' });
+  const items = req.body.items || [];
+  const subtotal = items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0), 0);
+  db.orders[idx].items = items;
+  db.orders[idx].subtotal = subtotal;
+  db.orders[idx].total = subtotal;
+  res.json(db.orders[idx]);
+});
+
+app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
+  if (!db.currentShift || db.currentShift.status !== 'open') {
+    return res.status(400).json({ detail: 'POS Kasir terkunci: Shift belum dibuka. Buka shift terlebih dahulu sebelum melayani transaksi.' });
+  }
+  const idx = db.orders.findIndex((o) => o.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ detail: 'Order tidak ditemukan' });
+  const order = db.orders[idx];
+  order.status = 'completed';
+  order.payment_method = req.body.payment_method || 'cash';
+  order.amount_paid = req.body.amount_paid || order.total;
+  order.change = Math.max(0, (Number(order.amount_paid) || 0) - (Number(order.total) || 0));
+  order.discount_type = req.body.discount_type || order.discount_type || 'none';
+  order.discount_value = req.body.discount_value || order.discount_value || 0;
+  order.paid_at = new Date().toISOString();
+
+  // If table was dine-in, free the table
+  if (order.table_id) {
+    const tbl = db.tables.find((t) => t.id === order.table_id);
+    if (tbl) tbl.status = 'empty';
+  }
+
+  // Update current shift sales
+  if (db.currentShift) {
+    const total = Number(order.total) || 0;
+    if (order.payment_method === 'cash') {
+      db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + total;
+    } else {
+      db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + total;
+    }
+    db.currentShift.total_sales = (db.currentShift.total_sales || 0) + total;
+    db.currentShift.orders_count = (db.currentShift.orders_count || 0) + 1;
+  }
+
+  broadcastRealtimeSync('order_paid', { order_number: order.order_number, total: order.total });
+  res.json(order);
+});
+
+app.post(['/api/orders', '/orders'], (req, res) => {
+  // POS Kasir WAJIB buka shift terlebih dahulu
+  if (!db.currentShift || db.currentShift.status !== 'open') {
+    return res.status(400).json({
+      detail: 'POS Kasir terkunci: Shift belum dibuka. Harap buka shift terlebih dahulu di menu Shift atau gerbang POS.',
+    });
+  }
+
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const seq = String(db.orders.length + 1).padStart(3, '0');
   const orderNumber = `GAK-${dateStr}-${seq}`;
@@ -1027,7 +1080,7 @@ app.post('/api/orders', (req, res) => {
     id: 'ord-' + Date.now(),
     order_number: orderNumber,
     created_at: new Date().toISOString(),
-    status: req.body.status || 'completed',
+    status: req.body.status || (req.body.pay_now ? 'completed' : 'open_bill'),
     ...req.body,
   };
 
@@ -1042,7 +1095,7 @@ app.post('/api/orders', (req, res) => {
   // Deduct stock for retail / foods
   if (Array.isArray(order.items)) {
     order.items.forEach((item) => {
-      const prod = db.products.find((p) => p.id === item.id || p.name === item.name);
+      const prod = db.products.find((p) => p.id === item.product_id || p.id === item.id || p.name === item.name);
       if (prod && typeof prod.stock === 'number') {
         prod.stock = Math.max(0, prod.stock - (item.qty || 1));
       }
