@@ -5038,7 +5038,7 @@ async def _ai_provider_cfg(feature="description"):
             "api_key": feat.get("api_key") or doc.get("openai_api_key") or OPENAI_COMPAT_API_KEY,
             "model": feat.get("model") or doc.get("openai_model") or OPENAI_COMPAT_MODEL}
 
-async def _ai_chat(messages, system="", feature="description", temperature=0.5, max_tokens=4000):
+async def _ai_chat(messages, system="", feature="description", temperature=0.5, max_tokens=4000, model=None):
     """Unified text chat across providers. `messages`=[{role:'user'|'assistant',content:str}].
     Routes to Gemini REST (X-goog-api-key) or chenzk (OpenAI-compatible), else Emergent fallback."""
     if not await _ai_allowed(feature):
@@ -5050,7 +5050,7 @@ async def _ai_chat(messages, system="", feature="description", temperature=0.5, 
         keys = await _gemini_keys(cfg.get("api_key"))
         if not keys:
             raise HTTPException(400, "Gemini API key belum diatur. Tambahkan di Pengaturan AI.")
-        model = cfg["model"] or GEMINI_TEXT_MODEL
+        model = model or cfg["model"] or GEMINI_TEXT_MODEL
         contents = []
         for m in messages:
             role = "model" if m.get("role") == "assistant" else "user"
@@ -5820,6 +5820,8 @@ async def ai_credit(feature: str = "description", admin: dict = Depends(require_
 class AIAssistantChatIn(BaseModel):
     session_id: Optional[str] = None
     message: str
+    model: Optional[str] = None
+    role: Optional[str] = None
 
 class AIAssistantApplyIn(BaseModel):
     action: dict
@@ -5943,9 +5945,18 @@ async def assistant_chat(body: AIAssistantChatIn, admin: dict = Depends(admin_or
     history = sess.get("messages", [])
     ctx = await _assistant_context()
     role_line = "Pengguna berperan: admin (boleh menerapkan aksi)." if admin.get("role") == "admin" else "Pengguna berperan: kasir (HANYA bertanya — jangan sertakan blok aksi, perubahan data hanya admin)."
-    system = role_line + "\n" + ASSISTANT_SYSTEM + "\n\nKONTEKS DATA SAAT INI:\n" + json.dumps(ctx, ensure_ascii=False)
+    
+    custom_system = ASSISTANT_SYSTEM
+    if body.role == 'operations':
+        custom_system = "Anda adalah Gemini Chatbot, asisten ahli operasional & POS restoran Grand Aceh Kuliner di Banda Aceh. Berikan saran taktis, pengelolaan persediaan bahan baku, meja, dan efisiensi alur kerja kasir/staf dengan ramah, praktis, dan profesional dalam Bahasa Indonesia."
+    elif body.role == 'analyst':
+        custom_system = "Anda adalah Gemini Chatbot, analis keuangan & penjualan restoran Grand Aceh Kuliner di Banda Aceh. Fokus pada pembedahan data laba kotor/bersih, rasio margin, perbandingan performa harian, kegemaran menu pelanggan, serta strategi promosi secara terstruktur, ramah, dan mendalam dalam Bahasa Indonesia."
+    elif body.role == 'specialist':
+        custom_system = "Anda adalah Gemini Chatbot, spesialis menu makanan/minuman dan kepuasan pelanggan Grand Aceh Kuliner di Banda Aceh. Bantu mengoptimalkan deskripsi produk yang menarik, strategi harga psikologis, penanganan keluhan meja, dan pengelolaan reservasi dengan hangat, solutif, dan komunikatif dalam Bahasa Indonesia."
+    
+    system = role_line + "\n" + custom_system + "\n\nKONTEKS DATA SAAT INI:\n" + json.dumps(ctx, ensure_ascii=False)
     msgs = history + [{"role": "user", "content": body.message}]
-    reply = await _ai_chat(msgs, system=system, feature="assistant", temperature=0.3, max_tokens=1500)
+    reply = await _ai_chat(msgs, system=system, feature="assistant", temperature=0.3, max_tokens=1500, model=body.model)
     action, clean = _parse_action(reply)
     history = (history + [{"role": "user", "content": body.message},
                           {"role": "assistant", "content": reply}])[-20:]

@@ -154,6 +154,8 @@ export default function AssistantAI() {
   const [recOpen, setRecOpen] = useState(false);
   const [recData, setRecData] = useState(null);
   const [recLoading, setRecLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("gemini-3.5-flash");
+  const [chatRole, setChatRole] = useState("general");
 
   const loadRec = async () => {
     setRecLoading(true); setRecData(null); setRecOpen(true);
@@ -242,7 +244,12 @@ export default function AssistantAI() {
     setMessages((m) => [...m, { role: "user", text: question }]);
     setLoading(true);
     try {
-      const r = await api.post("/ai/assistant/chat", { session_id: sid, message: question });
+      const r = await api.post("/ai/assistant/chat", {
+        session_id: sid,
+        message: question,
+        model: selectedModel,
+        role: chatRole,
+      });
       if (r.data.session_id) setSid(r.data.session_id);
       setMessages((m) => [...m, {
         role: "assistant", text: r.data.reply,
@@ -307,7 +314,7 @@ export default function AssistantAI() {
       {/* header + provider selector */}
       <div className="border-b bg-white px-4 lg:px-6 py-3 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <h1 className="text-lg font-extrabold flex items-center gap-2"><Sparkles className="text-[#E63946]" size={20} /> AI</h1>
+          <h1 className="text-lg font-extrabold flex items-center gap-2"><Sparkles className="text-[#E63946]" size={20} /> Gemini Chatbot</h1>
           <button data-testid="assistant-new-chat" onClick={newChat}
             className="tap h-9 px-3 rounded-lg border-2 border-[#E63946] text-[#E63946] font-bold text-sm flex items-center gap-1.5 hover:bg-[#E63946] hover:text-white transition-colors">
             <Plus size={15} /> Baru
@@ -338,6 +345,38 @@ export default function AssistantAI() {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Control Strip for Model & Role Selection */}
+      <div className="bg-white border-b px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-[#71717A]">Model Gemini:</span>
+          <select
+            data-testid="chatbot-model-select"
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="text-xs font-bold bg-[#FAFAFA] border-2 border-[#D4D4D8] rounded-lg px-2.5 py-1.5 focus:border-[#E63946] focus:outline-none"
+          >
+            <option value="gemini-3.5-flash">Umum (Gemini 3.5 Flash)</option>
+            <option value="gemini-3.1-pro-preview">Kompleks (Gemini 3.1 Pro)</option>
+            <option value="gemini-3.1-flash-lite">Cepat (Gemini 3.1 Flash Lite)</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-[#71717A]">Peran Chatbot:</span>
+          <select
+            data-testid="chatbot-role-select"
+            value={chatRole}
+            onChange={(e) => setChatRole(e.target.value)}
+            className="text-xs font-bold bg-[#FAFAFA] border-2 border-[#D4D4D8] rounded-lg px-2.5 py-1.5 focus:border-[#E63946] focus:outline-none"
+          >
+            <option value="general">Umum (Default POS)</option>
+            <option value="operations">Asisten POS & Operasional</option>
+            <option value="analyst">Analis Keuangan & Penjualan</option>
+            <option value="specialist">Pakar Menu & Layanan Pelanggan</option>
+          </select>
+        </div>
       </div>
 
       {provider === "chenzk" && !keySet && (
@@ -376,8 +415,8 @@ export default function AssistantAI() {
             <div className="h-14 w-14 rounded-2xl bg-[#E63946] grid place-items-center mx-auto mb-4">
               <Bot className="text-white" size={26} />
             </div>
-            <h2 className="text-xl font-extrabold">Asisten Admin</h2>
-            <p className="text-sm text-[#52525B] mt-1 mb-6">Minta bantuan kelola produk, kategori, vendor, harga, diskon & metode pembayaran. Setiap perubahan data akan minta konfirmasi <b>Terapkan</b>. Contoh:</p>
+            <h2 className="text-xl font-extrabold">Gemini AI Chatbot</h2>
+            <p className="text-sm text-[#52525B] mt-1 mb-6">Pilih model & peran chatbot Anda di atas, lalu mulailah berdiskusi interaktif terkait POS, manajemen menu, analisis penjualan harian, atau rekomendasi stok secara multi-turn. Contoh pertanyaan:</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {SUGGESTIONS.map((s) => (
                 <button key={s} data-testid={`assistant-suggest-${s.slice(0, 6)}`} onClick={() => ask(s)}

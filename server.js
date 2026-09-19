@@ -9,7 +9,7 @@ const AdmZip = require('adm-zip');
 const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } });
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 const HOST = '0.0.0.0';
 
 // Middlewares
@@ -2499,30 +2499,67 @@ app.post('/api/backup/import', upload.single('file'), (req, res) => {
 // 13. AI Assistant Integration (Gemini SDK)
 // ==========================================
 app.post('/api/ai/assistant/chat', async (req, res) => {
-  const { message, prompt } = req.body || {};
+  const { message, prompt, session_id, model, role } = req.body || {};
   const userText = message || prompt || 'Halo';
+
+  // 1. Manage/Retrieve multi-turn session history in memory db.aiSessions
+  if (!db.aiSessions) db.aiSessions = [];
+  let sid = session_id || 'sess_' + Date.now();
+  let session = db.aiSessions.find(s => s.id === sid);
+  if (!session) {
+    session = {
+      id: sid,
+      title: userText.slice(0, 60) || "Percakapan Baru",
+      count: 0,
+      updated_at: new Date().toISOString(),
+      messages: []
+    };
+    db.aiSessions.unshift(session);
+  }
+
+  // Append user message to history
+  session.messages.push({ role: 'user', text: userText });
+  session.updated_at = new Date().toISOString();
+  session.count = session.messages.length;
 
   // If GEMINI_API_KEY is available in environment, use @google/genai
   if (process.env.GEMINI_API_KEY) {
     try {
       const { GoogleGenAI } = require('@google/genai');
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const systemPrompt = `Anda adalah Asisten AI untuk aplikasi Point of Sale (POS) Grand Aceh Kuliner di Banda Aceh.
-Bantu kasir dan pengelola restoran dengan ramah, lugas, dan praktis dalam Bahasa Indonesia.
-Data Restoran Saat Ini:
-- Produk unggulan: Nasi Goreng Aceh (Rp 28.000), Mie Aceh Goreng (Rp 30.000), Ayam Tangkap (Rp 45.000), Kopi Sanger Dingin (Rp 16.000).
-- Total produk aktif: ${db.products.length}
-- Total meja: ${db.tables.length}
-- Order hari ini: ${db.orders.length}
-Jawab pertanyaan dengan sopan dan informatif.`;
+      
+      // Give the chatbot specific roles / personas based on selection
+      let systemPrompt = `Anda adalah Gemini Chatbot, asisten cerdas untuk sistem Point of Sale (POS) Grand Aceh Kuliner di Banda Aceh. Berikan jawaban yang ramah, praktis, informatif, dan ringkas dalam Bahasa Indonesia.`;
+      
+      if (role === 'operations') {
+        systemPrompt = `Anda adalah Gemini Chatbot, asisten ahli operasional & POS restoran Grand Aceh Kuliner di Banda Aceh. Berikan saran taktis, pengelolaan persediaan bahan baku, meja, dan efisiensi alur kerja kasir/staf dengan ramah, praktis, dan profesional dalam Bahasa Indonesia.`;
+      } else if (role === 'analyst') {
+        systemPrompt = `Anda adalah Gemini Chatbot, analis keuangan & penjualan restoran Grand Aceh Kuliner di Banda Aceh. Fokus pada pembedahan data laba kotor/bersih, rasio margin, perbandingan performa harian, kegemaran menu pelanggan, serta strategi promosi secara terstruktur, ramah, dan mendalam dalam Bahasa Indonesia.`;
+      } else if (role === 'specialist') {
+        systemPrompt = `Anda adalah Gemini Chatbot, spesialis menu makanan/minuman dan kepuasan pelanggan Grand Aceh Kuliner di Banda Aceh. Bantu mengoptimalkan deskripsi produk yang menarik, strategi harga psikologis, penanganan keluhan meja, dan pengelolaan reservasi dengan hangat, solutif, dan komunikatif dalam Bahasa Indonesia.`;
+      }
 
+      // Add context about current system state
+      systemPrompt += `\n\nData Restoran Saat Ini:
+- Produk aktif: ${db.products ? db.products.length : 0}
+- Total meja: ${db.tables ? db.tables.length : 0}
+- Order hari ini: ${db.orders ? db.orders.length : 0}`;
+
+      // Format full history for the multi-turn generateContent API
+      const contents = session.messages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+      }));
+
+      // Selection of model based on requirement (Lite, Flash, Pro)
+      const selectedModel = model || 'gemini-3.5-flash';
       const candidateModels = [
-        process.env.GEMINI_MODEL,
+        selectedModel,
+        'gemini-3.5-flash',
         'gemini-3.1-flash-lite',
         'gemini-3.8-flash',
-        'gemini-3.6-flash',
-        'gemini-flash-latest',
-      ].filter(Boolean);
+        'gemini-flash-latest'
+      ].filter((v, idx, arr) => arr.indexOf(v) === idx);
 
       let response = null;
       let lastErr = null;
@@ -2530,7 +2567,10 @@ Jawab pertanyaan dengan sopan dan informatif.`;
         try {
           response = await ai.models.generateContent({
             model: modelName,
-            contents: `${systemPrompt}\n\nPertanyaan Pengguna: ${userText}`,
+            contents: contents,
+            config: {
+              systemInstruction: systemPrompt
+            }
           });
           if (response && response.text) break;
         } catch (e) {
@@ -2540,8 +2580,15 @@ Jawab pertanyaan dengan sopan dan informatif.`;
       }
 
       if (response && response.text) {
+        const replyText = response.text;
+        // Append assistant response to history
+        session.messages.push({ role: 'assistant', text: replyText });
+        session.count = session.messages.length;
+        session.updated_at = new Date().toISOString();
+
         return res.json({
-          reply: response.text,
+          session_id: sid,
+          reply: replyText,
           action: null,
         });
       }
