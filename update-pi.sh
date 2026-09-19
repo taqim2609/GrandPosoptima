@@ -2,22 +2,6 @@
 set -e
 cd "$(dirname "$0")"
 echo "=== Update Grand Aceh Kuliner POS (Pi/Linux) ==="
-# Bila update sudah dialihkan ke Google AI Studio (ada file .aistudio-version),
-# gunakan jalur Google AI Studio.
-if [ -f .aistudio-version ]; then
-  echo "Mode update Google AI Studio terdeteksi..."
-  if [ -f update-aistudio-pi.sh ]; then
-    exec bash update-aistudio-pi.sh "$@"
-  else
-    echo "Mengunduh update-aistudio-pi.sh dari Google AI Studio..."
-    BASE_URL="${AISTUDIO_URL:-https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}"
-    curl -fsSL -o update-aistudio-pi.sh "$BASE_URL/update-aistudio-pi.sh" 2>/dev/null || true
-    chmod +x update-aistudio-pi.sh 2>/dev/null || true
-    if [ -f update-aistudio-pi.sh ]; then
-      exec bash update-aistudio-pi.sh "$@"
-    fi
-  fi
-fi
 if [ -d .git ]; then
   echo "Menarik pembaruan terbaru dari Git..."
   git config --global --add safe.directory "$(pwd)" 2>/dev/null || true

@@ -5659,21 +5659,8 @@ async def admin_update(admin: dict = Depends(require_admin)):
                 pass
         image = os.environ.get("UPDATER_IMAGE", "docker:cli")
         cmd = (
-            "apk add --no-cache git curl >/dev/null 2>&1; "
-            "if [ -f /project/.aistudio-version ] || [ -f /project/.vibecoder-version ]; then "
-            "VER=\"$(cat /project/.aistudio-version 2>/dev/null || cat /project/.vibecoder-version 2>/dev/null || true)\"; "
-            f"REMOTE=\"$(curl -fsSL -m 20 {VIBE_UPDATE_BASE_URL}/version.json | sed -n 's/.*\"version\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' | head -1 || true)\"; "
-            "if [ -n \"$REMOTE\" ] && [ \"$REMOTE\" != \"$VER\" ]; then "
-            f"curl -fsSL -m 300 -o /tmp/gak-pos-update.tar.gz {VIBE_UPDATE_BASE_URL}/pos-grand.tar.gz && "
-            "tar xzf /tmp/gak-pos-update.tar.gz -C /project && rm -f /tmp/gak-pos-update.tar.gz && "
-            "echo \"$REMOTE\" > /project/.aistudio-version && cp /project/.aistudio-version /project/.vibecoder-version 2>/dev/null || true; "
-            "echo \"Update ke versi $REMOTE\"; "
-            "else "
-            "echo 'Sudah versi terbaru, lewati unduhan.'; "
-            "fi; "
-            "else "
+            "apk add --no-cache git >/dev/null 2>&1; "
             "git config --global --add safe.directory /project; git -C /project pull --ff-only; "
-            "fi; "
             "cd /project && docker compose up -d --build"
         )
         cli.containers.run(
@@ -9873,39 +9860,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi.responses import JSONResponse
-
-class APIAuthForceMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        path = request.url.path
-        if path.startswith("/api/"):
-            clean_path = path.rstrip("/")
-            exemptions = [
-                "/api/auth/login",
-                "/api/health",
-                "/api/webhook/whatsapp",
-                "/api/ota/version"
-            ]
-            is_exempt = clean_path in exemptions or clean_path.startswith("/api/uploads")
-            if not is_exempt and request.method.upper() != "OPTIONS":
-                auth_header = request.headers.get("Authorization", "")
-                token = auth_header[7:] if auth_header.startswith("Bearer ") else request.cookies.get("access_token")
-                if not token:
-                    return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
-                try:
-                    payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
-                except jwt.ExpiredSignatureError:
-                    return JSONResponse(status_code=401, content={"detail": "Token expired"})
-                except jwt.InvalidTokenError:
-                    return JSONResponse(status_code=401, content={"detail": "Invalid token"})
-                user = await db.users.find_one({"id": payload["sub"]})
-                if not user or not user.get("active", True):
-                    return JSONResponse(status_code=401, content={"detail": "User not found or inactive"})
-        return await call_next(request)
-
-app.add_middleware(APIAuthForceMiddleware)
 
 # Private Network Access (PNA): Chrome/WebView memblokir panggilan cross-origin ke
 # IP privat (LAN 192.168.x / tailnet 100.x) bila respons tidak menyertakan

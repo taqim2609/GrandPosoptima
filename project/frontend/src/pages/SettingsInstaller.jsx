@@ -203,8 +203,8 @@ install-windows.bat`}</Code>
             <div className="font-bold text-xs text-[#52525B]">Alternatif via SSH (dipakai untuk update langsung di terminal Raspberry Pi):</div>
             <div>
               <div className="font-bold flex items-center gap-1.5 mb-1"><Cpu size={14} /> Update Manual Sekali Jalankan</div>
-              <Code>{`cd ${APP_DIR} && bash update-aistudio-pi.sh`}</Code>
-              <div className="text-[11px] text-[#52525B] mt-1">Cek versi di Google AI Studio → unduh → ekstrak → build &amp; restart otomatis.</div>
+              <Code>{`cd ${APP_DIR} && bash update-pi.sh`}</Code>
+              <div className="text-[11px] text-[#52525B] mt-1">Menarik pembaruan terbaru dari Git, lalu build &amp; restart otomatis.</div>
             </div>
             <div className="pt-2 border-t border-[#E4E4E7]">
               <div className="font-bold flex items-center gap-1.5 mb-1 text-[#059669]"><RefreshCw size={14} /> Pasang Auto-Update Otomatis (Setiap 03:30 Dini Hari)</div>
@@ -296,7 +296,7 @@ install-windows.bat`}</Code>
               "Di Raspberry Pi via SSH, jalankan 1 perintah bootstrap (pasang Docker, unduh kode dari Google AI Studio, install).",
               "Isi backend/.env.docker saat editor terbuka (JWT_SECRET, email/password admin), simpan.",
               "Akses http://IP-server di POS komputer / atur di APK Android.",
-              "Update: cd ~/grand-aceh-pos && bash update-aistudio-pi.sh (otomatis dari Google AI Studio).",
+              "Update: cd ~/grand-aceh-pos && bash update-pi.sh (otomatis menarik pembaruan terbaru dari Git).",
               "Backup rutin: tombol di atas atau backup-pi.sh. Lapor bug: Diagnostik.",
             ].map((s, i) => (
               <li key={s} className="flex gap-2"><span className="font-bold text-[#E63946]">{i + 1}.</span><span>{s}</span></li>

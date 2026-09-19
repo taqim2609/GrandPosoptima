@@ -12,11 +12,7 @@ NOTIFY="${1:-}"
 TS() { date "+%Y-%m-%d %H:%M:%S"; }
 echo "[$(TS)] Cek update dimulai..."
 
-# Bila update sudah dialihkan ke Google AI Studio (ada file .aistudio-version atau .vibecoder-version),
-# pakai update-aistudio-pi.sh (yang juga punya pengecekan versi + notifikasi WA).
-if [ -f .aistudio-version ] || [ -f .vibecoder-version ]; then
-  exec bash update-aistudio-pi.sh "$NOTIFY"
-fi
+# Cek update secara langsung dari Git/GitHub.
 
 # Docker butuh sudo bila user belum aktif di grup docker
 DOCKER="docker"; docker info >/dev/null 2>&1 || DOCKER="sudo docker"
