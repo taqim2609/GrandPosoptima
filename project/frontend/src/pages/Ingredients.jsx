@@ -14,10 +14,11 @@ import { can, canAny } from "@/lib/rbac";
 import {
   Boxes, Plus, Trash2, Loader2, ShoppingCart, Pencil, ClipboardList,
   Printer, MessageCircle, RefreshCw, Save, X, AlertTriangle, ScanLine, Wallet, History,
-  Tags, ShieldAlert,
+  Tags, ShieldAlert, Sparkles,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { printText } from "@/lib/print";
+import AiIngredientRecommendationModal from "@/components/AiIngredientRecommendationModal";
 
 const nf = (n) => (n == null ? "0" : Number(n).toLocaleString("id-ID", { maximumFractionDigits: 2 }));
 const fmtRp = (n) => "Rp" + Math.round(Number(n || 0)).toLocaleString("id-ID");
@@ -67,6 +68,43 @@ export default function IngredientsPage() {
   const fileRef = useRef(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanRows, setScanRows] = useState(null); // hasil edit {name,qty,unit,amount}
+  // AI Recipe & Ingredient Recommendation
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+
+  const handleApplyAiToShoppingList = (aiItems) => {
+    setList((curr) => {
+      const existing = [...(curr?.items || [])];
+      aiItems.forEach((aiItem) => {
+        const existIdx = existing.findIndex((x) => x.ingredient_id === aiItem.ingredient_id);
+        if (existIdx >= 0) {
+          existing[existIdx] = {
+            ...existing[existIdx],
+            qty: Number(aiItem.qty || 1),
+            cost: aiItem.cost || existing[existIdx].cost,
+            auto: true,
+            note: aiItem.note || existing[existIdx].note,
+          };
+        } else {
+          existing.push(aiItem);
+        }
+      });
+      return { ...(curr || { date }), items: existing };
+    });
+    setListDirty(true);
+    setTab("belanja");
+    toast.success(`${aiItems.length} bahan dimasukkan ke Daftar Belanja`);
+  };
+
+  const handleApplyAiToBulkPurchase = (aiItems) => {
+    setTab("pembelian");
+    const newRows = aiItems.map((aiItem) => ({
+      ingredient_id: aiItem.ingredient_id,
+      qty: aiItem.qty || 1,
+      cost: aiItem.cost || "",
+    }));
+    setBulkRows(newRows);
+    toast.success(`${aiItems.length} bahan siap disimpan di Pembelian Massal`);
+  };
 
   const loadIngs = useCallback(() => api.get("/ingredients").then((r) => setIngs(r.data || [])).catch(() => {}), []);
   const loadCats = useCallback(() => api.get("/ingredient-categories")
@@ -473,6 +511,13 @@ export default function IngredientsPage() {
           <div className="bg-white rounded-2xl border p-4 flex items-center gap-3 flex-wrap">
             <label className="text-xs font-bold text-[#52525B] uppercase">Tanggal</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 rounded-xl border px-3 font-num" />
+            <button
+              data-testid="ai-rekomendasi-belanja-btn"
+              onClick={() => setAiModalOpen(true)}
+              className="tap h-10 px-4 rounded-xl bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] hover:from-[#4F46E5] hover:to-[#7C3AED] text-white font-bold text-sm flex items-center gap-2 shadow-sm"
+            >
+              <Sparkles size={15} /> Rekomendasi Belanja AI
+            </button>
             <button data-testid="belanja-auto" onClick={autoSuggest} className="tap h-10 px-4 rounded-xl bg-[#4F46E5] text-white font-bold text-sm flex items-center gap-2"><RefreshCw size={14} /> Muat Otomatis</button>
             <button onClick={() => addManualRow(null)} className="tap h-10 px-4 rounded-xl bg-[#0A0A0A] text-white font-bold text-sm flex items-center gap-2"><Plus size={14} /> Baris Manual</button>
             <select value="" onChange={(e) => { if (e.target.value) { addManualRow(e.target.value); e.target.value = ""; } }} className="h-10 rounded-xl border px-3 bg-white text-sm">
@@ -535,6 +580,13 @@ export default function IngredientsPage() {
             <label className="text-xs font-bold text-[#52525B] uppercase">Tanggal riwayat</label>
             <input type="date" value={purDate} onChange={(e) => setPurDate(e.target.value)} className="h-10 rounded-xl border px-3 font-num" />
             <div className="ml-auto flex gap-2">
+              <button
+                data-testid="ai-purchase-recommendation-btn"
+                onClick={() => setAiModalOpen(true)}
+                className="tap h-11 px-4 rounded-xl bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] hover:from-[#4F46E5] hover:to-[#7C3AED] text-white font-bold text-sm flex items-center gap-2 shadow-sm"
+              >
+                <Sparkles size={15} /> Rekomendasi AI (Resep 7 Hari)
+              </button>
               <button data-testid="scan-btn" onClick={() => fileRef.current?.click()} disabled={scanBusy}
                 className="tap h-11 px-4 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold text-sm flex items-center gap-2 disabled:opacity-60">
                 {scanBusy ? <Loader2 size={15} className="animate-spin" /> : <ScanLine size={15} />} Scan Faktur (AI)
@@ -840,6 +892,14 @@ export default function IngredientsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* AI Recommendation Modal */}
+      <AiIngredientRecommendationModal
+        open={aiModalOpen}
+        onOpenChange={setAiModalOpen}
+        onApplyToShoppingList={handleApplyAiToShoppingList}
+        onApplyToBulkPurchase={handleApplyAiToBulkPurchase}
+        currentShoppingDate={date}
+      />
     </div>
   );
 }

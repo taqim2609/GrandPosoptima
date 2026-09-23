@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import api, { apiError } from "@/lib/api";
 import { rupiah } from "@/lib/format";
 import { toast } from "sonner";
-import { FlaskConical, Plus, Trash2, Loader2, Wand2, Boxes } from "lucide-react";
+import { FlaskConical, Plus, Trash2, Loader2, Wand2, Boxes, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import AiIngredientRecommendationModal from "@/components/AiIngredientRecommendationModal";
 
 // Bahan resep bisa dari MASTER BAHAN (disarankan — dipakai daftar belanja) atau produk lama.
 export default function Recipes() {
@@ -11,6 +12,7 @@ export default function Recipes() {
   const [ingredients, setIngredients] = useState([]);
   const [products, setProducts] = useState([]);
   const [open, setOpen] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
   const [form, setForm] = useState({ product_id: "", yield_units: 1, ingredients: [] });
   const [saving, setSaving] = useState(false);
 
@@ -87,7 +89,16 @@ export default function Recipes() {
           <h1 className="text-3xl font-extrabold flex items-center gap-2"><FlaskConical /> Resep &amp; HPP Otomatis</h1>
           <p className="text-sm text-[#52525B] mt-1">Susun bahan per produk; sistem menghitung HPP otomatis. Bahan diambil dari <b>Bahan Baku</b> (menu <b>Bahan &amp; Belanja</b>) agar ikut daftar belanja.</p>
         </div>
-        <button data-testid="add-recipe-btn" onClick={() => setOpen(true)} className="tap h-11 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center gap-2"><Plus size={18} /> Buat Resep</button>
+        <div className="flex items-center gap-2">
+          <button
+            data-testid="ai-recipe-recommendation-btn"
+            onClick={() => setAiModalOpen(true)}
+            className="tap h-11 px-5 rounded-xl bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] hover:from-[#4F46E5] hover:to-[#7C3AED] text-white font-bold flex items-center gap-2 shadow-sm"
+          >
+            <Sparkles size={18} /> Rekomendasi Belanja AI
+          </button>
+          <button data-testid="add-recipe-btn" onClick={() => setOpen(true)} className="tap h-11 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center gap-2"><Plus size={18} /> Buat Resep</button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -178,6 +189,12 @@ export default function Recipes() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AI Recommendation Modal */}
+      <AiIngredientRecommendationModal
+        open={aiModalOpen}
+        onOpenChange={setAiModalOpen}
+      />
     </div>
   );
 }

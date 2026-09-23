@@ -210,9 +210,26 @@ function FeatureCard({ featKey, data, onSaved }) {
           </Field>
         )}
         {isGemini && (
-          <p className="text-[11px] text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-3 py-2">
-            Mode Gemini memakai <b>default otomatis</b> (model &amp; kunci) atau <b>rotasi key</b> dari kartu "Gemini API Keys" di atas — tidak perlu memilih model/API key di sini.
-          </p>
+          <div className="space-y-3">
+            <Field label="Model Gemini AI" icon={Cpu}>
+              <select
+                data-testid={`gemini-model-select-${featKey}`}
+                value={form.model || "gemini-3.8-flash"}
+                onChange={(e) => setForm({ ...form, model: e.target.value })}
+                className="w-full h-11 rounded-xl border px-3 font-mono text-sm bg-white"
+              >
+                <option value="gemini-3.8-flash">gemini-3.8-flash (Default — Cepat &amp; Cerdas)</option>
+                <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra Ringan &amp; Hemat)</option>
+                <option value="gemini-flash-latest">gemini-flash-latest (Versi Terkini)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash (Generasi 2.5 Seimbang)</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro (Penalaran Mendalam)</option>
+                <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Deep Reasoning)</option>
+              </select>
+            </Field>
+            <p className="text-[11px] text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-3 py-2">
+              Mode Gemini memakai <b>model pilihan di atas</b> dengan autentikasi otomatis server atau <b>rotasi API key</b> dari kartu "Gemini API Keys".
+            </p>
+          </div>
         )}
         {!isGemini && (
           <div className="grid sm:grid-cols-2 gap-3">

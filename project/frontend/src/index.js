@@ -13,7 +13,9 @@ const queryClient = new QueryClient({
   },
 });
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
+const rootElement = document.getElementById("root");
+const root = ReactDOM.createRoot(rootElement);
+
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
@@ -21,6 +23,35 @@ root.render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// Safely remove the initial 'gak-init-loader' overlay once React finishes hydration/mounting
+function removeGakInitLoader() {
+  const loader = document.getElementById("gak-init-loader");
+  if (loader) {
+    loader.style.transition = "opacity 0.25s ease-out, visibility 0.25s ease-out";
+    loader.style.opacity = "0";
+    loader.style.pointerEvents = "none";
+    setTimeout(() => {
+      try {
+        if (loader.parentNode) {
+          loader.parentNode.removeChild(loader);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 300);
+  }
+}
+
+if (typeof window !== "undefined") {
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => {
+      setTimeout(removeGakInitLoader, 50);
+    });
+  } else {
+    setTimeout(removeGakInitLoader, 50);
+  }
+}
 
 // Service worker HANYA untuk versi web (PWA). Di APK Android (Capacitor) service worker
 // BERKONFLIK dengan update OTA (Capgo): SW menyajikan index/JS lama dari cache setelah

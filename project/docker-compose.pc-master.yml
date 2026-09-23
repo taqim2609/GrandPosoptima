@@ -1,0 +1,94 @@
+# ==============================================================================
+# Grand Aceh Kuliner POS — PC Master Server & WhatsApp Hub Setup
+# ==============================================================================
+# Menjalankan:
+# 1. Database (MongoDB)
+# 2. Backend POS API Server (Port 8000 / 80)
+# 3. Evolution API WhatsApp Gateway (Port 8080)
+# 4. Expose ke jaringan mesh Tailscale untuk Raspberry Pi & AI Studio
+# ==============================================================================
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: grandpos_master_mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_master_data:/data/db
+    networks:
+      - pos_tailscale_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: grandpos_master_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.docker
+    environment:
+      - UVICORN_WORKERS=4
+      - GOOGLE_CLOUD_SYNC_URL=${GOOGLE_CLOUD_SYNC_URL:-https://ais-pre-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}
+      - EVOLUTION_API_URL=http://evolution-api:8080
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-grandpos_evolution_secret_2026}
+    depends_on:
+      - mongo
+      - evolution-api
+    volumes:
+      - uploads_master_data:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - pos_tailscale_net
+
+  evolution-api:
+    image: atendai/evolution-api:v2.1.2
+    container_name: grandpos_master_evolution
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_URL=http://localhost:8080
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-grandpos_evolution_secret_2026}
+      - DATABASE_PROVIDER=local
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - STORE_MESSAGES=true
+      - STORE_MESSAGE_UP=true
+      - STORE_CONTACTS=true
+      - STORE_CHATS=true
+      - CLEAN_STORE_CLEANING_INTERVAL=7200
+      - LOG_LEVEL=INFO
+    volumes:
+      - evolution_master_instances:/evolution/instances
+      - evolution_master_store:/evolution/store
+    networks:
+      - pos_tailscale_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: ""
+    container_name: grandpos_master_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - pos_tailscale_net
+
+networks:
+  pos_tailscale_net:
+    driver: bridge
+
+volumes:
+  mongo_master_data:
+  uploads_master_data:
+  evolution_master_instances:
+  evolution_master_store:

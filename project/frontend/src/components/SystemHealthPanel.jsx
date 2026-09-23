@@ -27,6 +27,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
 
 export default function SystemHealthPanel({ embedded = false }) {
   const [data, setData] = useState(null);
@@ -402,6 +403,9 @@ export default function SystemHealthPanel({ embedded = false }) {
           </button>
         </div>
       </div>
+
+      {/* Panel Diagnostik Latensi & Packet Loss Hybrid (Local PC, Pi & Firebase) */}
+      <HybridSyncDiagnosticPanel />
 
       {/* 3 Kartu Metrik Utama: Disk Storage, DB Sync, Server Connectivity */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

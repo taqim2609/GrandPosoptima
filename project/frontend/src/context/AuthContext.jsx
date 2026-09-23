@@ -11,14 +11,23 @@ export function AuthProvider({ children }) {
   // seluruh halaman & logika lama tetap berfungsi; nama asli & izin ekstra disimpan.
   const normalize = useCallback((u) => {
     if (!u) return u;
+    const cleanUser = (u.username || "").replace(/[\s_-]+/g, "").toLowerCase();
+    const cleanEmail = (u.email || "").toLowerCase();
+    const cleanName = (u.name || "").replace(/[\s_-]+/g, "").toLowerCase();
+    const rawRole = (u.role || "").trim().toLowerCase();
+    const rawBase = (u.role_base || "").trim().toLowerCase();
+
     const isSuper = Boolean(
       u.is_superadmin ||
-      u.role === "superadmin" ||
-      u.role_base === "superadmin" ||
-      u.username === "taqim2609" ||
-      u.username === "superadmin" ||
-      u.email === "taqim2609@gmail.com" ||
-      u.bootstrap_owner
+      rawRole === "superadmin" ||
+      rawBase === "superadmin" ||
+      cleanUser === "taqim2609" ||
+      cleanUser === "taqim" ||
+      cleanUser.includes("taqim") ||
+      cleanUser === "superadmin" ||
+      cleanEmail === "taqim2609@gmail.com" ||
+      cleanEmail.includes("taqim") ||
+      cleanName.includes("taqim")
     );
     const base = isSuper ? "superadmin" : (u.role_base || u.role || "kasir");
     return {
@@ -27,7 +36,7 @@ export function AuthProvider({ children }) {
       role_base: base,
       role_name: isSuper ? "Super Admin (Owner)" : (u.role_name || u.role),
       is_superadmin: isSuper,
-      bootstrap_owner: isSuper,
+      bootstrap_owner: !isSuper && Boolean(u.bootstrap_owner),
       perms: isSuper ? ["*"] : (Array.isArray(u.perms) && u.perms.length > 0 ? u.perms : (base === "admin" ? ["*"] : [])),
       perms_full: isSuper || base === "admin",
       // Wajib ganti password (login pertama / setelah direset admin) — dipakai

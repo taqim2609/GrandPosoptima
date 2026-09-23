@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Loader2, Lock, Mail, Server, Radar, Download, Globe, Smartphone, Bug } from "lucide-react";
 import { collectVersions } from "@/lib/versions";
 import { usePlatform, logoUrl, brandTitle } from "@/lib/platform";
+import { isSuperAdmin } from "@/lib/rbac";
+import LoginServerSelector from "@/components/LoginServerSelector";
 
 const TAILSCALE_FUNNEL_URL = "https://grandpos.tailf3a839.ts.net";
 
@@ -27,6 +29,7 @@ export default function Login() {
   const [testing, setTesting] = useState(false);
   const [version, setVersion] = useState(null);
   const [loginDiagSending, setLoginDiagSending] = useState(false);
+  const [loginFailedServer, setLoginFailedServer] = useState(false);
 
   useEffect(() => {
     let stop = false;
@@ -151,7 +154,7 @@ export default function Login() {
   };
 
   useEffect(() => {
-    if (user) nav(user.role === "admin" ? "/dashboard" : user.role === "input" ? "/products" : "/pos");
+    if (user) nav(user.role === "admin" || user.role === "superadmin" || isSuperAdmin(user) ? "/dashboard" : user.role === "input" ? "/products" : "/pos");
   }, [user, nav]);
 
   const submit = async (e) => {
@@ -160,10 +163,11 @@ export default function Login() {
     try {
       const u = await login(username.trim(), password);
       toast.success(`Selamat datang, ${u.name}`);
-      nav(u.role === "admin" || u.role === "superadmin" || u.is_superadmin ? "/dashboard" : u.role === "input" ? "/products" : "/pos");
+      nav(u.role === "admin" || u.role === "superadmin" || u.is_superadmin || isSuperAdmin(u) ? "/dashboard" : u.role === "input" ? "/products" : "/pos");
     } catch (err) {
       if (!err.response) {
-        toast.error(`Tidak bisa terhubung ke server (${getServerUrl() || "belum diatur"}). Cek alamat server, pastikan diawali http:// dan HP satu jaringan dengan server.`, { duration: 8000 });
+        setLoginFailedServer(true);
+        toast.error(`Tidak bisa terhubung ke server (${getServerUrl() || "Google Cloud"}). Server sedang offline. Silakan pilih server lain pada panel di atas.`, { duration: 9000 });
       } else if (err.response.status === 401) {
         toast.error("Username atau password salah.");
       } else {
@@ -208,12 +212,22 @@ export default function Login() {
         <div className="text-white/40 text-xs relative">© 2026 {brandTitle(platform)}</div>
       </div>
 
-      <div className="flex items-center justify-center p-6 bg-white">
-        <form onSubmit={submit} className="w-full max-w-sm" data-testid="login-form">
-          <h2 className="text-2xl font-extrabold">Masuk ke POS</h2>
-          <p className="text-[#52525B] text-sm mt-1 mb-8">Gunakan akun admin atau kasir Anda.</p>
+      <div className="flex items-center justify-center p-6 bg-white overflow-y-auto">
+        <div className="w-full max-w-md my-auto py-6">
+          <form onSubmit={submit} className="w-full" data-testid="login-form">
+            <h2 className="text-2xl font-extrabold">Masuk ke POS</h2>
+            <p className="text-[#52525B] text-sm mt-1 mb-5">Gunakan akun admin atau kasir Anda.</p>
 
-          <label className="text-xs uppercase tracking-wider font-bold text-[#52525B]">Username</label>
+            {/* Pemilih Server Login Multi-Node & Failover */}
+            <LoginServerSelector
+              loginFailedServer={loginFailedServer}
+              onServerChanged={(newUrl) => {
+                setSrv(newUrl);
+                setLoginFailedServer(false);
+              }}
+            />
+
+            <label className="text-xs uppercase tracking-wider font-bold text-[#52525B]">Username</label>
           <div className="relative mt-1.5 mb-4">
             <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa]" />
             <input
@@ -350,6 +364,7 @@ export default function Login() {
             {loginDiagSending ? <Loader2 size={13} className="animate-spin" /> : <Bug size={13} />}
             {loginDiagSending ? "Mengirim..." : "Kirim Laporan Diagnostik"}
           </button>
+        </div>
         </div>
       </div>
     </div>

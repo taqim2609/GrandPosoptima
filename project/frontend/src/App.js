@@ -82,6 +82,19 @@ const wrap = (el, roles, mod) => (
 
 function App() {
   useEffect(() => {
+    // Dismiss gak-init-loader overlay once root component hydrates/mounts
+    const loader = document.getElementById("gak-init-loader");
+    if (loader) {
+      loader.style.transition = "opacity 0.25s ease-out, visibility 0.25s ease-out";
+      loader.style.opacity = "0";
+      loader.style.pointerEvents = "none";
+      setTimeout(() => {
+        try {
+          if (loader.parentNode) loader.parentNode.removeChild(loader);
+        } catch (_) {}
+      }, 300);
+    }
+
     // Branding platform (nama/logo/warna tema) tanpa perlu deploy.
     loadPlatform().catch(() => {});
     // ota.autocheck bisa dimatikan dari Pengaturan → Fitur & Integrasi.

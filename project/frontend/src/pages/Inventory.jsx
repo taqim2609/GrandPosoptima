@@ -2,9 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import api, { apiError } from "@/lib/api";
 import { rupiah } from "@/lib/format";
 import { toast } from "sonner";
-import { Boxes, PackagePlus, ClipboardCheck, Plus, Camera, ScanLine, Loader2 } from "lucide-react";
+import { Boxes, PackagePlus, ClipboardCheck, Plus, Camera, ScanLine, Loader2, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { wibToday } from "@/lib/format";
+import { syncStockToFirestore } from "@/lib/firebase";
 
 export default function Inventory() {
   const [tab, setTab] = useState("purchase");
@@ -51,8 +52,13 @@ function Purchase({ products, onDone }) {
     if (!pid) return toast.error("Pilih produk");
     if (!qty || Number(qty) <= 0) return toast.error("Qty harus > 0");
     try {
-      await api.post("/purchases", { product_id: pid, qty: Number(qty), unit_cost: Number(cost || 0), note });
+      const { data } = await api.post("/purchases", { product_id: pid, qty: Number(qty), unit_cost: Number(cost || 0), note });
       toast.success("Pembelian dicatat, stok bertambah");
+      const currentProd = products.find((p) => p.id === pid);
+      if (currentProd) {
+        const newStock = Number(currentProd.stock || 0) + Number(qty);
+        syncStockToFirestore(pid, newStock).catch(() => {});
+      }
       setPid(""); setQty(""); setCost(""); setNote("");
       load(); onDone();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
@@ -123,6 +129,7 @@ function Opname({ products, onDone }) {
     try {
       const { data } = await api.post("/stock-opname", { product_id: pid, counted_stock: Number(counted), note });
       toast.success(`Opname tersimpan. Selisih: ${data.difference}`);
+      syncStockToFirestore(pid, Number(counted)).catch(() => {});
       setPid(""); setCounted(""); setNote("");
       load(); onDone();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }

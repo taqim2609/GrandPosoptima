@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Tags, Plus, Pencil, Power, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { TYPE_LABEL } from "@/lib/format";
+import { syncCategoryToFirestore } from "@/lib/firebase";
 
 const empty = { name: "", type: "makanan", sort_order: 0, active: true };
 
@@ -20,9 +21,20 @@ export default function Categories() {
   const save = async () => {
     if (!form.name.trim()) return toast.error("Nama wajib diisi");
     try {
-      if (editId) await api.put(`/categories/${editId}`, form);
-      else await api.post("/categories", form);
-      toast.success("Kategori tersimpan"); setOpen(false); load();
+      let savedCat = null;
+      if (editId) {
+        await api.put(`/categories/${editId}`, form);
+        savedCat = { ...form, id: editId };
+      } else {
+        const res = await api.post("/categories", form);
+        savedCat = res.data;
+      }
+      if (savedCat) {
+        syncCategoryToFirestore(savedCat).catch(() => {});
+      }
+      toast.success("Kategori tersimpan & disinkronkan");
+      setOpen(false);
+      load();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
   };
   const del = async (c) => {

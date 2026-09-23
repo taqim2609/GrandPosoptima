@@ -1,18 +1,57 @@
 import axios from "axios";
 import { getServerUrl } from "./api";
 import { getBundleVersion } from "./versions";
+import { logRuntimeErrorToFirestore, testFirestoreConnection } from "./firebase";
 
 // ============================================================
-// Diagnostik & Lapor Bug — menangkap error global + menyusun
-// laporan teknis yang bisa ditempel ke chat Google AI Studio.
+// Diagnostik & Lapor Bug — menangkap error global + Firestore
+// Error Monitoring & Telemetry untuk Remote Debugging.
 // ============================================================
 
-const MAX = 25;
+const MAX = 50;
 export const errorLog = [];
+
+// Throttler to prevent flooding Firestore on infinite loop errors
+const recentErrorHashes = new Set();
 
 function push(entry) {
   errorLog.push(entry);
   if (errorLog.length > MAX) errorLog.shift();
+
+  // Send to Firestore remote debugging collection asynchronously
+  const hash = `${entry.type}_${entry.msg}_${entry.file || ""}_${entry.line || ""}`;
+  if (!recentErrorHashes.has(hash)) {
+    recentErrorHashes.add(hash);
+    setTimeout(() => recentErrorHashes.delete(hash), 15000); // 15s throttle per unique error
+
+    logRuntimeErrorToFirestore({
+      type: entry.type,
+      message: entry.msg,
+      stack: entry.stack || "",
+      file: entry.file || "",
+      line: entry.line || 0,
+      col: entry.col || 0,
+      url: entry.url || (typeof window !== "undefined" ? window.location.href : ""),
+      status: entry.status,
+      method: entry.method,
+    }).catch(() => {});
+  }
+}
+
+export function logAppError(type, message, extra = {}) {
+  const entry = {
+    t: new Date().toISOString(),
+    type: type || "custom_error",
+    msg: String(message || ""),
+    stack: extra.stack || "",
+    componentStack: extra.componentStack || extra.component_stack || "",
+    file: extra.file || "",
+    line: extra.line || 0,
+    col: extra.col || 0,
+    url: extra.url || (typeof window !== "undefined" ? window.location.href : ""),
+    ...extra,
+  };
+  push(entry);
 }
 
 let installed = false;
@@ -20,19 +59,44 @@ export function installDiag() {
   if (installed || typeof window === "undefined") return;
   installed = true;
 
+  // Test Firestore connection on app startup
+  testFirestoreConnection().then((res) => {
+    if (!res.ok) {
+      console.warn("[Firestore Monitor] Initial Firestore test connection note:", res.error);
+    } else {
+      console.info("[Firestore Monitor] Connected to Firestore error telemetry collection.");
+    }
+  });
+
   window.addEventListener("error", (e) => {
+    const errorObj = e.error || {};
     push({
-      t: new Date().toISOString(), type: "error",
-      msg: e.message || String(e.error || ""),
-      file: e.filename || "", line: e.lineno || 0, col: e.colno || 0,
+      t: new Date().toISOString(),
+      type: "runtime_error",
+      msg: e.message || String(e.error || "Unknown uncaught error"),
+      stack: errorObj.stack || "",
+      file: e.filename || "",
+      line: e.lineno || 0,
+      col: e.colno || 0,
     });
   });
 
   window.addEventListener("unhandledrejection", (e) => {
     const r = e && e.reason;
     let msg = "";
-    try { msg = r && r.message ? r.message : String(r); } catch (_) { msg = "unknown"; }
-    push({ t: new Date().toISOString(), type: "promise", msg });
+    let stack = "";
+    try {
+      msg = r && r.message ? r.message : String(r);
+      stack = r && r.stack ? r.stack : "";
+    } catch (_) {
+      msg = "unknown unhandled rejection";
+    }
+    push({
+      t: new Date().toISOString(),
+      type: "unhandled_rejection",
+      msg,
+      stack,
+    });
   });
 
   try {
@@ -46,11 +110,19 @@ export function installDiag() {
           const d = err.response && err.response.data && err.response.data.detail;
           if (d) detail = typeof d === "string" ? d : JSON.stringify(d);
         } catch (_) {}
-        push({
-          t: new Date().toISOString(), type: "api",
-          method: (cfg.method || "GET").toUpperCase(),
-          url: cfg.url || "", status, msg: detail,
-        });
+
+        // Only log 5xx server failures or network disconnects to Firestore
+        if (status >= 500 || status === 0 || !err.response) {
+          push({
+            t: new Date().toISOString(),
+            type: "api_network_error",
+            method: (cfg.method || "GET").toUpperCase(),
+            url: cfg.url || "",
+            status,
+            msg: detail,
+            stack: err.stack || "",
+          });
+        }
         return Promise.reject(err);
       }
     );

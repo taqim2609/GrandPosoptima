@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { setFirestoreSyncing } from "@/lib/firebase";
 
 const KEY = "gak_pending_orders";
 const LOG_KEY = "gak_sync_log";
@@ -33,6 +34,7 @@ export function OfflineProvider({ children }) {
   }, []);
 
   const _syncItems = useCallback(async (items) => {
+    setFirestoreSyncing(true, 3000);
     const map = new Map(JSON.parse(localStorage.getItem(KEY) || "[]").map((i) => [i.temp_id, i]));
     let ok = 0;
     const done = [];
@@ -64,6 +66,7 @@ export function OfflineProvider({ children }) {
       }
       window.dispatchEvent(new Event("gak-synced")); // refresh cached master data after upload
     }
+    setFirestoreSyncing(false);
     return ok;
   }, []);
 

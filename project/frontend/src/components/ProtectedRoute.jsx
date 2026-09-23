@@ -1,12 +1,12 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2, ShieldOff, LogOut } from "lucide-react";
-import { can, canAny, roleBaseOf } from "@/lib/rbac";
+import { can, canAny, roleBaseOf, isSuperAdmin } from "@/lib/rbac";
 import { NAV_ITEMS } from "@/lib/navItems";
 import ForceChangePassword from "@/components/ForceChangePassword";
 
 export const homeFor = (role) =>
-  role === "admin" ? "/dashboard" : role === "input" ? "/products" : "/pos";
+  role === "admin" || role === "superadmin" ? "/dashboard" : role === "input" ? "/products" : "/pos";
 
 // Modul untuk halaman "rumah" tiap role dasar (dipakai memilih halaman tujuan
 // bila halaman rumah itu sendiri tidak diizinkan).
@@ -15,6 +15,7 @@ const HOME_MOD = { "/dashboard": "dashboard", "/products": "produk", "/pos": "po
 /** Halaman pertama yang BOLEH dibuka user (dipakai saat mengalihkan akses ditolak).
  * Penting agar tidak terjadi lingkaran pengalihan ketika modul "dashboard" dicabut. */
 export function landingFor(user) {
+  if (isSuperAdmin(user)) return "/dashboard";
   const home = homeFor(roleBaseOf(user));
   const hm = HOME_MOD[home];
   if (hm && can(user, hm)) return home;

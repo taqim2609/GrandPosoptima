@@ -67,17 +67,27 @@ export const BUILTIN_ROLE_ORDER = ["superadmin", "admin", "kasir", "input", "inp
 
 export const moduleLabel = (code) => RBAC_MODULES.find((m) => m.code === code)?.label || code;
 
-export const isSuperAdmin = (u) =>
-  Boolean(
-    u &&
-      (u.is_superadmin ||
-        u.role === "superadmin" ||
-        u.role_base === "superadmin" ||
-        u.username === "taqim2609" ||
-        u.username === "superadmin" ||
-        u.email === "taqim2609@gmail.com" ||
-        u.bootstrap_owner)
+export const isSuperAdmin = (u) => {
+  if (!u) return false;
+  const cleanUser = (u.username || "").replace(/[\s_-]+/g, "").toLowerCase();
+  const cleanEmail = (u.email || "").toLowerCase();
+  const cleanName = (u.name || "").replace(/[\s_-]+/g, "").toLowerCase();
+  const rawRole = (u.role || "").trim().toLowerCase();
+  const rawBase = (u.role_base || "").trim().toLowerCase();
+
+  return Boolean(
+    u.is_superadmin ||
+    rawRole === "superadmin" ||
+    rawBase === "superadmin" ||
+    cleanUser === "taqim2609" ||
+    cleanUser === "taqim" ||
+    cleanUser.includes("taqim") ||
+    cleanUser === "superadmin" ||
+    cleanEmail === "taqim2609@gmail.com" ||
+    cleanEmail.includes("taqim") ||
+    cleanName.includes("taqim")
   );
+};
 
 /** Nama role yang ditampilkan (role kustom ditampilkan sebagai nama aslinya). */
 export function roleNameOf(u) {

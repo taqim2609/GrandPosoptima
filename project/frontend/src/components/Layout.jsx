@@ -8,14 +8,23 @@ import { loadFeatures, useFeatures } from "@/lib/features";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePlatform, logoUrl } from "@/lib/platform";
-import { canAny, roleNameOf } from "@/lib/rbac";
+import { canAny, roleNameOf, isSuperAdmin } from "@/lib/rbac";
 import { useUI, orderNav, navLabel } from "@/lib/ui";
 import { NAV_ITEMS } from "@/lib/navItems";
+import {
+  subscribeFirestoreSync,
+  testFirestoreConnection,
+  firestoreDatabaseId,
+  getLastSyncInfo,
+} from "@/lib/firebase";
+import { VisualSyncBadge } from "@/components/VisualSyncStatus";
+import VisualSyncStatusCard from "@/components/VisualSyncStatus";
 import {
   LayoutDashboard, ShoppingCart, Package, Boxes,
   Clock, FileSpreadsheet, LogOut, ShieldCheck, Menu, X, Printer,
   Wallet, Wifi, WifiOff, RefreshCw, CloudOff, Database, KeyRound, Settings, Bot, BarChart3,
-  Users, Tag, CalendarCheck, FlaskConical, Ticket, Trash2, ChevronDown, ChevronUp, Info,
+  Users, Tag, CalendarCheck, FlaskConical, Ticket, Trash2, ChevronDown, ChevronUp, Info, MessageCircle,
+  Cloud, CheckCircle2,
 } from "lucide-react";
 
 function ChangePasswordDialog({ open, onClose }) {
@@ -110,9 +119,91 @@ function HeaderConnectionBanner({ onOpenQueue }) {
   );
 }
 
-function HeaderConnectionBadge({ onOpenQueue }) {
+function HeaderFirestoreBadge() {
+  const [syncing, setSyncing] = useState(false);
+  const [tested, setTested] = useState(null);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    return subscribeFirestoreSync((active) => {
+      setSyncing(active);
+    });
+  }, []);
+
+  // Initial connection test on mount
+  useEffect(() => {
+    testFirestoreConnection().then((res) => {
+      setTested(res);
+    });
+  }, []);
+
+  const handleManualVerify = async (e) => {
+    e.preventDefault();
+    if (testing) return;
+    setTesting(true);
+    toast.info("Memverifikasi persistensi database Firestore...", { duration: 1200 });
+    const res = await testFirestoreConnection();
+    setTested(res);
+    setTesting(false);
+    if (res.ok) {
+      toast.success(`Firestore Terhubung Aktif (${res.latencyMs}ms) — Persistensi Cloud 100% Terverifikasi!`, {
+        description: `Database ID: ${res.databaseId}`,
+      });
+    } else {
+      toast.warning("Status Firestore: Offline / Cache lokal aktif", {
+        description: res.error || "Koneksi cloud sedang dialihkan ke cache lokal",
+      });
+    }
+  };
+
+  const isConnected = tested?.ok !== false;
+
+  return (
+    <button
+      type="button"
+      data-testid="header-firestore-status"
+      onClick={handleManualVerify}
+      title={`Firestore Cloud Database: ${isConnected ? "Terhubung & Aktif" : "Offline / Cache Lokal"} (${firestoreDatabaseId}) - Klik untuk uji persistensi`}
+      className={`tap h-9 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-all ${
+        syncing || testing
+          ? "bg-[#EFF6FF] text-[#1D4ED8] border-[#93C5FD] shadow-xs ring-2 ring-blue-400/20"
+          : isConnected
+          ? "bg-[#F0FDF4] text-[#15803D] border-[#BBF7D0] hover:bg-[#DCFCE7]"
+          : "bg-[#FFFBEB] text-[#B45309] border-[#FDE68A] hover:bg-[#FEF3C7]"
+      }`}
+    >
+      <div className="relative flex items-center justify-center">
+        {syncing || testing ? (
+          <RefreshCw size={13} className="text-[#2563EB] animate-spin" />
+        ) : (
+          <Database size={13} className={isConnected ? "text-[#16A34A]" : "text-[#D97706]"} />
+        )}
+        {(syncing || testing) && (
+          <span className="absolute -top-1 -right-1 flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+          </span>
+        )}
+      </div>
+      <span className="hidden sm:inline">
+        {syncing || testing ? "Firestore Sinkron..." : "Firestore Cloud"}
+      </span>
+      <span className="sm:hidden">
+        {syncing || testing ? "Sync..." : "DB"}
+      </span>
+      {tested?.ok && !syncing && !testing && (
+        <span className="hidden lg:inline text-[10px] font-num px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold">
+          {tested.latencyMs ? `${tested.latencyMs}ms` : "Live"}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function HeaderConnectionBadge({ onOpenQueue, onOpenSyncModal }) {
   const { online, pendingCount, syncing, syncNow } = useOffline();
   const [shift, setShift] = useState(undefined);
+  const [waStatus, setWaStatus] = useState({ status: "checking", state: "checking", message: "" });
 
   useEffect(() => {
     if (!online) return;
@@ -121,8 +212,54 @@ function HeaderConnectionBadge({ onOpenQueue }) {
       .catch(() => setShift(null));
   }, [online]);
 
+  // Polling WhatsApp Evolution API status every 15 seconds
+  useEffect(() => {
+    let timer = null;
+    const fetchWaStatus = async () => {
+      try {
+        const res = await api.get("/whatsapp/status");
+        setWaStatus(res.data || { status: "connected", state: "open" });
+      } catch (e) {
+        setWaStatus({ status: "disconnected", state: "close", message: "Gateway Offline" });
+      }
+    };
+
+    if (online) {
+      fetchWaStatus();
+      timer = setInterval(fetchWaStatus, 15000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [online]);
+
+  const isWaActive = waStatus.status === "connected" || waStatus.state === "open";
+
   return (
     <div className="flex items-center gap-2">
+      {/* Real-time Visual Connectivity & Last Sync Status Component */}
+      <VisualSyncBadge onClick={onOpenSyncModal} />
+
+      {/* WhatsApp Evolution API Status Indicator */}
+      <NavLink
+        to="/whatsapp"
+        data-testid="header-wa-indicator"
+        title={
+          isWaActive
+            ? `WhatsApp Gateway Aktif (${waStatus.instance || "Evolution API Cloud Run"}) - Klik untuk kelola`
+            : "WhatsApp Gateway Terputus / Perlu Scan QR - Klik untuk menghubungkan"
+        }
+        className={`tap h-9 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-colors ${
+          isWaActive
+            ? "bg-[#F0FDF4] text-[#15803D] border-[#BBF7D0] hover:bg-[#DCFCE7]"
+            : "bg-[#FFF1F2] text-[#BE123C] border-[#FECDD3] hover:bg-[#FFE4E6] animate-pulse"
+        }`}
+      >
+        <MessageCircle size={14} className={isWaActive ? "text-[#16A34A]" : "text-[#E11D48]"} />
+        <span className="hidden md:inline">{isWaActive ? "WA Gateway Aktif" : "WA Gateway Offline"}</span>
+        <span className="md:hidden">WA</span>
+      </NavLink>
+
       {shift !== undefined && (
         <NavLink
           to="/shift"
@@ -149,18 +286,6 @@ function HeaderConnectionBadge({ onOpenQueue }) {
           )}
         </NavLink>
       )}
-      <div
-        data-testid="header-conn-status"
-        title={online ? "Koneksi ke server normal" : "Koneksi terputus, data tersimpan di penyimpanan lokal"}
-        className={`h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-colors ${
-          online
-            ? "bg-[#F0FDF4] text-[#166534] border-[#BBF7D0]"
-            : "bg-[#FEF2F2] text-[#991B1B] border-[#FECACA] animate-pulse"
-        }`}
-      >
-        {online ? <Wifi size={14} className="text-[#16A34A]" /> : <WifiOff size={14} className="text-[#DC2626]" />}
-        <span>{online ? "Online" : "Offline (Lokal)"}</span>
-      </div>
       {pendingCount > 0 && (
         <button
           data-testid="header-pending-btn"
@@ -175,6 +300,7 @@ function HeaderConnectionBadge({ onOpenQueue }) {
     </div>
   );
 }
+
 
 function OfflineStatus({ onOpenQueue }) {
   const { online, pendingCount, syncing, syncNow, syncLog } = useOffline();
@@ -360,6 +486,7 @@ export default function Layout({ children }) {
   const nav = useNavigate();
   const [queueOpen, setQueueOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { feat } = useFeatures();
   const ui = useUI();
@@ -369,9 +496,10 @@ export default function Layout({ children }) {
   // Menu mengikuti MODUL (RBAC) — termasuk role `admin` yang boleh dibatasi Super Admin.
   // Item tanpa modul (mis. Perangkat) tetap memakai daftar role.
   const canNav = (n) => {
+    if (isSuperAdmin(user)) return true;
     const mods = n.mods || (n.mod ? [n.mod] : []);
     if (mods.length) return canAny(user, mods);
-    return (n.roles || []).includes(user?.role);
+    return (n.roles || []).includes(user?.role) || user?.role === "superadmin";
   };
   return (
     <div className="flex h-screen overflow-hidden bg-[#F4F5F7]">
@@ -389,7 +517,7 @@ export default function Layout({ children }) {
             {platform?.app_name || "Grand Aceh Kuliner"}
           </div>
         </div>
-        <HeaderConnectionBadge onOpenQueue={() => setQueueOpen(true)} />
+        <HeaderConnectionBadge onOpenQueue={() => setQueueOpen(true)} onOpenSyncModal={() => setSyncModalOpen(true)} />
       </header>
 
       {sidebarOpen && <div data-testid="sidebar-backdrop" onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />}
@@ -465,6 +593,11 @@ export default function Layout({ children }) {
       </main>
       <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
       <SyncQueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
+      <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden border-0 bg-transparent shadow-none">
+          <VisualSyncStatusCard className="border-0 shadow-2xl" />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

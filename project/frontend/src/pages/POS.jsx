@@ -13,10 +13,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import VoidDialog from "@/components/VoidDialog";
+import LazyProductImage from "@/components/LazyProductImage";
 import {
   Utensils, ShoppingBag, Store, Plus, Minus, Trash2, Armchair,
   Search, Receipt, X, CheckCircle2, Layers, Database, ScanLine, Clock, Play, Printer, Wifi, WifiOff, RefreshCw, CloudOff,
-  ShoppingCart, ChevronUp, ChevronDown, Lock, ArrowRight, Wallet, LayoutDashboard,
+  ShoppingCart, ChevronUp, ChevronDown, Lock, ArrowRight, Wallet, LayoutDashboard, Zap,
+  ArrowRightLeft, RotateCcw, AlertTriangle, MessageCircle,
 } from "lucide-react";
 
 const ORDER_TYPES = [
@@ -29,7 +31,7 @@ const ORDER_TYPES = [
    Memoized Sub-Components for High Performance POS on Android / Sunmi T2
    ========================================================================== */
 
-const ProductCard = memo(function ProductCard({ product, onAdd }) {
+const ProductCard = memo(function ProductCard({ product, onAdd, priority = false }) {
   const out = product.sold_out || (product.track_stock && product.stock <= 0);
   const handleClick = useCallback(() => {
     if (!out) onAdd(product);
@@ -45,13 +47,14 @@ const ProductCard = memo(function ProductCard({ product, onAdd }) {
       }`}
     >
       <div className="h-24 bg-[#F4F5F7] overflow-hidden">
-        {product.image ? (
-          <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <div className="h-full grid place-items-center text-[#d4d4d8]">
-            <Store size={28} />
-          </div>
-        )}
+        <LazyProductImage
+          src={product.image}
+          alt={product.name}
+          className="h-full w-full object-cover"
+          placeholderIcon={Store}
+          iconSize={28}
+          priority={priority}
+        />
       </div>
       {out && (
         <span className="absolute top-2 left-2 bg-[#EF4444] text-white text-[10px] font-bold px-2 py-0.5 rounded">
@@ -79,8 +82,8 @@ const ProductGrid = memo(function ProductGrid({ products = [], onAdd }) {
   }
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-      {safeProducts.map((p) => (
-        <ProductCard key={p.id} product={p} onAdd={onAdd} />
+      {safeProducts.map((p, idx) => (
+        <ProductCard key={p.id} product={p} onAdd={onAdd} priority={idx < 8} />
       ))}
     </div>
   );
@@ -197,10 +200,21 @@ export default function POS() {
   const [biz, setBiz] = useState(bizCache());
   const [orderType, setOrderType] = useState("take_away");
   const ui = useUI();
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [tables, setTables] = useState([]);
-  const [pms, setPms] = useState([]);
+
+  // Instant SWR First-Paint Initializer: Baca cache secara sinkron supaya render frame 1 (0ms) langsung tampil lengkap
+  const initialCache = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("gak_pos_cache");
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }, []);
+
+  const [products, setProducts] = useState(() => initialCache?.products || []);
+  const [categories, setCategories] = useState(() => initialCache?.categories || []);
+  const [tables, setTables] = useState(() => initialCache?.tables || []);
+  const [pms, setPms] = useState(() => initialCache?.pms || []);
   const [activeCat, setActiveCat] = useState("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]);
@@ -210,6 +224,8 @@ export default function POS() {
   const [discVal, setDiscVal] = useState(0);
   const [payOpen, setPayOpen] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
+  const [moveTableOpen, setMoveTableOpen] = useState(false);
+  const [moveSourceTable, setMoveSourceTable] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [cacheAt, setCacheAt] = useState(() => localStorage.getItem("gak_pos_cache_at"));
   const [shift, setShift] = useState(undefined);
@@ -218,7 +234,6 @@ export default function POS() {
   const [openingShiftLoading, setOpeningShiftLoading] = useState(false);
   // Bill terbuka (dine-in) yang sedang dibatalkan lewat VoidDialog
   const [voidBill, setVoidBill] = useState(null);
-  const [barcode, setBarcode] = useState("");
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -292,13 +307,36 @@ export default function POS() {
     return (categories || []).filter((c) => relevantTypes.includes(c.type));
   }, [categories, relevantTypes]);
 
+  const quickKeyProducts = useMemo(() => {
+    if (!products || products.length === 0) return [];
+    const popularKeywords = ["mie aceh", "teh tarik", "kopi", "canai", "ayam tangkap", "timun"];
+    const matches = [];
+    popularKeywords.forEach(keyword => {
+      const found = products.find(p => p && p.active && p.name?.toLowerCase().includes(keyword) && relevantTypes.includes(p.type));
+      if (found && !matches.some(m => m.id === found.id)) matches.push(found);
+    });
+    let idx = 0;
+    while (matches.length < 6 && idx < products.length) {
+      const p = products[idx];
+      if (p && p.active && relevantTypes.includes(p.type) && !matches.some(m => m.id === p.id)) {
+        matches.push(p);
+      }
+      idx++;
+    }
+    return matches.slice(0, 6);
+  }, [products, relevantTypes]);
+
   const visibleProducts = useMemo(() => {
+    const q = (search || "").trim().toLowerCase();
     return (products || []).filter((p) => {
       if (!p) return false;
       if (!relevantTypes.includes(p.type)) return false;
       if (activeCat !== "all" && p.category_id !== activeCat) return false;
-      if (search && !p.name?.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
+      if (!q) return true;
+      const matchName = p.name?.toLowerCase().includes(q);
+      const matchSku = (p.sku || "").toLowerCase().includes(q);
+      const matchBarcode = (p.barcode || "").toLowerCase().includes(q);
+      return matchName || matchSku || matchBarcode;
     });
   }, [products, relevantTypes, activeCat, search]);
 
@@ -408,14 +446,42 @@ export default function POS() {
       setOpeningShiftLoading(false);
     }
   };
-  const handleBarcode = (e) => {
+  const handleSearchKeyDown = (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    const code = barcode.trim();
-    if (!code) return;
-    const found = products.find((p) => (p.sku || "").toLowerCase() === code.toLowerCase());
-    if (found) { addItem(found); setBarcode(""); }
-    else { toast.error(`Produk kode "${code}" tidak ditemukan`); setBarcode(""); }
+    const term = (search || "").trim();
+    if (!term) return;
+
+    const termLower = term.toLowerCase();
+    // 1. Cek exact match SKU atau barcode
+    let matched = (products || []).find(
+      (p) =>
+        relevantTypes.includes(p.type) &&
+        ((p.sku || "").toLowerCase() === termLower || (p.barcode || "").toLowerCase() === termLower)
+    );
+    // 2. Cek exact match nama
+    if (!matched) {
+      matched = (products || []).find(
+        (p) => relevantTypes.includes(p.type) && p.name?.toLowerCase() === termLower
+      );
+    }
+    // 3. Bila hanya 1 produk yang cocok di daftar hasil pencarian
+    if (!matched && visibleProducts.length === 1) {
+      matched = visibleProducts[0];
+    }
+
+    if (matched) {
+      const out = matched.sold_out || (matched.track_stock && matched.stock <= 0);
+      if (out) {
+        toast.error(`Produk "${matched.name}" habis / sold out`);
+      } else {
+        addItem(matched);
+        setSearch("");
+        toast.success(`Ditambahkan: ${matched.name}`);
+      }
+    } else {
+      toast.error(`Produk atau SKU "${term}" tidak ditemukan`);
+    }
   };
 
   const openTablePicker = () => setTableOpen(true);
@@ -431,6 +497,81 @@ export default function POS() {
       toast.info(`Open bill ${data.order_number} dimuat`);
     } else {
       setCurrentOrderId(null); // keep items the cashier already added; assign them to this table
+    }
+  };
+
+  const handleOpenMoveTable = (sourceTbl) => {
+    const src = sourceTbl || table;
+    if (!src) {
+      toast.error("Pilih meja asal terlebih dahulu");
+      return;
+    }
+    setMoveSourceTable(src);
+    setMoveTableOpen(true);
+  };
+
+  const doMoveTable = async (targetTbl) => {
+    if (!targetTbl) return toast.error("Pilih meja tujuan");
+    const src = moveSourceTable || table;
+    if (!src) return toast.error("Meja asal tidak valid");
+    if (src.id === targetTbl.id) return toast.error("Meja tujuan tidak boleh sama dengan meja asal");
+
+    try {
+      const res = await api.post("/tables/move", {
+        from_table_id: src.id,
+        to_table_id: targetTbl.id,
+        order_id: currentOrderId || src.open_order_id || null,
+      });
+      toast.success(res.data?.detail || `Meja berhasil dipindahkan dari ${src.name} ke ${targetTbl.name}`);
+      if (table?.id === src.id) {
+        setTable(targetTbl);
+      }
+      setMoveTableOpen(false);
+      setMoveSourceTable(null);
+      load();
+    } catch (e) {
+      toast.error(apiError(e.response?.data?.detail));
+    }
+  };
+
+  const removeTableFromCart = () => {
+    if (!table) return;
+    if (currentOrderId) {
+      if (!window.confirm(`Lepas pilihan meja "${table.name}" dari pesanan aktif ini?`)) return;
+    }
+    setTable(null);
+    toast.info("Pilihan meja dilepas dari transaksi");
+  };
+
+  const clearTable = async (t) => {
+    if (!t) return;
+    if (!window.confirm(`Kosongkan status meja ${t.name}?`)) return;
+    try {
+      const { data } = await api.post(`/tables/${t.id}/clear`);
+      toast.success(data.detail || `Meja ${t.name} berhasil dikosongkan`);
+      if (table?.id === t.id) {
+        setTable(null);
+        setCurrentOrderId(null);
+      }
+      load();
+    } catch (e) {
+      toast.error(apiError(e.response?.data?.detail));
+    }
+  };
+
+  const deleteTable = async (t) => {
+    if (!t) return;
+    if (!window.confirm(`Hapus permanen meja ${t.name}?`)) return;
+    try {
+      const { data } = await api.delete(`/tables/${t.id}`);
+      toast.success(data.detail || `Meja ${t.name} berhasil dihapus`);
+      if (table?.id === t.id) {
+        setTable(null);
+        setCurrentOrderId(null);
+      }
+      load();
+    } catch (e) {
+      toast.error(apiError(e.response?.data?.detail));
     }
   };
 
@@ -784,30 +925,90 @@ export default function POS() {
 
         {/* product grid */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <div className="p-2.5 sm:p-3 border-b bg-white space-y-2 shrink-0">
-            <div className="relative">
-              <ScanLine size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#E63946]" />
+          <div className="p-2.5 sm:p-3 border-b bg-white shrink-0">
+            <div className="relative flex items-center">
+              <div className="absolute left-3.5 flex items-center gap-1.5 pointer-events-none text-[#E63946]">
+                <Search size={18} />
+                <span className="w-px h-3.5 bg-zinc-200" />
+                <ScanLine size={17} className="text-zinc-400" />
+              </div>
               <input
-                data-testid="barcode-input"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                onKeyDown={handleBarcode}
-                placeholder="Scan / ketik SKU produk lalu Enter"
-                className="w-full h-11 sm:h-12 pl-10 pr-3 rounded-xl border-2 border-[#E63946] outline-none font-num text-sm"
+                id="pos-search-barcode-input"
+                data-testid="product-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Cari nama produk atau scan / ketik SKU (lalu Enter)..."
+                className="w-full h-11 sm:h-12 pl-16 pr-24 rounded-xl border-2 border-zinc-200 focus:border-[#E63946] focus:ring-2 focus:ring-[#E63946]/10 outline-none text-sm transition-all shadow-xs"
                 autoFocus
               />
-            </div>
-            <div className="relative">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa]" />
-              <input
-                data-testid="product-search"
-                value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari nama produk..."
-                className="w-full h-10 sm:h-12 pl-10 pr-3 rounded-xl border border-[#E4E4E7] focus:border-[#E63946] outline-none text-sm"
-              />
+              <div className="absolute right-2.5 flex items-center gap-1.5">
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors"
+                    title="Hapus pencarian"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+                <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-100 border border-zinc-200 text-[11px] font-mono font-semibold text-zinc-500">
+                  <span>Enter ↵</span>
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto no-scrollbar p-2.5 sm:p-3">
+            {quickKeyProducts.length > 0 && (
+              <div className="mb-4 bg-zinc-50/50 rounded-2xl p-3 border border-zinc-200/60">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] uppercase tracking-wider font-extrabold text-[#E63946] flex items-center gap-1">
+                    <Zap size={12} className="fill-[#E63946]" /> Quick Keys — Paling Sering Dipesan
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-bold hidden sm:inline">Sentuh cepat untuk menambah ke keranjang</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-2">
+                  {quickKeyProducts.map((p) => {
+                    const cartItem = cart.find(item => item.product_id === p.id);
+                    const qty = cartItem ? cartItem.qty : 0;
+                    const out = p.sold_out || (p.track_stock && p.stock <= 0);
+                    return (
+                      <button
+                        key={`quick-${p.id}`}
+                        data-testid={`quick-key-${p.id}`}
+                        onClick={() => {
+                          if (!out) addItem(p);
+                        }}
+                        disabled={out}
+                        className={`tap relative h-12 rounded-xl px-2.5 text-left border flex items-center justify-between transition-all duration-150 ${
+                          qty > 0 
+                            ? "bg-rose-50 border-[#E63946] text-[#E63946] font-bold shadow-xs" 
+                            : "bg-white border-zinc-200 hover:border-[#E63946] text-zinc-800"
+                        } ${out ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        <div className="min-w-0 flex-1 pr-1.5">
+                          <div className="font-extrabold text-[11px] truncate leading-tight">{p.name}</div>
+                          <div className="text-[10px] text-zinc-500 font-semibold mt-0.5">{rupiah(p.price)}</div>
+                        </div>
+                        
+                        {qty > 0 ? (
+                          <span className="h-5 min-w-5 px-1 rounded-lg bg-[#E63946] text-white text-[10px] font-black flex items-center justify-center scale-up">
+                            {qty}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400 shrink-0 text-xs font-bold bg-zinc-50 border border-zinc-200 rounded-lg h-4.5 w-4.5 flex items-center justify-center">+</span>
+                        )}
+                        
+                        {out && (
+                          <span className="absolute inset-0 bg-white/80 flex items-center justify-center text-[10px] font-extrabold text-rose-600 rounded-xl">Habis</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <ProductGrid products={visibleProducts} onAdd={addItem} />
           </div>
         </div>
@@ -851,8 +1052,29 @@ export default function POS() {
             </div>
           </div>
           {orderType === "dine_in" && table && (
-            <div className="px-4 py-2 text-xs sm:text-sm font-bold ot-dine_in border-y shrink-0">
-              Meja: {table.name} {currentOrderId ? "· Open Bill" : ""}
+            <div className="px-3 py-2 text-xs sm:text-sm font-bold ot-dine_in border-y shrink-0 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 truncate">
+                <Armchair size={15} className="shrink-0" />
+                <span className="truncate">Meja: {table.name} {currentOrderId ? "· Open Bill" : ""}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  data-testid="pos-move-table-btn"
+                  onClick={() => handleOpenMoveTable(table)}
+                  title="Pindah Meja ini ke meja lain"
+                  className="px-2 py-1 rounded-lg bg-white text-[#0A0A0A] hover:bg-[#F4F5F7] text-[11px] font-bold flex items-center gap-1 shadow-xs border"
+                >
+                  <ArrowRightLeft size={11} /> Pindah
+                </button>
+                <button
+                  data-testid="pos-remove-table-btn"
+                  onClick={removeTableFromCart}
+                  title="Hapus / lepas pilihan meja dari transaksi ini"
+                  className="p-1 rounded-lg bg-[#FEE2E2] text-[#EF4444] hover:bg-[#FCA5A5] text-[11px] font-bold flex items-center gap-1"
+                >
+                  <X size={13} />
+                </button>
+              </div>
             </div>
           )}
           <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2 min-h-0 bg-[#FAFAFA]">
@@ -977,8 +1199,23 @@ export default function POS() {
         </button>
       </div>
 
-      <TableDialog open={tableOpen} onClose={() => setTableOpen(false)} tables={tables} onSelect={selectTable}
-        onCancelBill={(t) => { setTableOpen(false); setVoidBill({ id: t.open_order_id, order_number: t.name, status: "open", order_type: "dine_in", items: [], total: 0 }); }} />
+      <TableDialog
+        open={tableOpen}
+        onClose={() => setTableOpen(false)}
+        tables={tables}
+        onSelect={selectTable}
+        onMoveTable={(t) => { setTableOpen(false); handleOpenMoveTable(t); }}
+        onClearTable={clearTable}
+        onDeleteTable={deleteTable}
+        onCancelBill={(t) => { setTableOpen(false); setVoidBill({ id: t.open_order_id, order_number: t.name, status: "open", order_type: "dine_in", items: [], total: 0 }); }}
+      />
+      <MoveTableDialog
+        open={moveTableOpen}
+        onClose={() => { setMoveTableOpen(false); setMoveSourceTable(null); }}
+        sourceTable={moveSourceTable}
+        tables={tables}
+        onConfirm={doMoveTable}
+      />
       {/* Dialog input berat utk produk jual per berat */}
       <Dialog open={weightOpen} onOpenChange={(v) => { if (!v) setWeightOpen(false); }}>
         <DialogContent className="max-w-sm">
@@ -1023,42 +1260,217 @@ export default function POS() {
   );
 }
 
-function TableDialog({ open, onClose, tables = [], onSelect, onCancelBill }) {
+function TableDialog({
+  open,
+  onClose,
+  tables = [],
+  onSelect,
+  onCancelBill,
+  onMoveTable,
+  onClearTable,
+  onDeleteTable,
+}) {
   const safeTables = Array.isArray(tables) ? tables : [];
   const areas = [...new Set(safeTables.filter((t) => t?.active).map((t) => t.area).filter(Boolean))];
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>Pilih Meja (Dine-In)</DialogTitle></DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto space-y-4">
-          {safeTables.filter((t) => t?.active).length === 0 && <p className="text-sm text-[#52525B]">Belum ada meja aktif. Tambahkan di menu Meja.</p>}
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Armchair size={20} />
+            Pilih &amp; Kelola Meja (Dine-In)
+          </DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[65vh] overflow-y-auto space-y-5 pr-1">
+          {safeTables.filter((t) => t?.active).length === 0 && (
+            <p className="text-sm text-[#52525B]">Belum ada meja aktif. Tambahkan di menu Meja.</p>
+          )}
           {areas.map((area) => (
-            <div key={area}>
-              <div className="text-xs uppercase tracking-wider font-bold text-[#52525B] mb-2">{area}</div>
-              <div className="grid grid-cols-5 gap-2">
+            <div key={area} className="space-y-2">
+              <div className="text-xs uppercase tracking-wider font-bold text-[#52525B] flex items-center justify-between">
+                <span>{area}</span>
+                <span className="text-[11px] font-normal text-[#71717A]">
+                  {safeTables.filter((t) => t?.active && t?.area === area && t.status !== "open_bill").length} kosong
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
                 {safeTables.filter((t) => t?.active && t?.area === area).map((t) => (
-                  <div key={t.id} className="flex flex-col gap-1">
+                  <div key={t.id} className="flex flex-col gap-1.5 p-2 rounded-xl border bg-white shadow-2xs">
                     <button
-                      data-testid={`table-opt-${t.id}`} onClick={() => onSelect(t)}
-                      className={`tap h-14 rounded-lg border-2 font-bold flex flex-col items-center justify-center ${
-                        t.status === "open_bill" ? "tbl-open_bill" : "tbl-empty"
+                      data-testid={`table-opt-${t.id}`}
+                      onClick={() => onSelect(t)}
+                      className={`tap w-full h-14 rounded-lg border-2 font-bold flex flex-col items-center justify-center transition ${
+                        t.status === "open_bill"
+                          ? "tbl-open_bill border-[#F59E0B]"
+                          : "tbl-empty hover:border-[#E63946]"
                       }`}
                     >
-                      <span className="text-sm">{t.name}</span>
-                      <span className="text-[9px] mt-0.5">{t.status === "open_bill" ? "OPEN BILL" : `${t.capacity} kursi`}</span>
+                      <span className="text-sm font-black">{t.name}</span>
+                      <span className="text-[10px] mt-0.5 opacity-90">
+                        {t.status === "open_bill" ? "OPEN BILL" : `${t.capacity || 4} kursi`}
+                      </span>
                     </button>
-                    {t.status === "open_bill" && t.open_order_id && onCancelBill && (
-                      <button data-testid={`cancel-bill-${t.id}`} onClick={() => onCancelBill(t)}
-                        title="Batalkan bill terbuka (alasan wajib, tercatat)"
-                        className="tap h-7 rounded-lg bg-[#FEE2E2] text-[#B91C1C] text-[11px] font-bold">
-                        Batalkan
-                      </button>
-                    )}
+
+                    {/* Table Actions Toolbar */}
+                    <div className="flex items-center gap-1 justify-between pt-1 border-t border-zinc-100">
+                      {t.status === "open_bill" ? (
+                        <>
+                          <button
+                            data-testid={`move-table-${t.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onMoveTable) onMoveTable(t);
+                            }}
+                            title="Pindah Meja (Transfer Open Bill)"
+                            className="tap flex-1 h-7 rounded-md bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#DBEAFE] text-[10px] font-extrabold flex items-center justify-center gap-1"
+                          >
+                            <ArrowRightLeft size={11} /> Pindah
+                          </button>
+                          <button
+                            data-testid={`clear-table-${t.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onClearTable) onClearTable(t);
+                            }}
+                            title="Kosongkan Meja"
+                            className="tap h-7 w-7 rounded-md bg-[#F4F5F7] text-[#52525B] hover:bg-zinc-200 flex items-center justify-center"
+                          >
+                            <RotateCcw size={11} />
+                          </button>
+                          {t.open_order_id && onCancelBill && (
+                            <button
+                              data-testid={`cancel-bill-${t.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onCancelBill(t);
+                              }}
+                              title="Batalkan Bill Terbuka"
+                              className="tap h-7 px-1.5 rounded-md bg-[#FEE2E2] text-[#B91C1C] hover:bg-[#FCA5A5] text-[10px] font-bold"
+                            >
+                              Batal
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] text-[#047857] font-bold px-1">Tersedia</span>
+                          {onDeleteTable && (
+                            <button
+                              data-testid={`delete-table-${t.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteTable(t);
+                              }}
+                              title="Hapus Meja"
+                              className="tap h-6 w-6 rounded-md text-[#A1A1AA] hover:text-[#EF4444] hover:bg-[#FEE2E2] flex items-center justify-center ml-auto"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MoveTableDialog({ open, onClose, sourceTable, tables = [], onConfirm }) {
+  const [targetTable, setTargetTable] = useState(null);
+  const safeTables = Array.isArray(tables) ? tables : [];
+  const availableTables = safeTables.filter(
+    (t) => t.active && t.id !== sourceTable?.id && t.status !== "open_bill"
+  );
+  const areas = [...new Set(availableTables.map((t) => t.area).filter(Boolean))];
+
+  useEffect(() => {
+    if (open) setTargetTable(null);
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowRightLeft size={18} className="text-[#1D4ED8]" />
+            Pindah Meja (Dine-In)
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="p-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-between text-xs">
+            <div>
+              <span className="font-bold text-[#1E40AF] block">Meja Asal:</span>
+              <span className="text-sm font-black text-[#1D4ED8]">{sourceTable?.name || "Meja Tidak Diketahui"}</span>
+            </div>
+            <span className="px-2 py-1 bg-white text-[#1E40AF] font-bold rounded-lg border border-[#BFDBFE] text-[11px]">
+              {sourceTable?.area} · {sourceTable?.capacity || 4} kursi
+            </span>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-[#52525B] uppercase tracking-wider block mb-2">
+              Pilih Meja Tujuan yang Kosong:
+            </label>
+            {availableTables.length === 0 ? (
+              <div className="p-4 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#92400E] text-xs font-bold text-center">
+                Tidak ada meja lain yang kosong saat ini. Silakan kosongkan meja terlebih dahulu atau tambahkan meja baru.
+              </div>
+            ) : (
+              <div className="max-h-[45vh] overflow-y-auto space-y-3 pr-1">
+                {areas.map((area) => (
+                  <div key={area} className="space-y-1.5">
+                    <div className="text-[11px] font-bold text-[#71717A] uppercase">{area}</div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {availableTables.filter((t) => t.area === area).map((t) => {
+                        const isSelected = targetTable?.id === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            data-testid={`target-table-${t.id}`}
+                            onClick={() => setTargetTable(t)}
+                            className={`tap h-13 rounded-xl border-2 flex flex-col items-center justify-center font-bold transition ${
+                              isSelected
+                                ? "border-[#1D4ED8] bg-[#EFF6FF] text-[#1D4ED8] ring-2 ring-[#93C5FD]"
+                                : "border-zinc-200 bg-white hover:border-zinc-400 text-zinc-900"
+                            }`}
+                          >
+                            <span className="text-sm">{t.name}</span>
+                            <span className="text-[9px] text-[#71717A]">{t.capacity || 4} kursi</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+            <button
+              onClick={onClose}
+              className="tap h-11 px-4 rounded-xl bg-[#F4F5F7] font-bold text-sm text-[#52525B]"
+            >
+              Batal
+            </button>
+            <button
+              data-testid="confirm-move-table-btn"
+              onClick={() => {
+                if (targetTable) onConfirm(targetTable);
+              }}
+              disabled={!targetTable}
+              className="tap h-11 px-6 rounded-xl bg-[#1D4ED8] hover:bg-[#1E40AF] text-white font-bold text-sm disabled:opacity-40 flex items-center gap-2"
+            >
+              <ArrowRightLeft size={14} /> Pindahkan Meja
+            </button>
+          </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>
@@ -1079,8 +1491,25 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
   const [couponCode, setCouponCode] = useState("");
   const [searching, setSearching] = useState(false);
   useEffect(() => {
-    if (open) { setSelected([]); setPaid1(""); setPaid2(""); setMember(null); setPhone(""); setRedeemPts(""); setDiscReason(""); setCouponCode(""); }
-  }, [open]);
+    if (open) {
+      setPaid1("");
+      setPaid2("");
+      setMember(null);
+      setPhone("");
+      setRedeemPts("");
+      setDiscReason("");
+      setCouponCode("");
+      // Auto-select Cash (Tunai) if available to save 1 tap
+      const cashPm = pms.find((pm) => pm.type === "cash" || pm.name?.toLowerCase().includes("tunai"));
+      if (cashPm) {
+        setSelected([cashPm]);
+      } else if (pms.length > 0) {
+        setSelected([pms[0]]);
+      } else {
+        setSelected([]);
+      }
+    }
+  }, [open, pms]);
   const method = selected[0] || null;
   const second = selected[1] || null;
   const isSplit = selected.length === 2;
@@ -1093,10 +1522,25 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
     if (isSplit) return 0;
     return isCash1 ? amt1 : total;
   }
-  const quick = [total, 50000, 100000, 150000, 200000];
   const pointRate = Math.max(1, Number(biz?.member_redeem_per_point || 100));
   const redeemVal = Math.min(Number(redeemPts || 0) || 0, member?.points || 0) * pointRate;
   const payable = Math.max(0, total - redeemVal);
+
+  // Dynamic touch-friendly quick cash keys
+  const quick = useMemo(() => {
+    const list = [payable];
+    const round5 = Math.ceil(payable / 5000) * 5000;
+    if (round5 > payable && !list.includes(round5)) list.push(round5);
+    const round10 = Math.ceil(payable / 10000) * 10000;
+    if (round10 > payable && !list.includes(round10)) list.push(round10);
+    const round50 = Math.ceil(payable / 50000) * 50000;
+    if (round50 > payable && !list.includes(round50)) list.push(round50);
+    [10000, 20000, 50000, 100000, 200000].forEach((val) => {
+      if (val > payable && !list.includes(val)) list.push(val);
+    });
+    return list.sort((a, b) => a - b).slice(0, 5);
+  }, [payable]);
+
   const needReason =
     (discountType === "percent" && discountValue > Number(biz?.discount_reason_percent ?? 15)) ||
     (discountType === "amount" && discountValue > Number(biz?.discount_reason_amount ?? 50000));
@@ -1232,7 +1676,7 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
                 </button>
               ))}
             </div>
-            {amt1 >= total && <div className="flex justify-between font-bold"><span>Kembalian</span><span className="font-num text-[#047857]">{rupiah(amt1 - total)}</span></div>}
+            {amt1 >= payable && <div className="flex justify-between font-bold"><span>Kembalian</span><span className="font-num text-[#047857]">{rupiah(amt1 - payable)}</span></div>}
           </div>
         )}
 
@@ -1280,7 +1724,41 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
 }
 
 function ReceiptDialog({ order, onClose }) {
+  const [waPhone, setWaPhone] = useState("");
+  const [waSending, setWaSending] = useState(false);
+  const [showWaInput, setShowWaInput] = useState(false);
+
+  useEffect(() => {
+    if (order) {
+      setWaPhone(order.customer_phone || "");
+      setShowWaInput(false);
+    }
+  }, [order]);
+
   if (!order) return null;
+
+  const sendWaReceipt = async () => {
+    if (!waPhone.trim()) {
+      toast.error("Masukkan nomor WhatsApp pelanggan");
+      return;
+    }
+    setWaSending(true);
+    try {
+      const res = await api.post("/whatsapp/send-receipt", {
+        to: waPhone.trim(),
+        order_number: order.order_number,
+        total: order.total,
+        customer_name: order.customer_name || "Pelanggan",
+      });
+      toast.success(res.data.message || "Struk WhatsApp berhasil dikirim!");
+      setShowWaInput(false);
+    } catch (e) {
+      toast.error("Gagal mengirim struk via WhatsApp");
+    } finally {
+      setWaSending(false);
+    }
+  };
+
   return (
     <Dialog open={!!order} onOpenChange={onClose}>
       <DialogContent>
@@ -1291,13 +1769,45 @@ function ReceiptDialog({ order, onClose }) {
           <div className="font-num text-3xl font-extrabold mt-1">{rupiah(order.total)}</div>
           {order.change > 0 && <div className="text-sm mt-1">Kembalian: <span className="font-num font-bold">{rupiah(order.change)}</span></div>}
         </div>
+
+        {showWaInput ? (
+          <div className="bg-[#F0FDF4] p-3 rounded-xl border border-[#BBF7D0] space-y-2">
+            <label className="text-[11px] font-bold text-[#166534] uppercase tracking-wider block">Kirim Struk ke No. WhatsApp</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={waPhone}
+                onChange={(e) => setWaPhone(e.target.value)}
+                placeholder="08123456789"
+                className="flex-1 h-10 rounded-lg border px-3 text-xs font-mono bg-white outline-none focus:border-[#16A34A]"
+              />
+              <button
+                onClick={sendWaReceipt}
+                disabled={waSending}
+                className="tap h-10 px-3 rounded-lg bg-[#16A34A] text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {waSending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Kirim
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <DialogFooter className="flex-col gap-2 sm:flex-col">
           <button data-testid="print-receipt-btn" onClick={() => printReceipt(order)} className="tap w-full h-12 rounded-xl bg-[#0A0A0A] text-white font-bold flex items-center justify-center gap-2">
             <Receipt size={18} /> Cetak Struk
           </button>
+          {!showWaInput && (
+            <button
+              onClick={() => setShowWaInput(true)}
+              className="tap w-full h-12 rounded-xl bg-[#25D366] hover:bg-[#22C55E] text-white font-bold flex items-center justify-center gap-2"
+            >
+              <MessageCircle size={18} /> Kirim Struk WhatsApp
+            </button>
+          )}
           <button onClick={onClose} className="tap w-full h-12 rounded-xl bg-[#F4F5F7] font-bold">Transaksi Baru</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+

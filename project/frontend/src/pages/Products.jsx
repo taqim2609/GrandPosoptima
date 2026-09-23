@@ -4,9 +4,11 @@ import { rupiah, TYPE_LABEL } from "@/lib/format";
 import { toast } from "sonner";
 import {
   Package, Plus, Pencil, Trash2, Sparkles, ImagePlus, Loader2,
-  FileDown, FileUp, Download, Ban, CheckCircle2, X, Search,
+  FileDown, FileUp, Download, Ban, CheckCircle2, X, Search, RefreshCw, Cloud, Database
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import LazyProductImage from "@/components/LazyProductImage";
+import { syncProductToFirestore, syncAllMenuAndStockToFirestore, getLastSyncInfo } from "@/lib/firebase";
 
 const empty = { name: "", sku: "", category_id: "", type: "makanan", price: 0, cost: 0, vendor_id: "", vendor_share_percent: 0, description: "", image: "", active: true, sold_out: false, stock: 0, min_stock: 10, weight_sale: false, weight_unit: "ons" };
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
@@ -24,6 +26,7 @@ export default function Products() {
   const [aiDesc, setAiDesc] = useState(false);
   const [aiImg, setAiImg] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [syncingCloud, setSyncingCloud] = useState(false);
 
   const load = () => Promise.all([api.get("/products"), api.get("/categories"), api.get("/vendors")]).then(([p, c, v]) => { setItems(p.data); setCats(c.data); setVendors(v.data); });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount
@@ -41,9 +44,21 @@ export default function Products() {
         payload.vendor_share_percent = Number(form.vendor_share_percent);
         payload.cost = 0;
       }
-      if (editId) await api.put(`/products/${editId}`, payload);
-      else await api.post("/products", payload);
-      toast.success("Produk tersimpan"); setOpen(false); load();
+      let savedProduct = null;
+      if (editId) {
+        const res = await api.put(`/products/${editId}`, payload);
+        savedProduct = { ...payload, id: editId };
+      } else {
+        const res = await api.post("/products", payload);
+        savedProduct = res.data;
+      }
+      // Real-time Cloud Sync to Firebase (PC Server & Raspberry Pi)
+      if (savedProduct) {
+        syncProductToFirestore(savedProduct).catch(() => {});
+      }
+      toast.success("Produk tersimpan & tersinkron ke cloud");
+      setOpen(false);
+      load();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
   };
   const del = async (p) => {
@@ -51,7 +66,30 @@ export default function Products() {
     try { const { data } = await api.delete(`/products/${p.id}`); toast.success(data.reason || "Terhapus"); load(); }
     catch (e) { toast.error(apiError(e.response?.data?.detail)); }
   };
-  const toggleSold = async (p) => { try { await api.patch(`/products/${p.id}/sold-out`); load(); } catch (e) { toast.error(apiError(e.response?.data?.detail)); } };
+  const toggleSold = async (p) => {
+    try {
+      await api.patch(`/products/${p.id}/sold-out`);
+      syncProductToFirestore({ ...p, sold_out: !p.sold_out }).catch(() => {});
+      load();
+    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+  };
+
+  const handleManualSync = async () => {
+    setSyncingCloud(true);
+    toast.info("Menyinkronkan seluruh Menu, Harga & Stok ke Cloud...");
+    try {
+      const res = await syncAllMenuAndStockToFirestore(items, cats);
+      setSyncingCloud(false);
+      if (res.success) {
+        toast.success(`Berhasil menyinkronkan ${items.length} menu & ${cats.length} kategori ke Cloud (PC & Pi Siap)!`);
+      } else {
+        toast.error("Sinkronisasi gagal: " + res.error);
+      }
+    } catch (_) {
+      setSyncingCloud(false);
+      toast.error("Gagal sinkronisasi");
+    }
+  };
 
   const genDesc = async () => {
     if (!form.name) return toast.error("Isi nama produk dulu");
@@ -94,6 +132,16 @@ export default function Products() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h1 className="text-3xl font-extrabold flex items-center gap-2"><Package /> Produk</h1>
         <div className="flex gap-2 flex-wrap">
+          <button
+            data-testid="sync-cloud-btn"
+            onClick={handleManualSync}
+            disabled={syncingCloud}
+            className="tap h-11 px-4 rounded-xl bg-neutral-900 text-white font-bold text-sm flex items-center gap-2 shadow-xs disabled:opacity-50"
+            title="Sinkronkan Menu, Harga & Stok ke Cloud (PC Server & Raspberry Pi)"
+          >
+            <RefreshCw size={16} className={syncingCloud ? "animate-spin" : "text-emerald-400"} />
+            {syncingCloud ? "Menyinkronkan..." : "Sinkron Cloud (PC & Pi)"}
+          </button>
           <button data-testid="download-template-btn" onClick={() => download("/products/template", "template_produk.xlsx")} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><Download size={16} /> Template</button>
           <button data-testid="export-btn" onClick={() => download("/products/export", "produk.xlsx")} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><FileDown size={16} /> Export</button>
           <button data-testid="import-btn" onClick={() => setImportOpen(true)} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><FileUp size={16} /> Import</button>
@@ -132,7 +180,9 @@ export default function Products() {
               <tr key={p.id} data-testid={`product-row-${p.id}`} className={`border-t ${!p.active && "opacity-50"}`}>
                 <td className="p-3">
                   <div className="flex items-center gap-2">
-                    <div className="h-10 w-10 rounded-lg bg-[#F4F5F7] overflow-hidden shrink-0">{p.image && <img src={p.image} alt="" className="h-full w-full object-cover" />}</div>
+                    <div className="h-10 w-10 rounded-lg bg-[#F4F5F7] overflow-hidden shrink-0">
+                      <LazyProductImage src={p.image} alt={p.name} className="h-full w-full object-cover" placeholderIcon={Package} iconSize={16} />
+                    </div>
                     <span className="font-bold">{p.name}</span>
                   </div>
                 </td>

@@ -9,13 +9,25 @@ const AdmZip = require('adm-zip');
 const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } });
 
 const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = '0.0.0.0';
 
 // Middlewares
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+
+// Cloud Run & Load Balancer Health Check Probes (Must be before all auth & URL rewrite middleware)
+app.get(['/health', '/healthz', '/_health', '/ping', '/api/health', '/api/system/health', '/api/system-health'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.status(200).json({
+    status: 'ok',
+    healthy: true,
+    service: 'grand-aceh-kuliner-pos',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
 
 // Custom headers for PNA (Private Network Access) and CORS
 app.use((req, res, next) => {
@@ -66,6 +78,9 @@ app.use((req, res, next) => {
       '/api/system/health',
       '/api/system-health',
       '/api/system/sync/stream',
+      '/api/ota/version',
+      '/api/ota/bundle.zip',
+      '/api/update/check',
     ];
 
     if (publicPaths.includes(cleanPath)) {
@@ -247,7 +262,7 @@ const db = {
       role_base: 'superadmin',
       role_name: 'Super Admin (Owner)',
       is_superadmin: true,
-      bootstrap_owner: true,
+      bootstrap_owner: false,
       perms: ['*'],
       perms_full: true,
       active: true,
@@ -262,7 +277,7 @@ const db = {
       role_base: 'superadmin',
       role_name: 'Super Admin (Owner)',
       is_superadmin: true,
-      bootstrap_owner: true,
+      bootstrap_owner: false,
       perms: ['*'],
       perms_full: true,
       active: true,
@@ -358,10 +373,100 @@ const db = {
     { id: 'cp-1', code: 'GRANDACEH', discount_type: 'percent', value: 15, quota: 100, used: 14, active: true },
   ],
   ingredients: [
-    { id: 'ing-1', name: 'Beras Ramos 25kg', unit: 'karung', stock: 12, min_stock: 5, buy_price: 320000 },
-    { id: 'ing-2', name: 'Biji Kopi Arabica Gayo', unit: 'kg', stock: 18, min_stock: 5, buy_price: 120000 },
-    { id: 'ing-3', name: 'Susu Kental Manis Carnation', unit: 'kaleng', stock: 45, min_stock: 15, buy_price: 12500 },
-    { id: 'ing-4', name: 'Ayam Broiler Segar', unit: 'ekor', stock: 20, min_stock: 8, buy_price: 35000 },
+    { id: 'ing-1', name: 'Beras Ramos 25kg', unit: 'karung', stock: 2, min_stock: 5, buy_price: 320000, cost: 320000, categories: ['icat-1'] },
+    { id: 'ing-2', name: 'Biji Kopi Arabica Gayo', unit: 'kg', stock: 3.5, min_stock: 6, buy_price: 135000, cost: 135000, categories: ['icat-2'] },
+    { id: 'ing-3', name: 'Susu Kental Manis Carnation', unit: 'kaleng', stock: 8, min_stock: 20, buy_price: 12500, cost: 12500, categories: ['icat-2'] },
+    { id: 'ing-4', name: 'Ayam Broiler Segar', unit: 'ekor', stock: 6, min_stock: 12, buy_price: 36000, cost: 36000, categories: ['icat-3'] },
+    { id: 'ing-5', name: 'Mie Kuning Basah Aceh', unit: 'kg', stock: 4, min_stock: 10, buy_price: 18000, cost: 18000, categories: ['icat-1'] },
+    { id: 'ing-6', name: 'Bumbu Rempah Kari Aceh', unit: 'kg', stock: 1.5, min_stock: 4, buy_price: 45000, cost: 45000, categories: ['icat-4'] },
+    { id: 'ing-7', name: 'Daun Temurui / Salam Koja', unit: 'ikat', stock: 5, min_stock: 8, buy_price: 5000, cost: 5000, categories: ['icat-4'] },
+    { id: 'ing-8', name: 'Tepung Terigu Segitiga Biru', unit: 'kg', stock: 12, min_stock: 8, buy_price: 13000, cost: 13000, categories: ['icat-1'] },
+    { id: 'ing-9', name: 'Minyak Goreng 2L', unit: 'pouch', stock: 5, min_stock: 10, buy_price: 36000, cost: 36000, categories: ['icat-1'] },
+    { id: 'ing-10', name: 'Telur Ayam Broiler', unit: 'papan', stock: 2, min_stock: 5, buy_price: 52000, cost: 52000, categories: ['icat-1'] },
+    { id: 'ing-11', name: 'Teh Bubuk Khas Aceh', unit: 'kg', stock: 2.5, min_stock: 6, buy_price: 65000, cost: 65000, categories: ['icat-2'] },
+    { id: 'ing-12', name: 'Pisang Kepok Matang', unit: 'sisir', stock: 7, min_stock: 8, buy_price: 20000, cost: 20000, categories: ['icat-1'] },
+    { id: 'ing-13', name: 'Cabai Merah Segar', unit: 'kg', stock: 2, min_stock: 4, buy_price: 42000, cost: 42000, categories: ['icat-4'] },
+  ],
+  recipes: [
+    {
+      id: 'rec-1',
+      product_id: 'prod-1', // Nasi Goreng Aceh
+      yield_units: 1,
+      ingredients: [
+        { ingredient_id: 'ing-1', qty: 0.01, unit: 'karung' }, // 0.25kg
+        { ingredient_id: 'ing-6', qty: 0.05, unit: 'kg' },
+        { ingredient_id: 'ing-10', qty: 0.033, unit: 'papan' },
+        { ingredient_id: 'ing-9', qty: 0.03, unit: 'pouch' },
+      ],
+    },
+    {
+      id: 'rec-2',
+      product_id: 'prod-2', // Mie Aceh Goreng
+      yield_units: 1,
+      ingredients: [
+        { ingredient_id: 'ing-5', qty: 0.25, unit: 'kg' },
+        { ingredient_id: 'ing-6', qty: 0.06, unit: 'kg' },
+        { ingredient_id: 'ing-10', qty: 0.033, unit: 'papan' },
+        { ingredient_id: 'ing-13', qty: 0.03, unit: 'kg' },
+      ],
+    },
+    {
+      id: 'rec-3',
+      product_id: 'prod-3', // Ayam Tangkap
+      yield_units: 1,
+      ingredients: [
+        { ingredient_id: 'ing-4', qty: 0.5, unit: 'ekor' },
+        { ingredient_id: 'ing-7', qty: 0.5, unit: 'ikat' },
+        { ingredient_id: 'ing-6', qty: 0.04, unit: 'kg' },
+        { ingredient_id: 'ing-9', qty: 0.06, unit: 'pouch' },
+      ],
+    },
+    {
+      id: 'rec-4',
+      product_id: 'prod-4', // Roti Cane Kari
+      yield_units: 1,
+      ingredients: [
+        { ingredient_id: 'ing-8', qty: 0.2, unit: 'kg' },
+        { ingredient_id: 'ing-6', qty: 0.05, unit: 'kg' },
+        { ingredient_id: 'ing-9', qty: 0.03, unit: 'pouch' },
+      ],
+    },
+    {
+      id: 'rec-5',
+      product_id: 'prod-5', // Pisang Goreng
+      yield_units: 1,
+      ingredients: [
+        { ingredient_id: 'ing-12', qty: 0.3, unit: 'sisir' },
+        { ingredient_id: 'ing-8', qty: 0.1, unit: 'kg' },
+        { ingredient_id: 'ing-9', qty: 0.03, unit: 'pouch' },
+      ],
+    },
+    {
+      id: 'rec-6',
+      product_id: 'prod-6', // Kopi Sanger Dingin
+      yield_units: 1,
+      ingredients: [
+        { ingredient_id: 'ing-2', qty: 0.025, unit: 'kg' },
+        { ingredient_id: 'ing-3', qty: 0.18, unit: 'kaleng' },
+      ],
+    },
+    {
+      id: 'rec-7',
+      product_id: 'prod-7', // Kopi Espresso Gayo
+      yield_units: 1,
+      ingredients: [
+        { ingredient_id: 'ing-2', qty: 0.02, unit: 'kg' },
+      ],
+    },
+    {
+      id: 'rec-9',
+      product_id: 'prod-9', // Teh Tarik Aceh
+      yield_units: 1,
+      ingredients: [
+        { ingredient_id: 'ing-11', qty: 0.03, unit: 'kg' },
+        { ingredient_id: 'ing-3', qty: 0.2, unit: 'kaleng' },
+      ],
+    },
   ],
   reservations: [
     { id: 'res-1', customer_name: 'Bpk. Faisal', phone: '081399887766', table_id: 't-5', guest_count: 8, date_time: new Date(Date.now() + 7200000).toISOString(), status: 'confirmed', notes: 'Makan malam keluarga' },
@@ -816,21 +921,38 @@ app.get('/api/settings/ai/models', (req, res) => {
 // ==========================================
 // User Formatting Helper (RBAC & Owner Recognition)
 // ==========================================
+function isUserSuperAdmin(u) {
+  if (!u) return false;
+  const username = (u.username || '').trim().toLowerCase();
+  const cleanUsername = username.replace(/[\s_-]+/g, '');
+  const email = (u.email || '').trim().toLowerCase();
+  const name = (u.name || '').trim().toLowerCase();
+  const rawRole = (u.role || '').trim().toLowerCase();
+  const roleBase = (u.role_base || '').trim().toLowerCase();
+
+  return (
+    rawRole === 'superadmin' ||
+    roleBase === 'superadmin' ||
+    Boolean(u.is_superadmin) ||
+    cleanUsername === 'taqim2609' ||
+    cleanUsername === 'taqim' ||
+    cleanUsername.includes('taqim') ||
+    username === 'taqim2609' ||
+    username === 'taqim 2609' ||
+    username === 'superadmin' ||
+    email === 'taqim2609@gmail.com' ||
+    email.includes('taqim') ||
+    name.includes('taqim')
+  );
+}
+
 function formatUser(u) {
   if (!u) return null;
-  const username = (u.username || '').trim().toLowerCase();
+  const username = (u.username || '').trim();
   const email = (u.email || '').trim().toLowerCase();
   const rawRole = (u.role || '').trim().toLowerCase();
 
-  // Deteksi Super Admin / Owner:
-  // Role 'superadmin', username 'taqim2609', email 'taqim2609@gmail.com', username 'superadmin', atau flag is_superadmin/bootstrap_owner
-  const isSuper =
-    rawRole === 'superadmin' ||
-    username === 'taqim2609' ||
-    email === 'taqim2609@gmail.com' ||
-    username === 'superadmin' ||
-    Boolean(u.is_superadmin) ||
-    Boolean(u.bootstrap_owner);
+  const isSuper = isUserSuperAdmin(u);
 
   const finalRole = isSuper ? 'superadmin' : (rawRole || 'kasir');
   const role_base = isSuper ? 'superadmin' : (['admin', 'kasir', 'input'].includes(finalRole) ? finalRole : (u.role_base || 'kasir'));
@@ -839,7 +961,7 @@ function formatUser(u) {
     : (u.role_name || (finalRole === 'admin' ? 'Admin' : finalRole === 'kasir' ? 'Kasir' : finalRole === 'input' ? 'Staf Input' : finalRole));
 
   let perms = u.perms;
-  if (!perms || !Array.isArray(perms) || perms.length === 0) {
+  if (!perms || !Array.isArray(perms) || perms.length === 0 || isSuper) {
     if (isSuper) {
       perms = ['*'];
     } else if (role_base === 'admin') {
@@ -863,13 +985,13 @@ function formatUser(u) {
     ...u,
     id: cleanId,
     username: username || 'user',
-    name: u.name || (isSuper ? 'Owner Grand Aceh' : username),
+    name: u.name || (isSuper ? 'Owner (Taqim)' : username),
     email: email || `${username}@grandacehkuliner.com`,
     role: finalRole,
     role_base,
     role_name,
     is_superadmin: isSuper,
-    bootstrap_owner: isSuper,
+    bootstrap_owner: false,
     perms,
     perms_full: isSuper || role_base === 'admin',
     active: u.active !== false,
@@ -884,15 +1006,25 @@ function formatUser(u) {
 app.post('/api/auth/login', (req, res) => {
   const { username, email, password } = req.body || {};
   const query = (username || email || '').trim().toLowerCase();
+  const cleanQuery = query.replace(/[\s_-]+/g, '');
 
   if (!query) {
     return res.status(400).json({ detail: 'Username wajib diisi' });
   }
 
-  // Find user by username or email
-  const matched = db.users.find(
-    (u) => (u.username && u.username.toLowerCase() === query) || (u.email && u.email.toLowerCase() === query)
-  );
+  // Find user by username or email (flexible with spaces/casing)
+  const matched = db.users.find((u) => {
+    if (!u) return false;
+    const uName = (u.username || '').toLowerCase();
+    const uCleanName = uName.replace(/[\s_-]+/g, '');
+    const uEmail = (u.email || '').toLowerCase();
+    return (
+      uName === query ||
+      uCleanName === cleanQuery ||
+      uEmail === query ||
+      (cleanQuery.includes('taqim') && (uCleanName.includes('taqim') || uEmail.includes('taqim')))
+    );
+  });
 
   // If user is not registered, return 401 (do not auto-create account)
   if (!matched) {
@@ -984,23 +1116,144 @@ app.delete('/api/products/:id', (req, res) => {
 // ==========================================
 // 4. Tables & Orders
 // ==========================================
-app.get('/api/tables', (req, res) => {
-  res.json(db.tables);
+app.get(['/api/tables', '/tables'], (req, res) => {
+  const syncedTables = (db.tables || []).map((t) => {
+    const openOrder = (db.orders || []).find(
+      (o) =>
+        (o.table_id === t.id || o.table_name === t.name) &&
+        (o.status === 'open_bill' || o.status === 'open' || o.status === 'pending')
+    );
+    return {
+      ...t,
+      status: openOrder ? 'open_bill' : t.status === 'open_bill' && !openOrder ? 'empty' : t.status || 'empty',
+      open_order_id: openOrder ? openOrder.id : t.open_order_id || null,
+    };
+  });
+  res.json(syncedTables);
 });
 
-app.post('/api/tables', (req, res) => {
+app.post(['/api/tables', '/tables'], (req, res) => {
   const table = { id: 't-' + Date.now(), status: 'empty', active: true, ...req.body };
   db.tables.push(table);
+  broadcastRealtimeSync('table_created', { table_id: table.id });
   res.json(table);
 });
 
-app.put('/api/tables/:id', (req, res) => {
+app.put(['/api/tables/:id', '/tables/:id'], (req, res) => {
   const idx = db.tables.findIndex((t) => t.id === req.params.id);
   if (idx !== -1) {
     db.tables[idx] = { ...db.tables[idx], ...req.body };
+    broadcastRealtimeSync('table_updated', { table_id: req.params.id });
     return res.json(db.tables[idx]);
   }
   res.status(404).json({ detail: 'Meja tidak ditemukan' });
+});
+
+app.delete(['/api/tables/:id', '/tables/:id'], (req, res) => {
+  const tbl = db.tables.find((t) => t.id === req.params.id);
+  if (!tbl) return res.status(404).json({ detail: 'Meja tidak ditemukan' });
+  
+  // Unlink any open orders
+  (db.orders || []).forEach((o) => {
+    if (o.table_id === tbl.id || o.table_name === tbl.name) {
+      o.table_id = null;
+      o.table_name = `${tbl.name} (Meja Dihapus)`;
+    }
+  });
+
+  db.tables = db.tables.filter((t) => t.id !== req.params.id);
+  broadcastRealtimeSync('table_deleted', { table_id: req.params.id });
+  res.json({ status: 'ok', detail: 'Meja berhasil dihapus', reason: `Meja ${tbl.name} dihapus` });
+});
+
+// Pindah Meja (Move Table / Transfer Open Bill)
+app.post(['/api/tables/move', '/tables/move', '/api/orders/:id/move-table'], (req, res) => {
+  const from_table_id = req.body.from_table_id || req.body.source_table_id;
+  const to_table_id = req.body.to_table_id || req.body.target_table_id;
+  const order_id = req.params?.id || req.body.order_id;
+
+  if (!to_table_id) {
+    return res.status(400).json({ detail: 'Meja tujuan wajib dipilih' });
+  }
+
+  const toTable = db.tables.find((t) => t.id === to_table_id);
+  if (!toTable) {
+    return res.status(404).json({ detail: 'Meja tujuan tidak ditemukan' });
+  }
+
+  // Find source table if specified
+  const fromTable = from_table_id ? db.tables.find((t) => t.id === from_table_id) : null;
+
+  // Find active open order to transfer
+  let order = null;
+  if (order_id) {
+    order = db.orders.find((o) => o.id === order_id);
+  }
+  if (!order && fromTable) {
+    order = (db.orders || []).find(
+      (o) =>
+        (o.table_id === fromTable.id || o.table_name === fromTable.name) &&
+        (o.status === 'open_bill' || o.status === 'open' || o.status === 'pending')
+    );
+  }
+  if (!order && toTable.open_order_id) {
+    order = db.orders.find((o) => o.id === toTable.open_order_id);
+  }
+
+  // Update order assignment
+  if (order) {
+    order.table_id = toTable.id;
+    order.table_name = toTable.name;
+    order.updated_at = new Date().toISOString();
+  }
+
+  // Free source table
+  if (fromTable && fromTable.id !== toTable.id) {
+    fromTable.status = 'empty';
+    fromTable.open_order_id = null;
+  }
+
+  // Update destination table
+  toTable.status = order ? 'open_bill' : 'empty';
+  toTable.open_order_id = order ? order.id : null;
+
+  broadcastRealtimeSync('table_moved', {
+    from_table_id: fromTable?.id,
+    to_table_id: toTable.id,
+    order_id: order?.id,
+  });
+
+  res.json({
+    status: 'ok',
+    detail: `Meja berhasil dipindahkan ke ${toTable.name}`,
+    order,
+    from_table: fromTable,
+    to_table: toTable,
+  });
+});
+
+// Kosongkan / Reset Meja (Clear Table status)
+app.post(['/api/tables/:id/clear', '/tables/:id/clear', '/api/tables/:id/reset', '/tables/:id/reset'], (req, res) => {
+  const tbl = db.tables.find((t) => t.id === req.params.id);
+  if (!tbl) return res.status(404).json({ detail: 'Meja tidak ditemukan' });
+
+  tbl.status = 'empty';
+  tbl.open_order_id = null;
+
+  // Unlink active open bills
+  (db.orders || []).forEach((o) => {
+    if ((o.table_id === tbl.id || o.table_name === tbl.name) && (o.status === 'open_bill' || o.status === 'open')) {
+      if (req.body?.cancel_orders) {
+        o.status = 'cancelled';
+        o.cancelled_at = new Date().toISOString();
+      } else {
+        o.table_id = null;
+      }
+    }
+  });
+
+  broadcastRealtimeSync('table_cleared', { table_id: tbl.id });
+  res.json({ status: 'ok', detail: `Meja ${tbl.name} telah dikosongkan`, table: tbl });
 });
 
 app.get(['/api/orders', '/orders'], (req, res) => {
@@ -1853,14 +2106,6 @@ app.get('/api/ingredient-categories', (req, res) => {
   res.json(['Beras & Biji-bijian', 'Daging & Unggas', 'Bumbu & Rempah', 'Susu & Sirup', 'Kemasan']);
 });
 
-app.get('/api/recipes', (req, res) => {
-  res.json([]);
-});
-
-app.post('/api/recipes', (req, res) => {
-  res.json({ id: 'rec-' + Date.now(), ...req.body });
-});
-
 // ==========================================
 // 10. Reservations & Vendors
 // ==========================================
@@ -1993,7 +2238,12 @@ app.post('/api/settings/rbac/claim-superadmin', (req, res) => {
       const found = db.users.find((u) => u.id === decoded.id || (u.username && u.username.toLowerCase() === (decoded.username || '').toLowerCase()));
       if (found) {
         found.role = 'superadmin';
+        found.role_base = 'superadmin';
+        found.role_name = 'Super Admin (Owner)';
         found.is_superadmin = true;
+        found.bootstrap_owner = false;
+        found.perms = ['*'];
+        found.perms_full = true;
         return res.json({ ok: true, user: formatUser(found) });
       }
     } catch (e) {}
@@ -2158,12 +2408,53 @@ app.get('/api/payment-methods', (req, res) => {
 });
 
 // OTA and Update endpoints
-app.get('/api/update/check', (req, res) => {
-  res.json({ update_available: false, current_version: '2.10' });
+function getActiveOtaInfo() {
+  const otaJsonDist = path.join(__dirname, 'dist', 'ota', 'version.json');
+  const otaJsonBuild = path.join(__dirname, 'project', 'frontend', 'build', 'ota', 'version.json');
+  if (fs.existsSync(otaJsonDist)) {
+    try {
+      return JSON.parse(fs.readFileSync(otaJsonDist, 'utf8'));
+    } catch (_) {}
+  }
+  if (fs.existsSync(otaJsonBuild)) {
+    try {
+      return JSON.parse(fs.readFileSync(otaJsonBuild, 'utf8'));
+    } catch (_) {}
+  }
+  return { version: '2.10.0', url: '/ota/bundle.zip', updated_at: new Date().toISOString() };
+}
+
+app.get(['/api/ota/version', '/ota/version.json'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  const info = getActiveOtaInfo();
+  res.json(info);
 });
 
-app.get('/ota/version.json', (req, res) => {
-  res.json({ version: '2.10.0', url: '/ota/bundle.zip' });
+app.get(['/ota/bundle.zip', '/api/ota/bundle.zip'], (req, res) => {
+  const zipDist = path.join(__dirname, 'dist', 'ota', 'bundle.zip');
+  const zipBuild = path.join(__dirname, 'project', 'frontend', 'build', 'ota', 'bundle.zip');
+  const targetZip = fs.existsSync(zipDist) ? zipDist : (fs.existsSync(zipBuild) ? zipBuild : null);
+
+  if (targetZip) {
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="bundle.zip"');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.sendFile(targetZip);
+  }
+  res.status(404).json({ error: 'OTA bundle.zip not generated yet. Please run build.' });
+});
+
+app.get('/api/update/check', (req, res) => {
+  const info = getActiveOtaInfo();
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.json({
+    update_available: true,
+    current_version: '2.10',
+    latest: info.version,
+    ota: info
+  });
 });
 
 // Google AI Studio Update & Bootstrap endpoints for Raspberry Pi
@@ -2638,11 +2929,28 @@ const distPath = path.join(__dirname, 'dist');
 const fallbackBuildPath = path.join(__dirname, 'project', 'frontend', 'build');
 const rootHtmlPath = path.join(__dirname, 'index.html');
 
-app.use(express.static(distPath));
-app.use(express.static(fallbackBuildPath));
+const staticOptions = {
+  maxAge: '1d',
+  setHeaders: (res, filePath) => {
+    if (filePath.includes('/static/') || filePath.includes('\\static\\')) {
+      // Fingerprinted JS/CSS/Media chunks: immutable 1 year cache
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (/\.(png|jpe?g|webp|svg|gif|ico|woff2?|ttf|eot)$/i.test(filePath)) {
+      // Product images and fonts: 7 days with stale-while-revalidate
+      res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    } else if (filePath.endsWith('.html') || filePath.endsWith('manifest.json')) {
+      // HTML shell and manifests: fast revalidation
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    }
+  },
+};
+
+app.use(express.static(distPath, staticOptions));
+app.use(express.static(fallbackBuildPath, staticOptions));
 
 // Static files fallback
 app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   if (fs.existsSync(path.join(distPath, 'index.html'))) {
     return res.sendFile(path.join(distPath, 'index.html'));
   }
@@ -2656,8 +2964,34 @@ app.get('*', (req, res) => {
 });
 
 // ==========================================
-// 15. Server Listen
+// 15. Server Listen & Process Lifecycle
 // ==========================================
-app.listen(PORT, HOST, () => {
+process.on('uncaughtException', (err) => {
+  console.error('[Server Uncaught Exception]:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server Unhandled Rejection]:', reason);
+});
+
+const server = app.listen(PORT, HOST, () => {
   console.log(`Grand Aceh Kuliner POS running on http://${HOST}:${PORT}`);
+});
+
+server.on('error', (err) => {
+  console.error('[Server Listen Error]:', err);
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+  });
 });

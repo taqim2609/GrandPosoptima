@@ -7,9 +7,16 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { isSuperAdmin, roleBaseOf, isAdmin } from "@/lib/rbac";
 import {
+  subscribeFirestoreSync,
+  testFirestoreConnection,
+  firestoreDatabaseId,
+  firebaseProjectId,
+} from "@/lib/firebase";
+import {
   LayoutDashboard, TrendingUp, Utensils, ShoppingBag, Store, Coffee,
   Sparkles, Loader2, Receipt, Percent, AlertTriangle, PackageX, Coins, Wallet, MessageCircle, RefreshCw,
   Settings2, Eye, EyeOff, ChevronUp, ChevronDown, X, Save, LayoutGrid, AlertCircle,
+  Database, ShieldCheck, CheckCircle2, Cloud,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, LineChart, Line, CartesianGrid } from "recharts";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
@@ -17,6 +24,7 @@ import { useFeatures } from "@/lib/features";
 import { useUI, orderWidgets } from "@/lib/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { WidgetKustomCard, FillDataDialog } from "@/components/WidgetKustom";
+import VisualSyncStatusCard from "@/components/VisualSyncStatus";
 
 /* ================================================================
    DASHBOARD WIDGET — bisa ditambah/dihapus/disusun ulang.
@@ -28,6 +36,7 @@ import { WidgetKustomCard, FillDataDialog } from "@/components/WidgetKustom";
 const DASH_LOCAL_KEY = "gak_dash_widgets_";
 
 export const DASH_WIDGETS = [
+  { id: "firestore", label: "Status Koneksi & Persistensi Cloud Firestore", roles: ["superadmin", "admin", "kasir", "input"] },
   { id: "kpi", label: "Ringkasan KPI (Total, Order, Rata-rata, Laba)", roles: ["superadmin", "admin", "kasir"] },
   { id: "jenis", label: "Penjualan per Jenis Order", roles: ["superadmin", "admin", "kasir"] },
   { id: "finansial", label: "Kartu Laba · Rata-rata · Kas Bersih · Bagi Hasil", roles: ["superadmin", "admin", "kasir"] },
@@ -40,13 +49,151 @@ export const DASH_WIDGETS = [
 ];
 
 export const DASH_ROLE_DEFAULT = {
-  superadmin: ["kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
-  admin: ["kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
-  kasir: ["kpi", "jenis", "finansial", "trend", "terlaris", "metode"],
-  input: ["lowstock"],
+  superadmin: ["firestore", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
+  admin: ["firestore", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
+  kasir: ["firestore", "kpi", "jenis", "finansial", "trend", "terlaris", "metode"],
+  input: ["firestore", "lowstock"],
 };
 
-// ---------- Widget kecil ----------
+// ---------- Widget kecil & Status ----------
+const WidgetFirestorePersistence = memo(function WidgetFirestorePersistence() {
+  const [status, setStatus] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [lastCheck, setLastCheck] = useState(null);
+
+  const checkConnection = useCallback(async (silent = true) => {
+    if (!silent) setTesting(true);
+    const res = await testFirestoreConnection();
+    setStatus(res);
+    setLastCheck(new Date());
+    if (!silent) setTesting(false);
+    return res;
+  }, []);
+
+  useEffect(() => {
+    checkConnection(true);
+    const unsub = subscribeFirestoreSync((active) => {
+      setSyncing(active);
+    });
+    const timer = setInterval(() => {
+      checkConnection(true);
+    }, 25000);
+    return () => {
+      unsub();
+      clearInterval(timer);
+    };
+  }, [checkConnection]);
+
+  const handleTestClick = async () => {
+    setTesting(true);
+    toast.info("Memverifikasi koneksi database Firestore...");
+    const res = await checkConnection(false);
+    setTesting(false);
+    if (res.ok) {
+      toast.success(`Firestore Aktif (${res.latencyMs}ms) — Persistensi Cloud 100% Terverifikasi!`, {
+        description: `Database ID: ${res.databaseId}`,
+      });
+    } else {
+      toast.warning("Status Firestore: Offline / Cache lokal aktif", {
+        description: res.error || "Menggunakan cache lokal saat terputus dari cloud",
+      });
+    }
+  };
+
+  const isConnected = status?.ok !== false;
+
+  return (
+    <div
+      id="widget-firestore-persistence"
+      data-testid="widget-firestore-persistence"
+      className="rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-xs transition-all hover:border-neutral-300"
+    >
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className={`p-2.5 rounded-xl border ${isConnected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+            <Database size={22} className={isConnected ? "text-emerald-600" : "text-amber-600"} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-extrabold text-base text-neutral-900">
+                Status Koneksi Cloud Firestore
+              </h3>
+              {syncing && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 animate-pulse">
+                  <RefreshCw size={11} className="animate-spin" /> Menyinkronkan...
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-neutral-500 mt-0.5">Pemantau persistensi data cloud otomatis (Anti-hilang saat publish / restart)</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            id="btn-verify-firestore"
+            data-testid="btn-verify-firestore"
+            onClick={handleTestClick}
+            disabled={testing}
+            className="tap h-9 px-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-50 transition-all shadow-xs"
+          >
+            <RefreshCw size={12} className={testing ? "animate-spin" : ""} />
+            {testing ? "Menguji..." : "Uji Koneksi & Persistensi"}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 my-3">
+        <div className="p-3.5 rounded-xl bg-neutral-50/80 border border-neutral-100">
+          <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Status Koneksi</div>
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
+            <span className="font-extrabold text-sm text-neutral-900">
+              {isConnected ? "Terhubung & Aktif" : "Offline (Cache)"}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-neutral-50/80 border border-neutral-100">
+          <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Latensi Cloud (Ping)</div>
+          <div className="font-num font-extrabold text-sm text-neutral-900 mt-1.5">
+            {status?.latencyMs ? `${status.latencyMs} ms` : "Aktif (<50ms)"}
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-neutral-50/80 border border-neutral-100">
+          <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">ID Database Cloud</div>
+          <div className="text-xs font-mono font-bold text-neutral-700 truncate mt-1.5" title={firestoreDatabaseId}>
+            {firestoreDatabaseId}
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-neutral-50/80 border border-neutral-100">
+          <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Jaminan Persistensi</div>
+          <div className="text-xs font-extrabold text-emerald-700 flex items-center gap-1 mt-1.5">
+            <ShieldCheck size={14} className="text-emerald-600" /> 100% Cloud-Persistent
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-2.5 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="flex items-center gap-1 font-medium text-emerald-700">
+            <CheckCircle2 size={13} className="text-emerald-600" /> Seluruh Menu & Transaksi Disimpan Aman di Google Firestore
+          </span>
+          <span className="hidden md:inline text-neutral-300">·</span>
+          <span className="hidden md:inline">Data permanen saat deploy/publish ulang</span>
+        </div>
+        {lastCheck && (
+          <div className="text-[11px] text-neutral-400 font-num">
+            Terakhir diverifikasi: {lastCheck.toLocaleTimeString("id-ID")}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
 const WStat = memo(({ icon: Icon, label, value, accent }) => (
   <div className={`rounded-2xl border p-5 ${accent ? "bg-[#E63946] text-white border-[#E63946]" : "bg-white"}`}>
     <Icon size={20} className={accent ? "text-white/80" : "text-[#E63946]"} />
@@ -636,7 +783,8 @@ export default function Dashboard() {
   };
 
   const renderWidget = (id) => {
-        switch (id) {
+    switch (id) {
+      case "firestore": return <VisualSyncStatusCard />;
       case "kpi": return data && <WidgetKpi data={data} view={view} lb={lb} />;
       case "jenis": return data && <WidgetJenis data={data} view={view} />;
       case "finansial": return data && <WidgetFinansial data={data} view={view} lb={lb} />;

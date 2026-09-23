@@ -1,17 +1,18 @@
-# Grand Aceh Kuliner POS — paket server lokal (LAN).
-# Jalankan semua di 1 komputer:  docker compose up -d --build
-# Akses dari POS komputer / Android:  http://<IP-KOMPUTER-SERVER>
+# Grand Aceh Kuliner POS — Server Lokal (PC Server & Raspberry Pi)
+# Menjalankan: Mongo DB + Backend API + Frontend Web + Evolution API (WhatsApp Gateway)
+# Jalankan di PC Server: docker compose up -d --build
+# Jalankan di Pi:        docker compose up -d --build
 
 services:
   mongo:
-    # Windows / PC x86  -> mongo:7 (default).
-    # Raspberry Pi 3/4 (ARMv8.0-A) -> set MONGO_IMAGE=mongo:4.4.18 di .env
-    #   (versi 4.4.19+ & 5.0+ butuh ARMv8.2-A -> crash "Illegal Instruction" di Pi 3/4)
+    # PC Server (x86_64) -> mongo:7 (default berkecepatan tinggi)
+    # Raspberry Pi 3/4 (ARMv8.0) -> MONGO_IMAGE=mongo:4.4.18 di .env
     image: ${MONGO_IMAGE:-mongo:7}
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
-    # Port TIDAK diekspos ke luar; hanya diakses backend di jaringan internal Docker.
+    networks:
+      - pos_network
 
   backend:
     build: ./backend
@@ -21,41 +22,65 @@ services:
     environment:
       - HOST_PROJECT_DIR=${HOST_PROJECT_DIR:-}
       - UPDATER_IMAGE=${UPDATER_IMAGE:-docker:cli}
-      # Jumlah proses backend. 2 = laporan berat tidak lagi menahan semua request lain;
-      # naikkan (3-4) hanya bila RAM masih lega — lihat docs/PANDUAN-WORKER-UVICORN.md.
       - UVICORN_WORKERS=${UVICORN_WORKERS:-2}
+      - GOOGLE_CLOUD_SYNC_URL=${GOOGLE_CLOUD_SYNC_URL:-https://ais-pre-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL:-http://evolution-api:8080}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-grandpos_evolution_secret_2026}
     depends_on:
       - mongo
     volumes:
-      - uploads_data:/app/uploads   # gambar AI & unggahan tersimpan permanen
-      - /var/run/docker.sock:/var/run/docker.sock   # untuk tombol "Update Sekarang" (1-klik)
-      - ${HOST_PROJECT_DIR:-.}:/host-project:ro   # baca .vibecoder-version (versi terpasang)
+      - uploads_data:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOST_PROJECT_DIR:-.}:/host-project:ro
+    networks:
+      - pos_network
 
-  whatsapp:
-    build: ./whatsapp-service
+  evolution-api:
+    image: atendai/evolution-api:v2.1.2
+    container_name: grandpos_evolution_api
     restart: unless-stopped
+    ports:
+      - "${EVOLUTION_PORT:-8080}:8080"
     environment:
-      - CHROME_BIN=/usr/bin/chromium
-      - WA_SECRET=${WA_SECRET:-gak_wa_5f3c1e7b2d84a6f0}
-      - PORT=3001
+      - SERVER_URL=http://localhost:${EVOLUTION_PORT:-8080}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-grandpos_evolution_secret_2026}
+      - DATABASE_PROVIDER=local
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - STORE_MESSAGES=true
+      - STORE_MESSAGE_UP=true
+      - STORE_CONTACTS=true
+      - STORE_CHATS=true
+      - CLEAN_STORE_CLEANING_INTERVAL=7200
+      - LOG_LEVEL=INFO
     volumes:
-      - wa_auth:/app/whatsapp-service/.wwebjs_auth   # sesi WhatsApp tersimpan
-    # DINONAKTIFKAN: notifikasi WhatsApp kini via wacloud.id (HTTP API, tanpa Chromium).
-    # Layanan berat ini hanya nyala bila profil "legacy-wa" diaktifkan secara khusus.
-    profiles: ["legacy-wa"]
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    networks:
+      - pos_network
 
   frontend:
     build:
       context: ./frontend
       args:
-        REACT_APP_BACKEND_URL: ""   # kosong = pakai /api relatif (satu origin via nginx)
+        REACT_APP_BACKEND_URL: ""
     restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
       - backend
+    networks:
+      - pos_network
+
+networks:
+  pos_network:
+    driver: bridge
 
 volumes:
   mongo_data:
   uploads_data:
-  wa_auth:
+  evolution_instances:
+  evolution_store:

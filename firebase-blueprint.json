@@ -149,6 +149,26 @@
         "enabled": { "type": "boolean" }
       },
       "required": ["id", "name"]
+    },
+    "errorLog": {
+      "title": "ErrorLog",
+      "description": "Remote runtime error logs and telemetry diagnostics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "stack": { "type": "string" },
+        "component_stack": { "type": "string" },
+        "url": { "type": "string" },
+        "user_agent": { "type": "string" },
+        "user_name": { "type": "string" },
+        "user_role": { "type": "string" },
+        "platform": { "type": "string" },
+        "resolved": { "type": "boolean" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "type", "message", "timestamp"]
     }
   },
   "firestore": {
@@ -195,6 +215,10 @@
     "/custom_widgets/{widgetId}": {
       "schema": "customWidget",
       "description": "Collection of custom dashboard widgets"
+    },
+    "/error_logs/{errorId}": {
+      "schema": "errorLog",
+      "description": "Collection of remote runtime errors and debugging logs"
     }
   }
 }

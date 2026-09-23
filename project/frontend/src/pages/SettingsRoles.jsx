@@ -11,7 +11,7 @@ import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
 import { ShieldCheck, Save, Plus, Trash2, Loader2, Lock, KeyRound, Users, AlertTriangle, RotateCcw, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { RBAC_MODULES, BASE_MODULES, ROLE_LABELS, BUILTIN_ROLE_ORDER } from "@/lib/rbac";
+import { RBAC_MODULES, BASE_MODULES, ROLE_LABELS, BUILTIN_ROLE_ORDER, isSuperAdmin } from "@/lib/rbac";
 import { useAuth } from "@/context/AuthContext";
 
 const BUILTIN = BUILTIN_ROLE_ORDER;
@@ -181,7 +181,7 @@ export default function SettingsRoles() {
       </p>
 
       {/* ---- Mode bootstrap: belum ada Super Admin → angkat akun sendiri ---- */}
-      {me?.bootstrap_owner && (
+      {!isSuperAdmin(me) && me?.bootstrap_owner && (
         <div className="mb-4 rounded-2xl border-2 border-[#F59E0B] bg-[#FFFBEB] p-4 flex items-start gap-3 flex-wrap" data-testid="bootstrap-banner">
           <AlertTriangle size={20} className="text-[#B45309] shrink-0 mt-0.5" />
           <div className="flex-1 min-w-[240px]">

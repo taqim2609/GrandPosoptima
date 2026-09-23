@@ -3,7 +3,7 @@ import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { copyText } from "@/lib/utils";
-import { ROLE_LABELS, BUILTIN_ROLE_ORDER, can } from "@/lib/rbac";
+import { ROLE_LABELS, BUILTIN_ROLE_ORDER, can, isSuperAdmin } from "@/lib/rbac";
 import {
   Users, Plus, Power, ShieldCheck, KeyRound, UserCog, Trash2, Eye, EyeOff, Copy,
   AlertTriangle, Loader2, CheckCircle2, Tags,
@@ -50,7 +50,7 @@ export default function UsersPage() {
   const [catVal, setCatVal] = useState([]);
   const [savingCats, setSavingCats] = useState(false);
 
-  const isSuper = !!(me?.is_superadmin || me?.role === "superadmin" || me?.username === "taqim2609" || me?.email === "taqim2609@gmail.com" || me?.bootstrap_owner);
+  const isSuper = isSuperAdmin(me);
 
   const load = () => api.get("/users").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch(() => setItems([]));
   // Daftar role & izin bisa dibaca Super Admin DAN role yang punya izin "Roles & Izin

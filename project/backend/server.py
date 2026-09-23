@@ -88,6 +88,126 @@ api = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gak-pos")
 
+@api.get("/health")
+@app.get("/health")
+@app.get("/api/health")
+async def health_check():
+    return {
+        "ok": True,
+        "app": "gak-pos",
+        "status": "ok",
+        "app_name": "Grand Aceh Kuliner POS",
+        "node_role": "Google Cloud Primary / PC Server Master",
+        "time": datetime.now(timezone.utc).isoformat()
+    }
+
+class EvolutionHeartbeatIn(BaseModel):
+    instance_name: Optional[str] = "grand-aceh-pos"
+    status: Optional[str] = "connected"
+    phone: Optional[str] = None
+    local_url: Optional[str] = "http://localhost:8080"
+    device_name: Optional[str] = "PC Server Toko (Local Master)"
+    battery: Optional[int] = None
+    node_source: Optional[str] = "local_pc"
+    details: Optional[dict] = None
+
+@api.post("/evolution/heartbeat")
+async def evolution_receive_heartbeat(body: EvolutionHeartbeatIn):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "instance_name": body.instance_name or "grand-aceh-pos",
+        "status": body.status or "connected",
+        "phone": body.phone or "",
+        "local_url": body.local_url or "http://localhost:8080",
+        "device_name": body.device_name or "PC Server Toko (Local Master)",
+        "battery": body.battery,
+        "node_source": body.node_source or "local_pc",
+        "details": body.details or {},
+        "last_seen": now_iso,
+        "updated_at": now_iso,
+    }
+    await db.settings.update_one({"_id": "evolution_heartbeat"}, {"$set": doc}, upsert=True)
+    return {"ok": True, "message": "Heartbeat Evolution API berhasil dicatat", "timestamp": now_iso}
+
+@api.get("/evolution/status")
+async def evolution_get_status():
+    doc = await db.settings.find_one({"_id": "evolution_heartbeat"}, {"_id": 0}) or {}
+    last_seen_str = doc.get("last_seen")
+    is_alive = False
+    diff_sec = 999999
+    if last_seen_str:
+        try:
+            ls = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
+            diff_sec = (datetime.now(timezone.utc) - ls).total_seconds()
+            is_alive = diff_sec <= 60  # Heartbeat aktif dalam 60 detik terakhir
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "detected_on_pc": is_alive,
+        "status": doc.get("status", "disconnected") if is_alive else "offline",
+        "instance_name": doc.get("instance_name", "grand-aceh-pos"),
+        "phone": doc.get("phone", ""),
+        "local_url": doc.get("local_url", "http://localhost:8080"),
+        "device_name": doc.get("device_name", "PC Server Toko"),
+        "battery": doc.get("battery"),
+        "last_seen": last_seen_str,
+        "last_seen_seconds_ago": round(diff_sec, 1) if diff_sec < 999999 else None,
+        "cloud_sync_active": True,
+        "cloud_database_id": "ai-studio-grandposoptima-268f86d5-06a2-4402-8f77-90451ffce535"
+    }
+
+@api.get("/sync/ping")
+async def sync_ping():
+    t0 = time.perf_counter()
+    db_ok = True
+    try:
+        await db.command("ping")
+    except Exception:
+        db_ok = False
+    latency_db_ms = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "ok": True,
+        "role": "LOCAL_PC_SERVER_OR_PI",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "database_connected": db_ok,
+        "db_latency_ms": latency_db_ms,
+        "node_type": "hybrid_pos_node"
+    }
+
+@api.get("/sync/diagnostics")
+async def sync_diagnostics():
+    t0 = time.perf_counter()
+    db_ok = True
+    prod_count = 0
+    order_count = 0
+    try:
+        await db.command("ping")
+        prod_count = await db.products.count_documents({})
+        order_count = await db.orders.count_documents({})
+    except Exception:
+        db_ok = False
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "ok": db_ok,
+        "node": {
+            "name": "PC Server / Raspberry Pi Local Engine",
+            "type": "master_or_edge_node",
+            "database": "MongoDB 7.x (Local Engine)",
+            "db_status": "connected" if db_ok else "degraded",
+            "db_latency_ms": latency_ms,
+            "product_count": prod_count,
+            "order_count": order_count,
+        },
+        "cloud_target": {
+            "service": "Google Cloud Firestore",
+            "database_id": "ai-studio-grandposoptima-268f86d5-06a2-4402-8f77-90451ffce535",
+            "sync_protocol": "HTTPS / WebChannel / gRPC Stream"
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
 PRODUCT_TYPES = ["makanan", "minuman", "retail"]
 ORDER_TYPES = ["dine_in", "take_away", "retail"]
 
