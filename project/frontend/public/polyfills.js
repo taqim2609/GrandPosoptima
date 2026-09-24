@@ -27,6 +27,18 @@
     })();
   }
 
+  // ---------- React Refresh shims (safety for production bundles) ----------
+  if (typeof window !== "undefined") {
+    if (typeof window.$RefreshSig$ === "undefined") {
+      window.$RefreshSig$ = function () {
+        return function (type) { return type; };
+      };
+    }
+    if (typeof window.$RefreshReg$ === "undefined") {
+      window.$RefreshReg$ = function () {};
+    }
+  }
+
   // ---------- Object.hasOwn (Chrome 93+) ----------
   if (!Object.hasOwn) {
     Object.hasOwn = function (obj, prop) {

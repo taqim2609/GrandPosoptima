@@ -595,6 +595,9 @@ export default function Layout({ children }) {
       <SyncQueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
       <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
         <DialogContent className="max-w-2xl p-0 overflow-hidden border-0 bg-transparent shadow-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Status Sinkronisasi &amp; Diagnostik</DialogTitle>
+          </DialogHeader>
           <VisualSyncStatusCard className="border-0 shadow-2xl" />
         </DialogContent>
       </Dialog>

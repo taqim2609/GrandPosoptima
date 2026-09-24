@@ -73,7 +73,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "NODE_ENV=production craco build",
+    "build": "FAST_REFRESH=false NODE_ENV=production craco build",
     "check:undef": "eslint --config eslint.undef.config.mjs src",
     "postbuild": "node scripts/make-ota.js",
     "test": "craco test"

@@ -141,7 +141,7 @@ export default function Integritas() {
     }
   };
 
-  const checks = (report && report.groups ? report.groups.flatMap((g) => g.checks || []) : []);
+  const checks = (report && Array.isArray(report.groups) ? report.groups.flatMap((g) => g.checks || []) : []);
   const fixableChecks = checks.filter((c) => c.count > 0 && c.fix);
   const s = (report && report.summary) || { error: 0, warn: 0, ok: 0, fixable: 0, total: 0 };
   const info = (report && report.info) || {};
@@ -175,8 +175,8 @@ export default function Integritas() {
           </div>
           <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-[#52525B]">
             <span className="inline-flex items-center gap-1" data-testid="integritas-last">
-              <CalendarClock size={13} /> Pemeriksaan terakhir: {report ? timeID(report.at) : "belum pernah"}
-              {report ? ` · ${Math.round((report.duration_ms || 0) / 100) / 10} dtk · ${report.orders_scanned || 0} transaksi diperiksa` : ""}
+              <CalendarClock size={13} /> Pemeriksaan terakhir: {report && report.at ? timeID(report.at) : "belum pernah"}
+              {report && report.at ? ` · ${Math.round((report.duration_ms || 0) / 100) / 10} dtk · ${report.orders_scanned || 0} transaksi diperiksa` : ""}
             </span>
             <label className="inline-flex items-center gap-2 font-bold text-[#0A0A0A]">
               <input type="checkbox" data-testid="integritas-auto-toggle" checked={!!meta.auto} onChange={toggleAuto} />
@@ -187,7 +187,7 @@ export default function Integritas() {
 
         {loading ? (
           <div className="text-sm text-[#52525B] inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Memuat hasil terakhir...</div>
-        ) : !report ? (
+        ) : !report || !Array.isArray(report.groups) || report.groups.length === 0 ? (
           <div className="rounded-2xl border bg-white p-5 text-sm text-[#52525B]" data-testid="integritas-empty">
             Belum ada hasil pemeriksaan. Tekan <b>Cek Sekarang</b> untuk memeriksa integritas data server.
           </div>
@@ -200,10 +200,10 @@ export default function Integritas() {
               <StatCard label="Bisa Diperbaiki" value={s.fixable || 0} tone="neutral" testid="integritas-stat-fixable" />
             </div>
 
-            {report.groups.map((g) => {
+            {(report.groups || []).map((g) => {
               const bad = (g.checks || []).filter((c) => c.count > 0);
               return (
-                <div key={g.key} className="rounded-2xl border bg-white p-5" data-testid={`integritas-group-${g.key}`}>
+                <div key={g.key || Math.random()} className="rounded-2xl border bg-white p-5" data-testid={`integritas-group-${g.key}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-extrabold text-[#0A0A0A]">{g.label}</div>
                     <div className={`text-xs font-bold px-2 py-1 rounded-lg border ${bad.length ? "bg-[#FFF7ED] text-[#B45309] border-[#FED7AA]" : "bg-[#F0FDF4] text-[#15803D] border-[#BBF7D0]"}`}>

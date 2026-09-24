@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const AdmZip = require('adm-zip');
 
-const srcDir = path.join(__dirname, 'project', 'frontend', 'build');
+const frontendDir = path.join(__dirname, 'project', 'frontend');
+const srcDir = path.join(frontendDir, 'build');
 const destDir = path.join(__dirname, 'dist');
 
 function stamp() {
@@ -24,6 +26,31 @@ function copyRecursiveSync(src, dest) {
     }
   } else {
     fs.copyFileSync(src, dest);
+  }
+}
+
+console.log('[Build] Checking React frontend build status...');
+const hasFrontendBuild = fs.existsSync(srcDir) && fs.existsSync(path.join(srcDir, 'index.html')) && fs.existsSync(path.join(srcDir, 'static', 'js'));
+
+if (!hasFrontendBuild) {
+  console.log('[Build] Frontend build not found. Running build in project/frontend...');
+  try {
+    const hasNodeModules = fs.existsSync(path.join(frontendDir, 'node_modules', '@craco', 'craco'));
+    if (!hasNodeModules) {
+      execSync('npm install --legacy-peer-deps --include=dev', {
+        cwd: frontendDir,
+        stdio: 'inherit',
+        env: { ...process.env, NODE_ENV: 'development' }
+      });
+    }
+    execSync('npm run build', {
+      cwd: frontendDir,
+      stdio: 'inherit',
+      env: { ...process.env, NODE_ENV: 'production' }
+    });
+  } catch (buildErr) {
+    console.error('[Build] Frontend build failed:', buildErr.message);
+    process.exit(1);
   }
 }
 

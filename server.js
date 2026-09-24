@@ -2950,6 +2950,11 @@ app.use(express.static(fallbackBuildPath, staticOptions));
 
 // Static files fallback
 app.get('*', (req, res) => {
+  // If request is for a missing static asset (JS, CSS, fonts, images, maps), return 404 instead of index.html
+  if (/\.(js|css|json|map|png|jpe?g|webp|svg|gif|ico|woff2?|ttf|eot)$/i.test(req.path) || req.path.startsWith('/static/')) {
+    return res.status(404).type('text/plain').send('Resource not found');
+  }
+
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   if (fs.existsSync(path.join(distPath, 'index.html'))) {
     return res.sendFile(path.join(distPath, 'index.html'));
