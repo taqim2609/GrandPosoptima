@@ -1432,13 +1432,43 @@ Terima kasih atas kerja keras hari ini!
   });
 
   // POST /api/settings/outlet/logo & /api/settings/platform/logo
-  app.post(['/api/settings/outlet/logo', '/settings/outlet/logo', '/api/settings/platform/logo', '/settings/platform/logo'], upload.single('file'), (req, res) => {
+  app.post(['/api/settings/outlet/logo', '/settings/outlet/logo'], upload.single('file'), (req, res) => {
+    let url = '';
     if (req.file && req.file.buffer) {
       const mime = req.file.mimetype || 'image/png';
-      const b64 = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
-      return res.json({ url: b64 });
+      url = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+    } else if (req.body && req.body.url) {
+      url = req.body.url;
     }
-    res.json({ url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&h=200&fit=crop' });
+    if (url) {
+      db.settings = db.settings || {};
+      db.settings.business = db.settings.business || {};
+      db.settings.business.logo_url = url;
+      if (typeof broadcastRealtimeSync === 'function') {
+        broadcastRealtimeSync('outlet_logo_updated', { logo_url: url });
+      }
+      return res.json({ url, success: true });
+    }
+    res.status(400).json({ detail: 'File gambar logo tidak valid' });
+  });
+
+  app.post(['/api/settings/platform/logo', '/settings/platform/logo'], upload.single('file'), (req, res) => {
+    let url = '';
+    if (req.file && req.file.buffer) {
+      const mime = req.file.mimetype || 'image/png';
+      url = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+    } else if (req.body && req.body.url) {
+      url = req.body.url;
+    }
+    if (url) {
+      db.platform = db.platform || {};
+      db.platform.logo_url = url;
+      if (typeof broadcastRealtimeSync === 'function') {
+        broadcastRealtimeSync('platform_logo_updated', { logo_url: url });
+      }
+      return res.json({ url, success: true });
+    }
+    res.status(400).json({ detail: 'File gambar logo tidak valid' });
   });
 
   // ==========================================

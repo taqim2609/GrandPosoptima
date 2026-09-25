@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { setFirestoreSyncing } from "@/lib/firebase";
+import { setFirestoreSyncing, syncOrderToFirestore } from "@/lib/firebase";
 
 const KEY = "gak_pending_orders";
 const LOG_KEY = "gak_sync_log";
@@ -44,6 +44,15 @@ export function OfflineProvider({ children }) {
         map.delete(item.temp_id);
         ok++;
         done.push({ client_ref: item.temp_id, order_number: res.data?.order_number, total: item.meta?.total || 0, status: "ok" });
+        
+        // Auto-sync the completed order to Firebase Firestore when back online
+        if (res.data) {
+          try {
+            await syncOrderToFirestore(res.data);
+          } catch (fireErr) {
+            console.error("[Firestore] Gagal sinkronisasi transaksi offline ke Firebase:", fireErr);
+          }
+        }
       } catch (e) {
         const cur = map.get(item.temp_id);
         if (cur) {

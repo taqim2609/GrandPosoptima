@@ -64,14 +64,15 @@ export const LazyProductImage = memo(function LazyProductImage({
         }
       );
 
-      if (imgRef.current) {
-        observer.observe(imgRef.current);
+      const node = imgRef.current;
+      if (node) {
+        observer.observe(node);
       }
 
       return () => {
-        if (imgRef.current) {
+        if (node) {
           try {
-            observer.unobserve(imgRef.current);
+            observer.unobserve(node);
           } catch (e) {}
         }
       };

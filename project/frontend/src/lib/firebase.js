@@ -338,3 +338,30 @@ export async function deleteRemoteErrorLog(errorId) {
     return false;
   }
 }
+
+// Real-time Order Sync with Firestore Cloud (Offline & Online)
+export async function syncOrderToFirestore(order) {
+  if (!order || !order.id) return { success: false, error: "Invalid order data" };
+  setFirestoreSyncing(true, 1000);
+  try {
+    const docRef = doc(db, "orders", String(order.id));
+    const payload = {
+      id: String(order.id),
+      order_number: String(order.order_number || ""),
+      status: String(order.status || "completed"),
+      total: Number(order.total || 0),
+      payment_method: String(order.payment_method || order.payment_method_id || ""),
+      created_at: String(order.created_at || new Date().toISOString()),
+      synced_at: new Date().toISOString(),
+      updated_at: serverTimestamp(),
+    };
+    await setDoc(docRef, payload, { merge: true });
+    setFirestoreSyncing(false);
+    updateLastSyncInfo({ ok: true, lastOrderSync: order.order_number });
+    return { success: true, id: order.id };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `orders/${order.id}`);
+    return { success: false, error: err.message };
+  }
+}
+

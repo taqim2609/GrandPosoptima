@@ -8,8 +8,8 @@ export default function SubTabs({ items = [], initial, testid = "subtab", classN
   const currentItem = items.find((x) => x.key === t) || items[0];
   const Active = currentItem?.comp;
   return (
-    <div className={`h-full flex flex-col ${className}`} data-testid={testid}>
-      <div className="flex gap-1.5 px-6 pt-4 pb-3 border-b bg-white overflow-x-auto no-scrollbar">
+    <div className={`h-full flex flex-col min-h-0 ${className}`} data-testid={testid}>
+      <div className="flex gap-1.5 px-6 pt-4 pb-3 border-b bg-white overflow-x-auto no-scrollbar shrink-0">
         {items.map((x) => (
           <button key={x.key} data-testid={`${testid}-${x.key}`} onClick={() => setT(x.key)}
             className={`tap flex items-center gap-2 px-4 h-10 rounded-xl font-bold text-sm whitespace-nowrap ${
@@ -19,7 +19,7 @@ export default function SubTabs({ items = [], initial, testid = "subtab", classN
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <ErrorBoundary key={t}>
           <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin h-8 w-8 border-4 border-[#E63946] border-t-transparent rounded-full"></div></div>}>
             {isValidElement(Active) ? Active : (Active ? <Active /> : null)}

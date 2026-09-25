@@ -9,16 +9,18 @@ import { useUI, posLabel } from "@/lib/ui";
 import { useOffline } from "@/context/OfflineContext";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { syncOrderToFirestore } from "@/lib/firebase";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import VoidDialog from "@/components/VoidDialog";
 import LazyProductImage from "@/components/LazyProductImage";
+import ReceiptModal from "@/components/ReceiptModal";
 import {
   Utensils, ShoppingBag, Store, Plus, Minus, Trash2, Armchair,
   Search, Receipt, X, CheckCircle2, Layers, Database, ScanLine, Clock, Play, Printer, Wifi, WifiOff, RefreshCw, CloudOff,
   ShoppingCart, ChevronUp, ChevronDown, Lock, ArrowRight, Wallet, LayoutDashboard, Zap,
-  ArrowRightLeft, RotateCcw, AlertTriangle, MessageCircle,
+  ArrowRightLeft, RotateCcw, AlertTriangle, MessageCircle, Copy, Check, Send, Sparkles, Share2,
 } from "lucide-react";
 
 const ORDER_TYPES = [
@@ -669,6 +671,14 @@ export default function POS() {
       }
       setPayOpen(false);
       setReceipt(data);
+      // Synchronize to Firebase Firestore
+      if (data) {
+        try {
+          await syncOrderToFirestore(data);
+        } catch (fireErr) {
+          console.error("[Firestore] Gagal sinkronisasi transaksi ke Firebase:", fireErr);
+        }
+      }
       // Auto-print struk (buka laci juga) bila diaktifkan
       if (getDeviceConfig().autoPrint) {
         try { printReceipt(data); } catch (e) {}
@@ -1724,90 +1734,6 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
 }
 
 function ReceiptDialog({ order, onClose }) {
-  const [waPhone, setWaPhone] = useState("");
-  const [waSending, setWaSending] = useState(false);
-  const [showWaInput, setShowWaInput] = useState(false);
-
-  useEffect(() => {
-    if (order) {
-      setWaPhone(order.customer_phone || "");
-      setShowWaInput(false);
-    }
-  }, [order]);
-
-  if (!order) return null;
-
-  const sendWaReceipt = async () => {
-    if (!waPhone.trim()) {
-      toast.error("Masukkan nomor WhatsApp pelanggan");
-      return;
-    }
-    setWaSending(true);
-    try {
-      const res = await api.post("/whatsapp/send-receipt", {
-        to: waPhone.trim(),
-        order_number: order.order_number,
-        total: order.total,
-        customer_name: order.customer_name || "Pelanggan",
-      });
-      toast.success(res.data.message || "Struk WhatsApp berhasil dikirim!");
-      setShowWaInput(false);
-    } catch (e) {
-      toast.error("Gagal mengirim struk via WhatsApp");
-    } finally {
-      setWaSending(false);
-    }
-  };
-
-  return (
-    <Dialog open={!!order} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader><DialogTitle className="flex items-center gap-2 text-[#047857]"><CheckCircle2 /> Transaksi Selesai</DialogTitle></DialogHeader>
-        <div className="text-center">
-          {order.offline && <div data-testid="offline-receipt-badge" className="inline-block bg-[#0A0A0A] text-white text-xs font-bold px-3 py-1 rounded-full mb-2">STRUK OFFLINE — BELUM DISINKRON</div>}
-          <div className="font-num text-sm text-[#52525B]">{order.order_number}</div>
-          <div className="font-num text-3xl font-extrabold mt-1">{rupiah(order.total)}</div>
-          {order.change > 0 && <div className="text-sm mt-1">Kembalian: <span className="font-num font-bold">{rupiah(order.change)}</span></div>}
-        </div>
-
-        {showWaInput ? (
-          <div className="bg-[#F0FDF4] p-3 rounded-xl border border-[#BBF7D0] space-y-2">
-            <label className="text-[11px] font-bold text-[#166534] uppercase tracking-wider block">Kirim Struk ke No. WhatsApp</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={waPhone}
-                onChange={(e) => setWaPhone(e.target.value)}
-                placeholder="08123456789"
-                className="flex-1 h-10 rounded-lg border px-3 text-xs font-mono bg-white outline-none focus:border-[#16A34A]"
-              />
-              <button
-                onClick={sendWaReceipt}
-                disabled={waSending}
-                className="tap h-10 px-3 rounded-lg bg-[#16A34A] text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {waSending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Kirim
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <DialogFooter className="flex-col gap-2 sm:flex-col">
-          <button data-testid="print-receipt-btn" onClick={() => printReceipt(order)} className="tap w-full h-12 rounded-xl bg-[#0A0A0A] text-white font-bold flex items-center justify-center gap-2">
-            <Receipt size={18} /> Cetak Struk
-          </button>
-          {!showWaInput && (
-            <button
-              onClick={() => setShowWaInput(true)}
-              className="tap w-full h-12 rounded-xl bg-[#25D366] hover:bg-[#22C55E] text-white font-bold flex items-center justify-center gap-2"
-            >
-              <MessageCircle size={18} /> Kirim Struk WhatsApp
-            </button>
-          )}
-          <button onClick={onClose} className="tap w-full h-12 rounded-xl bg-[#F4F5F7] font-bold">Transaksi Baru</button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  return <ReceiptModal order={order} open={!!order} onClose={onClose} />;
 }
 

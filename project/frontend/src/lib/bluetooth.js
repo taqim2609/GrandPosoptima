@@ -113,16 +113,24 @@ function buildEscPos(order, cfg) {
     L.push(text("--------------------------------\n"));
     L.push(cmd(ESC, 0x61, 1)); // center lagi utk header outlet
   }
+  if (order.offline) {
+    L.push(text("*** STRUK OFFLINE ***\n"));
+  }
   L.push(cmd(ESC, 0x45, 1)); // bold on
-  L.push(text((cfg.outletName || "") + "\n"));
+  L.push(text((cfg.outletName || "GRANDPOS OPTIMA") + "\n"));
   L.push(cmd(ESC, 0x45, 0)); // bold off
   if (cfg.outletAddress) L.push(text((cfg.outletAddress || "") + "\n"));
-  L.push(text("\n"));
+  L.push(text("--------------------------------\n"));
   L.push(cmd(ESC, 0x61, 0)); // left
-  L.push(text(`No: ${order.order_number}\n`));
-  L.push(text(`${dt}\n`));
-  L.push(text(`Kasir: ${order.cashier_name || "-"}\n`));
-  L.push(text(`${LABEL[order.order_type] || order.order_type || ""}\n`));
+  L.push(text(`No. Order : ${order.order_number}\n`));
+  L.push(text(`Tanggal   : ${dt}\n`));
+  L.push(text(`Kasir     : ${order.cashier_name || "-"}\n`));
+  const srvLabel = LABEL[order.order_type] || order.order_type || "Umum";
+  const tbl = order.table_name ? ` (${order.table_name})` : "";
+  L.push(text(`Layanan   : ${srvLabel}${tbl}\n`));
+  if (order.customer_name) {
+    L.push(text(`Pelanggan : ${order.customer_name}${order.customer_phone ? ` (${order.customer_phone})` : ""}\n`));
+  }
   L.push(text("--------------------------------\n"));
   (order.items || []).forEach((i) => {
     const rp = (n) => "Rp" + Math.round(Number(n || 0)).toLocaleString("id-ID");
@@ -134,22 +142,32 @@ function buildEscPos(order, cfg) {
     if (nm.length > nameW) nm = nm.slice(0, Math.max(0, nameW - 1)) + "~";
     const pad = Math.max(1, 41 - nm.length - right.length);
     L.push(text(`${nm}${" ".repeat(pad)}${right}\n`));
+    if (i.notes) L.push(text(`  * Note: ${i.notes}\n`));
   });
   L.push(text("--------------------------------\n"));
-  L.push(text(`Subtotal: ${rupiah(order.subtotal)}\n`));
-  if (order.discount) L.push(text(`Diskon: -${rupiah(order.discount)}\n`));
-  (order.promos_applied || []).forEach((p) => L.push(text(`Promo ${p}: -${rupiah(order.promo_discount || 0)}\n`)));
-  if (order.redeem_discount) L.push(text(`Tukar poin: -${rupiah(order.redeem_discount)}\n`));
-  if (order.service_tax) L.push(text(`Pajak Layanan: +${rupiah(order.service_tax)}\n`));
+  L.push(text(`Subtotal      : ${rupiah(order.subtotal)}\n`));
+  if (order.discount) L.push(text(`Diskon        : -${rupiah(order.discount)}\n`));
+  (order.promos_applied || []).forEach((p) => L.push(text(`Promo (${p}): -${rupiah(order.promo_discount || 0)}\n`)));
+  if (order.redeem_discount) L.push(text(`Tukar Poin    : -${rupiah(order.redeem_discount)}\n`));
+  if (order.service_tax) L.push(text(`Pajak Layanan : +${rupiah(order.service_tax)}\n`));
   L.push(cmd(ESC, 0x61, 1));
   L.push(cmd(ESC, 0x45, 1));
-  L.push(text(`TOTAL: ${rupiah(order.total)}\n`));
+  L.push(text(`TOTAL : ${rupiah(order.total)}\n`));
   L.push(cmd(ESC, 0x45, 0));
   L.push(cmd(ESC, 0x61, 0));
-  if (order.payment_method_name) L.push(text(`${order.payment_method_name}: ${rupiah(order.amount_paid || order.total)}\n`));
-  if (order.change) L.push(text(`Kembali: ${rupiah(order.change)}\n`));
-  if (order.points_earned) L.push(text(`Poin member: +${order.points_earned}\n`));
-  L.push(text(`\n${cfg.footerText || "Terima kasih"}\n`));
+  const payParts = (order.payment_splits && order.payment_splits.length)
+    ? order.payment_splits
+    : (order.payment_method_name ? [{ payment_method_name: order.payment_method_name, amount: order.amount_paid || order.total }] : []);
+  payParts.forEach((pp) => {
+    L.push(text(`Bayar (${pp.payment_method_name}): ${rupiah(pp.amount)}\n`));
+  });
+  if (!(order.payment_splits && order.payment_splits.length) && order.change) {
+    L.push(text(`Kembalian     : ${rupiah(order.change)}\n`));
+  }
+  if (order.points_earned) L.push(text(`Poin Member   : +${order.points_earned}\n`));
+  L.push(cmd(ESC, 0x61, 1));
+  L.push(text(`\n${cfg.footerText || "Terima Kasih Atas Kunjungan Anda"}\n`));
+  L.push(text("Simpan struk ini sebagai bukti transaksi\n"));
   L.push(text("\n\n"));
   L.push(cmd(GS, 0x56, 0)); // cut (full)
   return concat(...L);

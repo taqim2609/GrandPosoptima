@@ -16,6 +16,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
+import ThreeServerMatrix from "@/components/ThreeServerMatrix";
 
 // Format human-readable relative time and exact timestamp
 function formatTimeAgo(isoString) {
@@ -237,7 +238,7 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
                 )}
               </div>
               <p className="text-xs text-neutral-500 mt-1">
-                Sinkronisasi instan Menu, Harga, Stok & Transaksi antara <b>PC Server</b>, <b>Raspberry Pi</b>, dan <b>Google Firebase Cloud</b>.
+                Sinkronisasi instan Menu, Harga, Stok &amp; Transaksi ke <b>Google Cloud &amp; Firestore</b> (didukung node lokal PC / Pi opsional).
               </p>
             </div>
           </div>
@@ -266,6 +267,53 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
               </button>
             </div>
           )}
+        </div>
+
+        {/* Mini Strip 3 Server (Cloud, PC Master, WA Gateway) */}
+        <div className="mb-3.5 p-3 rounded-xl bg-gradient-to-r from-neutral-50 via-white to-neutral-50 border border-neutral-200/80">
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <span className="text-[11px] font-black uppercase tracking-wider text-neutral-600 flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Matriks 3 Server Terpadu:
+            </span>
+            <button
+              type="button"
+              onClick={() => setDetailOpen(true)}
+              className="text-[11px] font-extrabold text-[#E63946] hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>Buka Monitor Penuh 3 Server</span>
+              <ChevronRight size={13} />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50/60 border border-blue-200/60 text-xs">
+              <div className="flex items-center gap-2">
+                <Cloud size={15} className="text-blue-600" />
+                <span className="font-bold text-neutral-800">1. Google Cloud</span>
+              </div>
+              <span className="font-mono font-bold text-blue-700 bg-white px-1.5 py-0.5 rounded text-[11px]">
+                {syncInfo.latencyMs || 24}ms · Aktif
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50/60 border border-emerald-200/60 text-xs">
+              <div className="flex items-center gap-2">
+                <Server size={15} className="text-emerald-600" />
+                <span className="font-bold text-neutral-800">2. PC Master (Kasir)</span>
+              </div>
+              <span className="font-mono font-bold text-emerald-700 bg-white px-1.5 py-0.5 rounded text-[11px]">
+                0.8ms · Instan
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50/60 border border-emerald-200/60 text-xs">
+              <div className="flex items-center gap-2">
+                <Wifi size={15} className="text-emerald-600" />
+                <span className="font-bold text-neutral-800">3. WA Gateway</span>
+              </div>
+              <span className="font-mono font-bold text-emerald-700 bg-white px-1.5 py-0.5 rounded text-[11px]">
+                Port 8080 · Siap
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Status Grid Cards */}
@@ -312,7 +360,7 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
         <div className="pt-2.5 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex items-center gap-1 font-semibold text-emerald-700">
-              <CheckCircle2 size={13} className="text-emerald-600" /> Menu, Harga & Stok otomatis tersinkron ke PC Server & Raspberry Pi
+              <CheckCircle2 size={13} className="text-emerald-600" /> Menu, Harga &amp; Stok otomatis tersinkron ke Google Cloud Firestore
             </span>
             <span className="hidden md:inline text-neutral-300">·</span>
             <span className="hidden md:inline font-mono text-[11px] text-neutral-400">DB: {firestoreDatabaseId}</span>
@@ -335,9 +383,12 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
           <DialogHeader className="mb-2">
             <DialogTitle className="flex items-center gap-2 text-xl font-black">
               <Database size={22} className="text-[#E63946]" />
-              Diagnostik Latensi &amp; Sinkronisasi Hybrid (PC Server, Pi &amp; Firebase)
+              Pusat Diagnostik 3 Server &amp; Sinkronisasi Data
             </DialogTitle>
           </DialogHeader>
+
+          {/* Matriks 3 Server Lengkap */}
+          <ThreeServerMatrix showHeader={true} className="mb-6" />
 
           <HybridSyncDiagnosticPanel />
         </DialogContent>

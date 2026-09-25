@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Download, Monitor, Cpu, CheckCircle2, RefreshCw, DatabaseBackup, Globe, CloudUpload, Bug, Loader2, ShieldCheck, Cloud } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import { BOOTSTRAP_PI_SH, BOOTSTRAP_WINDOWS_BAT, downloadText, AISTUDIO_DEFAULT_URL } from "@/lib/installers";
+import { BOOTSTRAP_PI_SH, BOOTSTRAP_WINDOWS_BAT, START_PC_SERVER_BAT, SETUP_RASPBERRYPI_SH, downloadText, AISTUDIO_DEFAULT_URL } from "@/lib/installers";
 import GDriveBackupManager from "@/components/GDriveBackupManager";
 
 const AISTUDIO_URL = AISTUDIO_DEFAULT_URL;
@@ -151,6 +151,55 @@ export default function SettingsInstaller() {
 
         {/* INSTALL */}
         <Section n="1" title="Instal Server (pertama kali)" icon={Globe} desc="Unduh kode langsung dari Google AI Studio, lalu jalankan. Sekali perintah untuk Raspberry Pi.">
+          {/* SCRIPT PRODUKSI PC & RASP PI */}
+          <div className="rounded-xl border-2 border-[#10B981] bg-[#F0FDF4] p-5 space-y-4 shadow-sm" data-testid="unified-installers-box">
+            <div className="flex items-center gap-2 font-extrabold text-[#111827]">
+              <ShieldCheck size={20} className="text-[#10B981]" />
+              Unified POS Node Scripts (PC &amp; Raspberry Pi)
+            </div>
+            <p className="text-xs text-[#4B5563]">
+              Gunakan script di bawah ini untuk menginstal dan menjalankan model <b>Hybrid Lokal + Cloud</b> dengan PC Utama bertindak sebagai Node Evolution API (WhatsApp Gateway) dan Raspberry Pi sebagai Client Ringan terdedikasi.
+            </p>
+            
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="border border-[#BBF7D0] bg-white rounded-xl p-4 space-y-2">
+                <div className="font-extrabold text-sm flex items-center gap-1.5 text-[#065F46]">
+                  <Monitor size={16} /> PC Server Utama (Windows)
+                </div>
+                <p className="text-[11px] text-[#4B5563]">
+                  Mengaktifkan Evolution API (port 8080) di Docker, mendeteksi IP Tailscale secara otomatis, dan menjalankan server POS lokal (port 3000).
+                </p>
+                <button
+                  onClick={() => {
+                    downloadText("start-pc-server.bat", START_PC_SERVER_BAT);
+                    toast.success("start-pc-server.bat berhasil diunduh");
+                  }}
+                  className="tap w-full h-9 px-3 rounded-lg bg-[#10B981] hover:bg-[#059669] text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Download size={13} /> Unduh start-pc-server.bat
+                </button>
+              </div>
+
+              <div className="border border-[#BBF7D0] bg-white rounded-xl p-4 space-y-2">
+                <div className="font-extrabold text-sm flex items-center gap-1.5 text-[#065F46]">
+                  <Cpu size={16} /> Raspberry Pi (Client Ringan)
+                </div>
+                <p className="text-[11px] text-[#4B5563]">
+                  Menginstal Node.js 20, Tailscale VPN, mengunduh dependencies POS, dan mendaftarkan systemd service agar POS nyala otomatis tanpa Evolution API yang berat.
+                </p>
+                <button
+                  onClick={() => {
+                    downloadText("setup-raspberrypi.sh", SETUP_RASPBERRYPI_SH);
+                    toast.success("setup-raspberrypi.sh berhasil diunduh");
+                  }}
+                  className="tap w-full h-9 px-3 rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Download size={13} /> Unduh setup-raspberrypi.sh
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="rounded-xl border-2 border-[#E63946] bg-[#FEF2F2] p-4 space-y-2">
             <div className="flex items-center gap-2 font-extrabold"><Cpu size={18} className="text-[#E63946]" /> Raspberry Pi (headless) — 1 perintah via SSH</div>
             <p className="text-xs text-[#52525B]">Memasang <b>Docker</b>, meng-<b>unduh kode</b> dari Google AI Studio ke <code>{APP_DIR}</code>, lalu menjalankan installer (editor konfigurasi terbuka otomatis).</p>
@@ -161,7 +210,7 @@ export default function SettingsInstaller() {
             </button>
           </div>
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 space-y-2 text-sm text-[#3f3f46]">
-            <div className="font-bold flex items-center gap-1.5"><Monitor size={14} /> Komputer Windows</div>
+            <div className="font-bold flex items-center gap-1.5"><Monitor size={14} /> Komputer Windows (Instalasi Standalone)</div>
             <p className="text-xs text-[#52525B]">Pastikan <b>Docker Desktop</b> terpasang. Cara termudah: unduh skrip bootstrap lalu <b>dobel-klik</b> — otomatis unduh dari Google AI Studio + install.</p>
             <button data-testid="download-bootstrap-windows" onClick={() => { downloadText("bootstrap-windows.bat", BOOTSTRAP_WINDOWS_BAT); toast.success("bootstrap-windows.bat diunduh"); }}
               className="tap h-9 px-3 rounded-lg bg-white border border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs inline-flex items-center gap-1.5">
@@ -172,6 +221,35 @@ export default function SettingsInstaller() {
 curl -fsSL ${AISTUDIO_URL}/pos-grand.tar.gz -o pos-grand.tar.gz
 tar xzf pos-grand.tar.gz
 install-windows.bat`}</Code>
+          </div>
+        </Section>
+
+        {/* GUIDES FOR INSTALLATION AND UPDATES */}
+        <Section title="Panduan Instalasi &amp; Pembaruan Server" icon={CheckCircle2} desc="Panduan operasional harian untuk memelihara server kasir Anda di PC Utama dan Raspberry Pi.">
+          <div className="bg-white rounded-xl border p-5 space-y-4 text-sm text-[#374151]">
+            <div className="space-y-2">
+              <h3 className="font-extrabold text-[#111827] flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-[#10B981]"></span>
+                A. Manajemen Server di PC Utama (Windows)
+              </h3>
+              <ol className="list-decimal pl-5 space-y-1 text-xs text-[#4B5563]">
+                <li><b>Cara Instal:</b> Unduh file <code className="font-mono text-xs text-[#10B981]">start-pc-server.bat</code> di atas, pindahkan ke folder proyek utama di PC Anda. Pastikan <b>Docker Desktop</b> sudah aktif, lalu klik dua kali file <code className="font-mono text-xs">start-pc-server.bat</code>.</li>
+                <li><b>Cara Kerja:</b> Script akan otomatis mendeteksi alamat IP Tailscale PC Anda, menyalakannya di container Docker (Evolution API port 8080), dan menjalankan backend POS (port 3000). Alamat IP Tailscale ini langsung diinjeksi ke program secara otomatis!</li>
+                <li><b>Cara Update:</b> Cukup tutup konsol server (Command Prompt) yang sedang berjalan, lakukan <code className="font-mono text-xs">git pull</code> (atau unduh paket terbaru), lalu jalankan kembali file <code className="font-mono text-xs">start-pc-server.bat</code> tersebut.</li>
+              </ol>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-[#F3F4F6]">
+              <h3 className="font-extrabold text-[#111827] flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-[#4F46E5]"></span>
+                B. Manajemen Server di Raspberry Pi (Client Ringan)
+              </h3>
+              <ol className="list-decimal pl-5 space-y-1 text-xs text-[#4B5563]">
+                <li><b>Cara Instal:</b> Kirim file <code className="font-mono text-xs text-[#4F46E5]">setup-raspberrypi.sh</code> ke Raspberry Pi Anda (misal via SFTP atau wget). Masuk ke terminal Pi via SSH, lalu jalankan perintah: <code className="font-mono text-xs text-[#111827] bg-[#F3F4F6] px-1 py-0.5 rounded">chmod +x setup-raspberrypi.sh &amp;&amp; ./setup-raspberrypi.sh</code>.</li>
+                <li><b>Cara Kerja:</b> Script akan menginstal Node.js, mengaktifkan Tailscale VPN, mendownload dependencies, dan mendaftarkan service background <code className="font-mono text-xs">grandpos.service</code> yang otomatis berjalan di port 3000 saat Pi dinyalakan.</li>
+                <li><b>Cara Update:</b> Anda bisa memperbarui sistem di Raspberry Pi dengan mengklik tombol merah <b>"Update Sekarang" (Update 1-Klik)</b> di atas secara langsung dari browser kasir mana saja, atau via SSH manual dengan menjalankan: <code className="font-mono text-xs">cd ~/grand-aceh-pos &amp;&amp; bash update-pi.sh</code>.</li>
+              </ol>
+            </div>
           </div>
         </Section>
 

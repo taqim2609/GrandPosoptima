@@ -150,8 +150,10 @@ export function applyTheme(p) {
 export function logoUrl(cfg) {
   const u = cfg?.logo_url || "";
   if (!u) return "";
-  if (/^https?:/.test(u)) return u;
-  return (getServerUrl() || "") + u;
+  if (u.startsWith("data:") || u.startsWith("blob:") || /^https?:\/\//i.test(u)) return u;
+  const srv = getServerUrl() || "";
+  if (u.startsWith("/")) return srv ? `${srv}${u}` : u;
+  return srv ? `${srv}/${u}` : `/${u}`;
 }
 
 /* ---------- hook ---------- */

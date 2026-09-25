@@ -28,6 +28,7 @@ import {
   ChevronUp,
   Flame,
   Filter,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildDiagReport, installDiag, errorLog } from "@/lib/diag";
@@ -42,6 +43,7 @@ import {
 } from "@/lib/firebase";
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
 import EvolutionDetectionCard from "@/components/EvolutionDetectionCard";
+import TailscaleDashboard from "@/components/TailscaleDashboard";
 
 export default function Diagnostik() {
   const [report, setReport] = useState("");
@@ -1260,6 +1262,7 @@ export default function Diagnostik() {
 
         {activeTab === "hybrid-sync" && (
           <div className="space-y-6">
+            <TailscaleDashboard />
             <EvolutionDetectionCard />
             <HybridSyncDiagnosticPanel />
           </div>

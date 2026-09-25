@@ -101,6 +101,39 @@ async def health_check():
         "time": datetime.now(timezone.utc).isoformat()
     }
 
+@api.get("/system/tailscale-status")
+async def get_tailscale_status():
+    import subprocess
+    ip = os.environ.get("TAILSCALE_PC_IP") or ""
+    active = False
+    
+    # Try to execute tailscale ip -4
+    try:
+        res = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0 and res.stdout.strip():
+            ip = res.stdout.strip()
+            active = True
+    except Exception:
+        pass
+        
+    # Fallback status check
+    if not active:
+        try:
+            res = subprocess.run(["tailscale", "status", "--peers=false"], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0:
+                active = True
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "active": active or bool(ip),
+        "ip": ip or "127.0.0.1",
+        "role": "PC Server Master" if "PC" in os.environ.get("NODE_ENV", "") or not os.path.exists("/etc/systemd/system/grandpos.service") else "Raspberry Pi Client",
+        "backend_url": os.environ.get("REACT_APP_BACKEND_URL") or "http://grandpos.local:3000",
+        "evolution_url": os.environ.get("EVOLUTION_API_URL") or "http://localhost:8080"
+    }
+
 class EvolutionHeartbeatIn(BaseModel):
     instance_name: Optional[str] = "grand-aceh-pos"
     status: Optional[str] = "connected"
@@ -5499,6 +5532,24 @@ async def get_upload(fname: str):
         raise HTTPException(404, "File tidak ditemukan")
     return FileResponse(str(fp))
 
+@api.get("/installers/download")
+async def download_installer(key: str = Query(...)):
+    if key == "apk_sunmi_t2":
+        apk_path = PROJECT_ROOT.parent / "apk" / "Grand-Aceh-Kuliner-POS-v2.10.apk"
+        if not apk_path.exists():
+            alt_path = PROJECT_ROOT / "frontend" / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+            if alt_path.exists():
+                apk_path = alt_path
+            else:
+                raise HTTPException(status_code=404, detail="File APK tidak ditemukan di server.")
+        return FileResponse(
+            path=str(apk_path),
+            filename="Grand-Aceh-Kuliner-POS-v2.10.apk",
+            media_type="application/vnd.android.package-archive"
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Key installer tidak valid.")
+
 @api.get("/installers/project-zip")
 async def download_project_zip(admin: dict = Depends(require_admin)):
     if not (PROJECT_ROOT / "docker-compose.yml").exists():
@@ -6478,6 +6529,9 @@ async def _wa_config():
 
 async def _wa_configured():
     c = await _wa_config()
+    prov = c.get("provider") or "wacloud"
+    if prov == "evolution":
+        return bool(c.get("evolution_url") and c.get("evolution_api_key"))
     return bool(c.get("api_key") and c.get("device_id"))
 
 def _wa_normalize(num):
@@ -6509,13 +6563,45 @@ async def _wacloud_request(method, path, **kw):
 
 async def _wa_send_text(to, text):
     cfg = await _wa_config()
-    device_id = cfg.get("device_id")
-    if not device_id:
-        raise HTTPException(400, "Device WhatsApp belum dipilih di Pengaturan")
-    return await _wacloud_request("POST", "/messages", json={
-        "device_id": device_id, "to": _wa_normalize(to),
-        "message_type": "text", "text": text,
-    })
+    prov = cfg.get("provider") or "wacloud"
+    
+    if prov == "evolution":
+        import httpx
+        url = cfg.get("evolution_url") or "http://localhost:8080"
+        instance = cfg.get("evolution_instance") or "grand-aceh-pos"
+        api_key = cfg.get("evolution_api_key") or ""
+        
+        if not url:
+            raise HTTPException(400, "URL Evolution API belum diisi di Pengaturan")
+        
+        url = url.rstrip("/")
+        endpoint = f"{url}/message/sendText/{instance}"
+        headers = {
+            "apikey": api_key,
+            "Content-Type": "application/json"
+        }
+        normalized_num = _wa_normalize(to)
+        payload = {
+            "number": normalized_num,
+            "options": {
+                "delay": 500,
+                "presence": "composing"
+            },
+            "textMessage": {
+                "text": text
+            }
+        }
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post(endpoint, headers=headers, json=payload)
+        return r
+    else:
+        device_id = cfg.get("device_id")
+        if not device_id:
+            raise HTTPException(400, "Device WhatsApp belum dipilih di Pengaturan")
+        return await _wacloud_request("POST", "/messages", json={
+            "device_id": device_id, "to": _wa_normalize(to),
+            "message_type": "text", "text": text,
+        })
 
 # ================================================================== TEMPLATE WHATSAPP (bisa diedit admin)
 # Semua pesan WA (laporan harian, laporan shift, bagi hasil vendor, belanja harian,
@@ -7347,7 +7433,8 @@ async def _send_whatsapp(recipients, text):
             except Exception:
                 pass
             if r.status_code in (200, 201) and body.get("success", True):
-                out.append({"to": to, "ok": True, "id": (body.get("data") or {}).get("message_id")})
+                msg_id = (body.get("key") or {}).get("id") or (body.get("data") or {}).get("message_id") or "sent"
+                out.append({"to": to, "ok": True, "id": msg_id})
             else:
                 out.append({"to": to, "ok": False, "error": body.get("error") or body.get("message") or r.text})
         except HTTPException as he:
@@ -7500,30 +7587,52 @@ async def cron_notify(request: Request, body: CronNotifyIn):
     res = await _send_whatsapp([body.to.strip()], body.message)
     return {"sent": res}
 
-# ---- WhatsApp Gateway (wacloud.id) config, devices & test ----
+# ---- WhatsApp Gateway config, devices & test ----
 class WAConfigIn(BaseModel):
+    provider: Optional[str] = "wacloud"
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     device_id: Optional[str] = None
     device_name: Optional[str] = None
+    evolution_url: Optional[str] = None
+    evolution_api_key: Optional[str] = None
+    evolution_instance: Optional[str] = None
+    phone: Optional[str] = None
+    status: Optional[str] = None
 
 @api.get("/whatsapp/config")
 async def whatsapp_get_config(admin: dict = Depends(require_admin)):
     c = await _wa_config()
     key = c.get("api_key") or ""
+    provider = c.get("provider") or "wacloud"
+    
+    # Check configured based on chosen provider
+    if provider == "evolution":
+        configured = bool(c.get("evolution_url") and c.get("evolution_api_key"))
+    else:
+        configured = bool(c.get("api_key") and c.get("device_id"))
+        
     return {
-        "configured": bool(c.get("api_key") and c.get("device_id")),
+        "configured": configured,
+        "provider": provider,
         "api_key_set": bool(key),
         "api_key_masked": (key[:6] + "…" + key[-4:]) if len(key) > 12 else ("•" * len(key)),
         "base_url": c.get("base_url") or WACLOUD_DEFAULT_BASE,
         "device_id": c.get("device_id", ""),
         "device_name": c.get("device_name", ""),
+        "evolution_url": c.get("evolution_url", ""),
+        "evolution_api_key": c.get("evolution_api_key", ""),
+        "evolution_instance": c.get("evolution_instance", "grand-aceh-pos"),
+        "phone": c.get("phone", ""),
+        "status": c.get("status", "disconnected")
     }
 
 @api.put("/whatsapp/config")
 async def whatsapp_put_config(body: WAConfigIn, admin: dict = Depends(require_admin)):
     upd = {}
-    if body.api_key is not None and body.api_key.strip():
+    if body.provider is not None:
+        upd["provider"] = body.provider.strip()
+    if body.api_key is not None:
         upd["api_key"] = body.api_key.strip()
     if body.base_url is not None:
         upd["base_url"] = body.base_url.strip() or WACLOUD_DEFAULT_BASE
@@ -7531,6 +7640,17 @@ async def whatsapp_put_config(body: WAConfigIn, admin: dict = Depends(require_ad
         upd["device_id"] = body.device_id.strip()
     if body.device_name is not None:
         upd["device_name"] = body.device_name.strip()
+    if body.evolution_url is not None:
+        upd["evolution_url"] = body.evolution_url.strip()
+    if body.evolution_api_key is not None:
+        upd["evolution_api_key"] = body.evolution_api_key.strip()
+    if body.evolution_instance is not None:
+        upd["evolution_instance"] = body.evolution_instance.strip()
+    if body.phone is not None:
+        upd["phone"] = body.phone.strip()
+    if body.status is not None:
+        upd["status"] = body.status.strip()
+        
     if upd:
         await db.settings.update_one({"_id": "wa"}, {"$set": upd}, upsert=True)
     return {"ok": True}
@@ -7567,37 +7687,203 @@ async def whatsapp_test(body: WATestIn, admin: dict = Depends(require_admin)):
         raise HTTPException(400, f"Gagal kirim: {res[0].get('error') if res else 'tidak diketahui'}")
     return {"sent": res}
 
+class WAInstanceCreateIn(BaseModel):
+    evolution_url: Optional[str] = None
+    evolution_api_key: Optional[str] = None
+    instance_name: Optional[str] = "grand-aceh-pos"
+
+@api.get("/whatsapp/status")
+@api.get("/settings/whatsapp")
+async def whatsapp_status():
+    """Memeriksa status koneksi WhatsApp Gateway aktif (Evolution API atau WACloud.id)."""
+    cfg = await _wa_config()
+    provider = cfg.get("provider") or "wacloud"
+    
+    if provider == "evolution":
+        url = (cfg.get("evolution_url") or "http://localhost:8080").rstrip("/")
+        instance = cfg.get("evolution_instance") or "grand-aceh-pos"
+        key = cfg.get("evolution_api_key") or ""
+        
+        state = "disconnected"
+        details = {}
+        if url and key:
+            try:
+                headers = {"apikey": key}
+                async with httpx.AsyncClient(timeout=4) as client:
+                    r = await client.get(f"{url}/instance/connectionState/{instance}", headers=headers)
+                    if r.status_code == 200:
+                        data = r.json()
+                        inst_state = (data.get("instance") or {}).get("state") or data.get("state") or ""
+                        if inst_state.lower() in ("open", "connected"):
+                            state = "connected"
+                        else:
+                            state = inst_state.lower() or "connecting"
+                        details = data
+                    elif r.status_code == 404:
+                        state = "not_created"
+            except Exception as e:
+                state = "offline"
+                details = {"error": str(e)}
+        else:
+            state = "unconfigured"
+            
+        status = "connected" if state == "connected" else "disconnected"
+        return {
+            "status": status,
+            "state": state,
+            "provider": "evolution",
+            "api_url": url,
+            "instance_name": instance,
+            "api_key": key,
+            "has_key": bool(key),
+            "details": details
+        }
+    else:
+        configured = bool(cfg.get("api_key") and cfg.get("device_id"))
+        return {
+            "status": "connected" if configured else "disconnected",
+            "state": "open" if configured else "disconnected",
+            "provider": "wacloud",
+            "device_name": cfg.get("device_name", ""),
+            "device_id": cfg.get("device_id", ""),
+            "api_url": cfg.get("base_url") or WACLOUD_DEFAULT_BASE,
+            "instance_name": cfg.get("device_name", "Device WACloud"),
+            "has_key": bool(cfg.get("api_key"))
+        }
+
+@api.post("/whatsapp/instance/create")
+async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depends(require_admin)):
+    """Menghubungkan atau membuat instance WhatsApp pada Evolution API lokal dan mengambil QR Code."""
+    cfg = await _wa_config()
+    url = (body.evolution_url or cfg.get("evolution_url") or "http://localhost:8080").rstrip("/")
+    key = body.evolution_api_key or cfg.get("evolution_api_key") or ""
+    instance = body.instance_name or cfg.get("evolution_instance") or "grand-aceh-pos"
+    
+    if not url:
+        raise HTTPException(400, "URL Evolution API belum diisi")
+        
+    headers = {"apikey": key, "Content-Type": "application/json"}
+    qrcode = None
+    pairing_code = None
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            # 1. Coba ambil QR code dari instance yang sudah ada
+            r = await client.get(f"{url}/instance/connect/{instance}", headers=headers)
+            if r.status_code == 200:
+                data = r.json()
+                qrcode = data.get("base64") or (data.get("qrcode") or {}).get("base64") or data.get("code")
+                pairing_code = data.get("pairingCode")
+            elif r.status_code == 404:
+                # 2. Jika instance belum ada di Evolution API, buat instance baru
+                create_payload = {
+                    "instanceName": instance,
+                    "token": key,
+                    "qrcode": True,
+                    "integration": "WHATSAPP-BAILEYS"
+                }
+                r_create = await client.post(f"{url}/instance/create", headers=headers, json=create_payload)
+                if r_create.status_code in (200, 201):
+                    data = r_create.json()
+                    qrcode = (data.get("qrcode") or {}).get("base64") or data.get("base64") or (data.get("instance") or {}).get("qrcode")
+                    pairing_code = data.get("pairingCode") or (data.get("instance") or {}).get("pairingCode")
+                else:
+                    try:
+                        err_text = r_create.json().get("response") or r_create.text
+                    except Exception:
+                        err_text = r_create.text
+                    raise HTTPException(r_create.status_code, f"Gagal membuat instance Evolution API: {err_text}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Tidak dapat terhubung ke Evolution API ({url}): {e}")
+        
+    await db.settings.update_one(
+        {"_id": "wa"},
+        {"$set": {
+            "provider": "evolution",
+            "evolution_url": url,
+            "evolution_api_key": key,
+            "evolution_instance": instance
+        }},
+        upsert=True
+    )
+    
+    return {
+        "ok": True,
+        "instance": instance,
+        "qrcode": qrcode,
+        "pairingCode": pairing_code
+    }
+
 # Webhook penerima pesan dari WACloud.id untuk booking otomatis
-def _parse_wacloud_payload(payload: dict):
+def _parse_any_whatsapp_payload(payload: dict):
     sender = None
     body = None
-    
-    # 1. Coba dari objek nested 'data'
+    from_me = False
+    is_group = False
+    remote_jid = ""
+    participant = ""
+
+    event = payload.get("event")
     data = payload.get("data")
+    
+    if event == "messages.upsert" and isinstance(data, dict):
+        key = data.get("key") or {}
+        from_me = key.get("fromMe") or False
+        remote_jid = key.get("remoteJid") or ""
+        participant = key.get("participant") or data.get("participant") or ""
+        is_group = bool(payload.get("isGroup") or remote_jid.endswith("@g.us") or participant)
+
+        if is_group:
+            sender = (participant or remote_jid).split("@")[0] if "@" in (participant or remote_jid) else (participant or remote_jid)
+        else:
+            sender = remote_jid.split("@")[0] if "@" in remote_jid else remote_jid
+            
+        message = data.get("message") or {}
+        body = (
+            message.get("conversation") or 
+            (message.get("extendedTextMessage") or {}).get("text") or 
+            (message.get("imageMessage") or {}).get("caption") or 
+            (message.get("videoMessage") or {}).get("caption") or
+            ""
+        )
+        return sender, body, from_me, is_group, remote_jid, participant
+
     if isinstance(data, dict):
-        sender = data.get("from") or data.get("sender") or data.get("phone") or data.get("phone_number") or data.get("participant")
+        remote_jid = data.get("chatId") or data.get("remoteJid") or data.get("jid") or ""
+        participant = data.get("participant") or data.get("author") or ""
+        is_group = bool(data.get("isGroup") or (remote_jid and remote_jid.endswith("@g.us")) or participant)
+        raw_sender = data.get("from") or data.get("sender") or data.get("phone") or data.get("phone_number") or participant
+        sender = (participant or raw_sender or "").split("@")[0] if is_group else (raw_sender or "").split("@")[0]
         body = data.get("body") or data.get("message") or data.get("text") or data.get("caption")
+        from_me = data.get("from_me") or data.get("fromMe") or False
         
-    # 2. Coba dari tingkat root
     if not sender:
-        sender = payload.get("from") or payload.get("sender") or payload.get("phone") or payload.get("phone_number") or payload.get("participant")
+        remote_jid = payload.get("chatId") or payload.get("remoteJid") or payload.get("jid") or remote_jid
+        participant = payload.get("participant") or payload.get("author") or participant
+        is_group = bool(payload.get("isGroup") or (remote_jid and remote_jid.endswith("@g.us")) or participant or str(payload.get("from", "")).endswith("@g.us"))
+        raw_sender = payload.get("from") or payload.get("sender") or payload.get("phone") or payload.get("phone_number") or participant
+        sender = (participant or raw_sender or "").split("@")[0] if is_group else (raw_sender or "").split("@")[0]
     if not body:
         body = payload.get("body") or payload.get("message") or payload.get("text") or payload.get("caption")
+    if not from_me:
+        from_me = payload.get("from_me") or payload.get("fromMe") or False
         
-    return sender, body
+    return sender, body, from_me, is_group, remote_jid, participant
 
 async def _process_whatsapp_webhook(payload: dict):
-    logger.info(f"Menerima webhook WACloud: {payload}")
-    sender, body = _parse_wacloud_payload(payload)
+    logger.info(f"Menerima webhook WhatsApp: {payload}")
+    sender, body, from_me, is_group, remote_jid, participant = _parse_any_whatsapp_payload(payload)
     if not sender or not body:
         logger.warning("Webhook tidak memiliki sender atau body.")
         return
         
     body_str = str(body)
-    body_lower = body_str.lower()
+    body_lower = body_str.lower().strip()
     
     # Deteksi arah pesan keluar untuk menghindari loop rekursif
-    if payload.get("from_me") is True or payload.get("fromMe") is True:
+    if from_me:
         logger.info("Mengabaikan pesan keluar dari diri sendiri (from_me: True).")
         return
         
@@ -7612,16 +7898,50 @@ async def _process_whatsapp_webhook(payload: dict):
         return
         
     # Hindari memproses balasan dari bot itu sendiri
-    bot_keywords = ["booking berhasil", "booking gagal", "mohon kirimkan format booking", "terima kasih telah memilih grand aceh kuliner"]
+    bot_keywords = [
+        "booking berhasil", "booking gagal", "mohon kirimkan format booking",
+        "terima kasih telah memilih grand aceh kuliner", "tiket reservasi meja",
+        "reservasi meja kami hanya dapat dilakukan melalui grup"
+    ]
     if any(bk in body_lower for bk in bot_keywords):
         logger.info("Mengabaikan pesan yang mengandung tanda/balasan bot.")
         return
 
-    # Filter apakah pesan mengandung niat booking/reservasi
-    keywords = ["booking", "reservasi", "meja", "pesan tempat", "pax", "porsi", "makan", "reserv"]
-    if not any(k in body_lower for k in keywords):
-        logger.info("Pesan bukan permintaan booking, mengabaikan.")
+    # Ambil konfigurasi WhatsApp & Aturan Grup
+    cfg = await _wa_config()
+    group_only = cfg.get("group_only_reservation", True)
+    raw_keywords = cfg.get("reservation_keywords", "#reservasi, #booking, !reservasi, reservasi")
+    keywords = [k.strip().lower() for k in raw_keywords.split(",") if k.strip()]
+    target_group_id = (cfg.get("target_group_id") or "").strip().lower()
+    reject_private = cfg.get("reject_private_booking", True)
+    reply_to_group = cfg.get("reply_to_group", True)
+    send_private_confirm = cfg.get("send_private_confirm", True)
+
+    # 1. Filter apakah pesan mengandung kata kunci reservasi
+    matched_keyword = next((k for k in keywords if k in body_lower), None)
+    if not matched_keyword:
+        logger.info(f"Pesan tidak mengandung kata kunci reservasi resmi ({keywords}), mengabaikan.")
         return
+
+    # 2. Cek apakah reservasi dibatasi hanya melalui Grup WhatsApp
+    if group_only and not is_group:
+        logger.info(f"Reservasi dari {sender} ditolak karena dikirim via japri (hanya grup yang diizinkan).")
+        if reject_private and sender:
+            reject_msg = (
+                "*INFORMASI RESERVASI MEJA — Grand Aceh Kuliner*\n\n"
+                "Halo Kak! Mohon maaf, reservasi meja Grand Aceh Kuliner *hanya dapat dilakukan melalui Grup WhatsApp resmi kami*.\n\n"
+                f"Silakan bergabung ke grup resmi atau kirim pesan pemesanan Anda di dalam grup dengan kata kunci: *{keywords[0] if keywords else '#reservasi'}*.\n\n"
+                "Hal ini agar pencatatan jadwal transparan bagi seluruh staf kasir kami. Terima kasih atas pengertiannya! 🙏"
+            )
+            await _send_whatsapp([sender], reject_msg)
+        return
+
+    # 3. Cek Whitelist ID Grup Spesifik (jika dikonfigurasi)
+    if is_group and target_group_id:
+        current_gid = (remote_jid or "").lower()
+        if target_group_id not in current_gid and current_gid != target_group_id:
+            logger.info(f"Pesan dari grup {current_gid} di luar target grup reservasi {target_group_id}")
+            return
 
     # Kirim ke Gemini untuk parsing parameter booking
     try:
@@ -7713,6 +8033,10 @@ async def _process_whatsapp_webhook(payload: dict):
             return
 
         # Simpan reservasi ke database
+        cfg = await _wa_config()
+        provider = cfg.get("provider") or "wacloud"
+        created_by_str = "Evolution AI" if provider == "evolution" else "WACloud AI"
+
         doc = {
             "id": new_id(),
             "table_id": matched_table_id,
@@ -7723,29 +8047,44 @@ async def _process_whatsapp_webhook(payload: dict):
             "time": res_time,
             "note": f"{note} (Booking Otomatis via WhatsApp)".strip(),
             "status": "confirmed",
-            "created_by": "WACloud AI",
+            "created_by": created_by_str,
             "created_at": now_utc().isoformat()
         }
         await db.reservations.insert_one(doc)
         
         # Kirim konfirmasi balasan WhatsApp
-        reply_msg = (
-            f"🎉 *BOOKING BERHASIL!*\n\n"
-            f"Halo Kak *{cust_name}*,\n"
-            f"Reservasi Anda telah dikonfirmasi oleh sistem otomatis kami:\n\n"
-            f"📍 *Meja:* {matched_table_name}\n"
-            f"👥 *Jumlah Orang:* {pax} Orang\n"
-            f"📅 *Tanggal:* {res_date}\n"
-            f"⏰ *Waktu:* {res_time} WIB\n"
-            f"📝 *Catatan:* {note or '-'}\n\n"
-            f"Terima kasih telah memilih Grand Aceh Kuliner. Sampai jumpa di lokasi! 😊"
-        )
-        await _send_whatsapp([sender], reply_msg)
+        if is_group and reply_to_group and remote_jid:
+            group_reply = (
+                f"🎉 *RESERVASI MEJA DITERIMA — Grand Aceh Kuliner*\n\n"
+                f"Halo Kak *{cust_name}* (@{sender}), booking meja Anda telah tercatat otomatis:\n\n"
+                f"📍 *Meja:* {matched_table_name}\n"
+                f"👥 *Jumlah Orang:* {pax} Orang\n"
+                f"📅 *Tanggal:* {res_date}\n"
+                f"⏰ *Waktu:* {res_time} WIB\n"
+                f"📝 *Catatan:* {note or '-'}\n\n"
+                f"Meja akan disiapkan oleh tim kasir kami. Sampai jumpa di restoran! 🙏✨"
+            )
+            await _send_whatsapp([remote_jid], group_reply)
+
+        if send_private_confirm and sender:
+            ticket_msg = (
+                f"🔖 *TIKET RESERVASI MEJA — Grand Aceh Kuliner*\n\n"
+                f"Halo Kak *{cust_name}*,\n"
+                f"Berikut adalah konfirmasi reservasi Anda melalui Grup WhatsApp resmi:\n\n"
+                f"📅 *Tanggal:* {res_date}\n"
+                f"⏰ *Waktu:* {res_time} WIB\n"
+                f"🪑 *Meja:* {matched_table_name}\n"
+                f"👥 *Kapasitas:* {pax} Orang\n\n"
+                f"Tunjukkan pesan ini kepada kasir kami saat tiba di restoran. Terima kasih! 😊"
+            )
+            await _send_whatsapp([sender], ticket_msg)
+            
         logger.info(f"Booking sukses disimpan untuk {cust_name} di {matched_table_name}")
     except Exception as e:
         logger.error(f"Gagal memproses reservasi otomatis: {e}")
-        reply = f"Mohon maaf Kak, terjadi kesalahan sistem saat memproses reservasi otomatis Anda. Silakan hubungi admin kami secara manual."
-        await _send_whatsapp([sender], reply)
+        reply = "Mohon maaf Kak, terjadi kesalahan sistem saat memproses reservasi otomatis Anda. Silakan hubungi admin kami secara manual."
+        if sender:
+            await _send_whatsapp([sender], reply)
 
 @api.post("/webhook/whatsapp")
 async def wacloud_webhook(request: Request, background_tasks: BackgroundTasks):

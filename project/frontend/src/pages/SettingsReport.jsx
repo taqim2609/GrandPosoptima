@@ -46,15 +46,15 @@ export default function SettingsReport() {
 
   return (
     <div className="h-full overflow-y-auto p-8">
-      <h1 className="text-2xl font-extrabold flex items-center gap-2 mb-1"><MessageCircle /> Laporan &amp; WhatsApp</h1>
-      <p className="text-sm text-[#52525B] mb-5">Kirim laporan harian otomatis ke WhatsApp lewat wacloud.id, atau kirim manual dari Dashboard.</p>
+      <h1 className="text-2xl font-extrabold flex items-center gap-2 mb-1"><Clock /> Jadwal Laporan Otomatis WhatsApp</h1>
+      <p className="text-sm text-[#52525B] mb-5">Kirim rekap omzet dan laporan harian otomatis ke nomor WhatsApp pemilik / manajemen via Gateway aktif.</p>
 
       {!configured && (
         <div data-testid="wa-not-configured" className="flex items-start gap-3 bg-[#FEF3C7] border border-[#F59E0B] text-[#92400E] rounded-2xl px-4 py-3 mb-5 max-w-2xl">
           <ShieldAlert size={20} className="shrink-0 mt-0.5" />
           <div className="text-sm">
-            <div className="font-extrabold">WhatsApp Gateway belum siap</div>
-            Buka menu <b>WhatsApp</b> di sidebar, isi API Key wacloud.id lalu pilih device, agar pengiriman laporan berfungsi.
+            <div className="font-extrabold">WhatsApp Gateway belum aktif</div>
+            Buka tab <b>Gateway &amp; Koneksi</b> di atas untuk menghubungkan Evolution API (PC Lokal) atau WACloud.id agar pengiriman laporan otomatis aktif.
           </div>
         </div>
       )}

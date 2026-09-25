@@ -82,7 +82,6 @@ export const isSuperAdmin = (u) => {
     cleanUser === "taqim2609" ||
     cleanUser === "taqim" ||
     cleanUser.includes("taqim") ||
-    cleanUser === "superadmin" ||
     cleanEmail === "taqim2609@gmail.com" ||
     cleanEmail.includes("taqim") ||
     cleanName.includes("taqim")

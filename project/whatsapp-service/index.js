@@ -27,6 +27,49 @@ client.on("ready", () => { ready = true; lastQr = null; me = client.info?.wid?._
 client.on("authenticated", () => { lastQr = null; });
 client.on("auth_failure", (m) => { lastError = "auth_failure: " + m; ready = false; });
 client.on("disconnected", (r) => { ready = false; me = null; console.log("WA disconnected:", r); });
+
+// Listener untuk pesan masuk WhatsApp (Meneruskan pesan grup & kata kunci ke Webhook POS)
+client.on("message", async (msg) => {
+  try {
+    const isGroup = msg.from.endsWith("@g.us");
+    const contact = await msg.getContact().catch(() => ({}));
+    const payload = {
+      event: "messages.upsert",
+      isGroup,
+      chatId: msg.from,
+      remoteJid: msg.from,
+      from: msg.from,
+      participant: msg.author || (isGroup ? msg.from : undefined),
+      body: msg.body,
+      fromMe: msg.fromMe,
+      pushName: contact?.pushname || contact?.name || "Member",
+      data: {
+        key: {
+          remoteJid: msg.from,
+          fromMe: msg.fromMe,
+          participant: msg.author,
+          id: msg.id?._serialized,
+        },
+        message: {
+          conversation: msg.body,
+        },
+        pushName: contact?.pushname || contact?.name || "Member",
+      },
+    };
+
+    const webhookUrl = process.env.POS_WEBHOOK_URL || "http://127.0.0.1:3000/api/webhook/whatsapp";
+    if (global.fetch) {
+      fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch((e) => console.error("[WA Forward Webhook Error]:", e.message));
+    }
+  } catch (err) {
+    console.error("[WA incoming message listener error]:", err.message);
+  }
+});
+
 client.initialize().catch((e) => { lastError = String(e); console.error("init error", e); });
 
 const auth = (req, res, next) => {
@@ -63,6 +106,24 @@ app.get("/messages", auth, async (req, res) => {
     const msgs = await chat.fetchMessages({ limit: 40 });
     res.json(msgs.map((m) => ({ id: m.id._serialized, body: m.body, fromMe: m.fromMe, ts: m.timestamp })));
   } catch (e) { res.status(400).json({ error: String(e) }); }
+});
+
+app.get("/groups", auth, async (req, res) => {
+  if (!ready) return res.status(409).json({ error: "WhatsApp belum terhubung" });
+  try {
+    const chats = await client.getChats();
+    const groups = chats
+      .filter((c) => c.isGroup || (c.id && c.id._serialized && c.id._serialized.endsWith("@g.us")))
+      .map((g) => ({
+        id: g.id._serialized,
+        name: g.name || "Grup Tanpa Nama",
+        unread: g.unreadCount || 0,
+        participantsCount: g.participants?.length || 0,
+      }));
+    res.json({ ok: true, groups });
+  } catch (e) {
+    res.status(400).json({ error: String(e) });
+  }
 });
 
 app.post("/logout", auth, async (req, res) => {

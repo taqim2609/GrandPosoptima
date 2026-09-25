@@ -90,7 +90,7 @@ export default function EvolutionDetectionCard() {
                 Auto-Deteksi Evolution API
               </CardTitle>
               <CardDescription className="text-xs text-slate-500 mt-1">
-                Status sinkronisasi dan konektivitas gateway WhatsApp Cloud Run
+                Status sinkronisasi dan konektivitas gateway WhatsApp yang berjalan di PC Server Lokal (Local Master)
               </CardDescription>
             </div>
           </div>

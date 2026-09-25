@@ -140,7 +140,11 @@ export default function IngredientsPage() {
   if (produk) allowedTabs.push("bahan");
   if (belanja) allowedTabs.push("belanja", "pembelian");
   if (opname) allowedTabs.push("opname");
-  useEffect(() => { if (!allowedTabs.includes(tab)) setTab(allowedTabs[0] || "bahan"); }, [tab, allowedTabs.join(",")]);
+  const allowedTabsKey = allowedTabs.join(",");
+  useEffect(() => {
+    if (!allowedTabs.includes(tab)) setTab(allowedTabs[0] || "bahan");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, allowedTabsKey]);
 
   // ---------- master bahan ----------
   const openNew = () => { setEditing(null); setForm({ name: "", unit: "", stock: 0, min_stock: 0, cost: 0, note: "" }); setFormCats([]); setEditOpen(true); };

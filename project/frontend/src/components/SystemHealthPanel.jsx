@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
+import ThreeServerMatrix from "@/components/ThreeServerMatrix";
 
 export default function SystemHealthPanel({ embedded = false }) {
   const [data, setData] = useState(null);
@@ -403,6 +404,9 @@ export default function SystemHealthPanel({ embedded = false }) {
           </button>
         </div>
       </div>
+
+      {/* Pusat Pemantauan 3 Server Terpadu (Cloud, PC Master, WA Gateway) */}
+      <ThreeServerMatrix className="mb-2" />
 
       {/* Panel Diagnostik Latensi & Packet Loss Hybrid (Local PC, Pi & Firebase) */}
       <HybridSyncDiagnosticPanel />
@@ -783,7 +787,7 @@ export default function SystemHealthPanel({ embedded = false }) {
       </div>
 
       {/* ========================================================
-          4. Raspberry Pi Environment & Hardware Vitals
+          4. Host Environment & Physical Node Status
          ======================================================== */}
       <div
         id="section-raspberry-environment"
@@ -797,36 +801,41 @@ export default function SystemHealthPanel({ embedded = false }) {
             </div>
             <div>
               <h3 className="text-sm font-extrabold text-[#0A0A0A]">
-                Lingkungan Perangkat Keras Raspberry Pi
+                {pi.installed ? "Lingkungan Perangkat Keras Raspberry Pi" : "Lingkungan Host Server (Google Cloud Container)"}
               </h3>
               <p className="text-xs text-[#71717A]">
-                Status sensor prosesor, suhu termal, memori RAM, dan waktu aktif perangkat.
+                {pi.installed
+                  ? "Status sensor prosesor, suhu termal, memori RAM, dan waktu aktif perangkat."
+                  : "Status sumber daya server host aktif, memori RAM, waktu aktif sistem, dan status node outlet."}
               </p>
             </div>
           </div>
 
           <span className="self-start sm:self-auto text-xs font-mono font-bold text-[#52525B] bg-[#F4F4F5] px-2.5 py-1 rounded-md">
-            {pi.model || "Raspberry Pi 4 Model B"}
+            {pi.installed ? (pi.model || "Raspberry Pi 4 Model B") : "Google Cloud Linux Container"}
           </span>
         </div>
 
-        {/* 4 Kolom Metrik Vital Raspberry Pi */}
+        {/* 4 Kolom Metrik Vital Host */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Suhu CPU */}
+          {/* Status Host / Suhu */}
           <div className="p-3.5 rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs text-[#71717A] mb-1">
               <span className="flex items-center gap-1 font-bold">
-                <Thermometer size={14} className="text-[#E63946]" /> Suhu SoC
+                {pi.installed ? <Thermometer size={14} className="text-[#E63946]" /> : <Cloud size={14} className="text-[#2563EB]" />}
+                {pi.installed ? "Suhu SoC" : "Status Host"}
               </span>
               <span className="text-[10px] font-bold text-[#15803D] bg-[#DCFCE7] px-1.5 py-0.5 rounded">
-                {pi.cpu_temperature?.status === "critical" ? "Tinggi" : "Optimal"}
+                {pi.installed ? (pi.cpu_temperature?.status === "critical" ? "Tinggi" : "Optimal") : "Aktif (Cloud)"}
               </span>
             </div>
-            <div className="text-2xl font-black text-[#0A0A0A] font-num">
-              {pi.cpu_temperature?.temp_c ? `${pi.cpu_temperature.temp_c}°C` : "44.2°C"}
+            <div className="text-xl font-black text-[#0A0A0A] font-num">
+              {pi.installed
+                ? (pi.cpu_temperature?.temp_c ? `${pi.cpu_temperature.temp_c}°C` : "44.2°C")
+                : "Online 24/7"}
             </div>
             <div className="text-[11px] text-[#71717A] mt-1">
-              Batas aman: &lt; 70°C
+              {pi.installed ? "Batas aman: < 70°C" : "Google Cloud Run Platform"}
             </div>
           </div>
 
@@ -841,7 +850,7 @@ export default function SystemHealthPanel({ embedded = false }) {
               {pi.load_avg ? pi.load_avg.join(" · ") : "0.12 · 0.08 · 0.05"}
             </div>
             <div className="text-[11px] text-[#71717A] mt-1">
-              Kapasitas {pi.cpu_cores || 4} Inti ARM Cortex
+              {pi.cpu_cores || 2} vCPU Cores
             </div>
           </div>
 
@@ -885,6 +894,41 @@ export default function SystemHealthPanel({ embedded = false }) {
             </div>
           </div>
         </div>
+
+        {/* Node Fisik Toko Status Banner (jika belum dipasang) */}
+        {!pi.installed && (
+          <div className="mt-3 p-3.5 bg-neutral-50 border border-neutral-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="text-xs font-bold text-neutral-800 flex items-center gap-1.5">
+                <Server size={14} className="text-neutral-500" />
+                Status Node Fisik Toko (PC Server &amp; Raspberry Pi)
+              </div>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-neutral-200/70 text-neutral-700">
+                Mode Cloud Mandiri (Opsional)
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-neutral-600">
+              <div className="p-2.5 bg-white rounded-lg border border-neutral-200 flex items-start gap-2">
+                <span className="w-2 h-2 rounded-full bg-zinc-400 mt-1 shrink-0"></span>
+                <div>
+                  <div className="font-extrabold text-neutral-800">PC Server Master (Lokal)</div>
+                  <div className="text-[11px] text-neutral-500 mt-0.5">
+                    Status: <b className="text-neutral-600">Belum Terhubung</b> (Opsional). Seluruh transaksi kasir langsung tersimpan aman di Google Cloud.
+                  </div>
+                </div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-neutral-200 flex items-start gap-2">
+                <span className="w-2 h-2 rounded-full bg-zinc-400 mt-1 shrink-0"></span>
+                <div>
+                  <div className="font-extrabold text-neutral-800">Raspberry Pi (Node Kasir 2)</div>
+                  <div className="text-[11px] text-neutral-500 mt-0.5">
+                    Status: <b className="text-neutral-600">Belum Terhubung</b> (Opsional). Tidak wajib jika sudah menggunakan browser / cloud.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ========================================================

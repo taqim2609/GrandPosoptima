@@ -140,8 +140,19 @@ export default function UsersPage() {
   // Hapus akun: cek dulu jejak transaksinya (akun berjejak hanya dinonaktifkan).
   const openDelete = async (u) => {
     setDelTarget(u); setDelInfo(null);
-    try { const r = await api.get(`/users/${u.id}/delete-check`); setDelInfo(r.data); }
-    catch (e) { setDelInfo({ error: apiError(e.response?.data?.detail) }); }
+    try {
+      const r = await api.get(`/users/${u.id}/delete-check`);
+      const info = r.data || {};
+      const activeSupers = items.filter((x) => x.active !== false && isSuperAdmin(x));
+      const targetIsSuper = isSuperAdmin(u);
+      const isLastSuper = targetIsSuper && (activeSupers.length <= 1 || !activeSupers.some((x) => x.id !== u.id));
+      if (typeof info.is_superadmin === "undefined") info.is_superadmin = targetIsSuper;
+      if (typeof info.is_last_superadmin === "undefined") info.is_last_superadmin = isLastSuper;
+      if (u.id === me?.id) info.self = true;
+      setDelInfo(info);
+    } catch (e) {
+      setDelInfo({ error: apiError(e.response?.data?.detail) });
+    }
   };
   const doDelete = async () => {
     setDelBusy(true);
@@ -182,6 +193,7 @@ export default function UsersPage() {
                       {bc.icon && <ShieldCheck size={11} />}{labelOf(u.role, rolesMeta)}
                     </span>
                     {!u.active && <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#FEE2E2] text-[#B91C1C]">Nonaktif</span>}
+                    {u.has_custom_perms && <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#F3E8FF] text-[#7E22CE]">★ Izin Khusus (RBAC)</span>}
                     {u.must_change_password && <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#FEF3C7] text-[#B45309]">Wajib ganti password</span>}
                   </div>
                 </div>
@@ -221,6 +233,14 @@ export default function UsersPage() {
               )}
 
               <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <a
+                  href="/pengaturan?tab=users&sub=rbac"
+                  data-testid={`rbac-btn-${u.id}`}
+                  title="Atur Hak Akses / Role-Based Access Pengguna Ini"
+                  className="tap h-9 px-2.5 rounded-lg bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#DBEAFE] text-[11px] font-bold flex items-center gap-1 border border-[#BFDBFE]"
+                >
+                  <ShieldCheck size={14} /> Izin RBAC
+                </a>
                 <button data-testid={`role-btn-${u.id}`} onClick={() => openRole(u)} title="Ganti role" className="tap h-9 w-9 rounded-lg bg-[#F4F5F7] grid place-items-center"><UserCog size={15} /></button>
                 <button data-testid={`reset-pw-${u.id}`} onClick={() => { setResetTarget(u); setNewPw(""); setResetMust(true); setPwDone(null); }} title="Reset password" className="tap h-9 w-9 rounded-lg bg-[#F4F5F7] grid place-items-center"><KeyRound size={15} /></button>
                 <button data-testid={`toggle-${u.id}`} onClick={() => toggle(u)} title="Aktif/Nonaktif" className="tap h-9 w-9 rounded-lg bg-[#F4F5F7] grid place-items-center"><Power size={15} /></button>
@@ -356,10 +376,21 @@ export default function UsersPage() {
             <div className="text-sm text-[#B91C1C]">{delInfo.error}</div>
           ) : delInfo.self ? (
             <div className="flex items-start gap-2 text-sm"><AlertTriangle className="text-[#B45309] shrink-0" size={18} />
-              <span>Ini akun Anda sendiri — akun yang sedang dipakai tidak bisa dihapus.</span></div>
-          ) : delInfo.is_superadmin ? (
+              <span>Ini akun Anda sendiri — akun yang sedang aktif digunakan login tidak bisa dihapus.</span></div>
+          ) : delInfo.is_superadmin && delInfo.is_last_superadmin ? (
             <div className="flex items-start gap-2 text-sm"><AlertTriangle className="text-[#B45309] shrink-0" size={18} />
-              <span>Akun <b>Super Admin</b> hanya bisa dihapus oleh Super Admin lain, dan akun Super Admin terakhir tidak bisa dihapus.</span></div>
+              <span>Akun <b>Super Admin terakhir</b> tidak bisa dihapus untuk mencegah sistem terkunci tanpa pengelola. Buat atau angkat akun Super Admin lain terlebih dahulu jika ingin menghapus akun ini.</span></div>
+          ) : delInfo.is_superadmin ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 text-sm"><AlertTriangle className="text-[#B45309] shrink-0" size={18} />
+                <span>Akun <b>@{delInfo.username}</b> adalah akun <b>Super Admin</b>. Karena masih ada akun Super Admin lain yang aktif, Anda dapat menghapus akun ini.</span></div>
+              <p className="text-xs text-rose-600 font-semibold">Tindakan ini akan menghapus akun dan mencabut semua hak akses Super Admin tersebut.</p>
+              {delInfo.has_history && (
+                <div className="rounded-xl bg-[#FFFBEB] border border-[#FDE68A] p-3 text-xs">
+                  <span>Akun memiliki riwayat transaksi, akan dinonaktifkan agar rekap laporan lama tetap aman.</span>
+                </div>
+              )}
+            </div>
           ) : delInfo.has_history ? (
             <div className="space-y-3">
               <div className="flex items-start gap-2 text-sm"><AlertTriangle className="text-[#B45309] shrink-0" size={18} />
@@ -379,7 +410,7 @@ export default function UsersPage() {
             </div>
           )}
           <DialogFooter>
-            {delInfo && !delInfo.error && !delInfo.self && !delInfo.is_superadmin && (
+            {delInfo && !delInfo.error && !delInfo.self && (!delInfo.is_superadmin || !delInfo.is_last_superadmin) && (
               <button
                 data-testid="confirm-del-btn" onClick={doDelete} disabled={delBusy}
                 className={`tap w-full h-12 rounded-xl text-white font-bold disabled:opacity-60 ${delInfo.has_history ? "bg-[#B45309]" : "bg-[#B91C1C]"}`}

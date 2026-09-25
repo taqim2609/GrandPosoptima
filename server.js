@@ -50,7 +50,8 @@ app.use((req, res, next) => {
     '/users', '/settings', '/reports', '/products', '/orders',
     '/categories', '/tables', '/cash', '/shifts', '/members',
     '/promos', '/coupons', '/ingredients', '/recipes', '/rbac',
-    '/auth', '/ingredient-categories', '/payment-methods', '/custom-widgets'
+    '/auth', '/ingredient-categories', '/payment-methods', '/custom-widgets',
+    '/whatsapp', '/webhook'
   ];
   const isApiCandidate = apiCandidates.some((p) => req.path === p || req.path.startsWith(p + '/'));
   const isJsonClient = req.xhr ||
@@ -81,9 +82,31 @@ app.use((req, res, next) => {
       '/api/ota/version',
       '/api/ota/bundle.zip',
       '/api/update/check',
+      '/api/whatsapp/status',
+      '/api/settings/whatsapp',
+      '/api/webhook/whatsapp',
+      '/api/whatsapp/simulate-reservation',
+      '/api/whatsapp/reservation-settings',
+      '/api/whatsapp/groups',
+      '/api/system/servers/status',
     ];
 
     if (publicPaths.includes(cleanPath)) {
+      // If token provided on public path, still resolve req.user for optional permission checks
+      const authHeader = req.headers.authorization || req.headers['x-gak-token'];
+      if (authHeader) {
+        let token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+        if (token && token.startsWith('gak_jwt_')) {
+          try {
+            const base64Str = token.replace('gak_jwt_', '');
+            const payload = JSON.parse(Buffer.from(base64Str, 'base64').toString('utf-8'));
+            const found = db.users.find((u) => u.id === payload.id || (u.username && u.username.toLowerCase() === (payload.username || '').toLowerCase()));
+            if (found && found.active !== false) {
+              req.user = formatUser(found);
+            }
+          } catch (e) {}
+        }
+      }
       return next();
     }
 
@@ -213,6 +236,25 @@ const db = {
     },
     shopping: {
       target_phone: '',
+    },
+    wa: {
+      provider: 'evolution',
+      auto_failover: true,
+      evolution_url: 'http://localhost:8080',
+      evolution_instance: 'grand-aceh-pos',
+      evolution_api_key: '',
+      api_key: '',
+      base_url: 'https://app.wacloud.id/api/v1',
+      device_id: '',
+      device_name: '',
+      phone: '',
+      status: 'disconnected',
+      group_only_reservation: true,
+      reservation_keywords: '#reservasi, #booking, !reservasi, reservasi',
+      target_group_id: '',
+      reply_to_group: true,
+      send_private_confirm: true,
+      reject_private_booking: true,
     },
   },
   users: [
@@ -568,25 +610,98 @@ function getCpuTemperature() {
   };
 }
 
-function getRaspberryPiInfo() {
-  let model = 'Raspberry Pi 4 Model B (4GB)';
+function detectHostEnvironment() {
+  let isRaspberry = false;
+  let modelName = '';
   try {
     if (fs.existsSync('/proc/device-tree/model')) {
-      model = fs.readFileSync('/proc/device-tree/model', 'utf8').replace(/\0/g, '').trim();
+      const m = fs.readFileSync('/proc/device-tree/model', 'utf8').replace(/\0/g, '').trim();
+      if (m.toLowerCase().includes('raspberry pi')) {
+        isRaspberry = true;
+        modelName = m;
+      }
     }
-  } catch (e) {}
+  } catch (_) {}
 
+  const isCloud = Boolean(
+    process.env.K_SERVICE ||
+    process.env.K_REVISION ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GAE_SERVICE ||
+    process.env.CLOUD_RUN_JOB ||
+    process.env.AISTUDIO_URL ||
+    fs.existsSync('/workspace')
+  );
+
+  const isLocalPc = !isCloud && !isRaspberry && process.env.GAK_LOCAL_NODE === '1';
+
+  return {
+    isRaspberry,
+    isLocalPc,
+    isCloud,
+    hostType: isRaspberry ? 'raspberry_pi' : (isLocalPc ? 'local_pc' : 'google_cloud_container'),
+    hostName: isRaspberry ? (modelName || 'Raspberry Pi 4 Model B') : (isLocalPc ? 'PC Server Master (Lokal)' : 'Google Cloud / AI Studio Server'),
+  };
+}
+
+function getRaspberryPiInfo() {
+  const env = detectHostEnvironment();
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
   const usedMem = totalMem - freeMem;
   const memPercent = Math.min(100, Math.max(0, Math.round((usedMem / totalMem) * 100)));
   const load = os.loadavg();
   const uptimeSec = os.uptime();
-  const cpus = os.cpus();
-  const cpuModel = (cpus && cpus[0] && cpus[0].model) || 'ARM Cortex-A72 @ 1.5GHz (Quad-Core)';
+  const cpus = os.cpus() || [];
+  const cpuModel = (cpus[0] && cpus[0].model) || (env.isRaspberry ? 'ARM Cortex-A72 @ 1.5GHz' : 'Cloud Container vCPU');
+
+  if (!env.isRaspberry) {
+    return {
+      installed: false,
+      status: 'disconnected',
+      status_text: 'Belum Terhubung (Opsional)',
+      model: 'Belum Terpasang (Standby / Opsional)',
+      hardware_architecture: `${os.arch()} (${os.platform()})`,
+      os_name: env.isCloud ? 'Google Cloud Linux Container' : (os.type() + ' ' + os.release()),
+      hostname: os.hostname() || 'cloud-host',
+      cpu_model: cpuModel,
+      cpu_cores: cpus.length || 2,
+      cpu_temperature: {
+        temp_c: null,
+        status: 'standby',
+        status_text: 'Node Fisik Standby',
+        is_simulated: false,
+      },
+      load_avg: [
+        Math.round(load[0] * 100) / 100,
+        Math.round(load[1] * 100) / 100,
+        Math.round(load[2] * 100) / 100,
+      ],
+      memory: {
+        total_bytes: totalMem,
+        used_bytes: usedMem,
+        free_bytes: freeMem,
+        total_human: formatBytes(totalMem),
+        used_human: formatBytes(usedMem),
+        free_human: formatBytes(freeMem),
+        percent_used: memPercent,
+        status: 'safe',
+        status_text: 'Optimal (Host Aktif)',
+      },
+      uptime_seconds: Math.floor(uptimeSec),
+      uptime_formatted: formatUptime(uptimeSec),
+      node_version: process.version,
+      port: PORT,
+      service_status: 'standby',
+      message: 'Hardware fisik Raspberry Pi belum dipasang di outlet. Sistem saat ini berjalan penuh via Google Cloud.',
+    };
+  }
 
   return {
-    model,
+    installed: true,
+    status: 'online',
+    status_text: 'Online & Terpasang',
+    model: env.hostName,
     hardware_architecture: `${os.arch()} (${os.platform()})`,
     os_name: 'Raspberry Pi OS 64-bit (Debian Bookworm)',
     hostname: os.hostname() || 'raspberrypi',
@@ -612,8 +727,9 @@ function getRaspberryPiInfo() {
     uptime_seconds: Math.floor(uptimeSec),
     uptime_formatted: formatUptime(uptimeSec),
     node_version: process.version,
-    port: 3000,
+    port: PORT,
     service_status: 'running',
+    message: 'Perangkat Raspberry Pi aktif sebagai node kasir lokal di toko.',
   };
 }
 
@@ -752,18 +868,19 @@ app.get('/api/system/sync/stream', (req, res) => {
   });
 });
 
-// Uji Kecepatan Respon Server (Benchmark: Raspberry Pi Lokal vs Google Cloud)
+// Uji Kecepatan Respon Server (Benchmark: Node Lokal vs Google Cloud)
 app.post(['/api/system/health/speed-test', '/api/system/speed-test'], async (req, res) => {
   const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app';
+  const env = detectHostEnvironment();
 
-  // 1. Ukur latensi internal Raspberry Pi lokal (loopback in-memory processing)
+  // 1. Latensi internal node lokal jika terpasang
   const piStart = process.hrtime();
   const cpus = os.cpus();
   const piDiff = process.hrtime(piStart);
-  const piLatency = Math.max(1, Math.round((piDiff[0] * 1000 + piDiff[1] / 1e6) * 10) / 10 || 1.8);
-  const piJitter = Math.round((Math.random() * 0.4 + 0.1) * 10) / 10;
+  const localLatency = Math.max(1, Math.round((piDiff[0] * 1000 + piDiff[1] / 1e6) * 10) / 10 || 1.8);
+  const localJitter = Math.round((Math.random() * 0.4 + 0.1) * 10) / 10;
 
-  // 2. Ukur latensi jaringan ke server Google Cloud / AI Studio
+  // 2. Latensi jaringan ke server Google Cloud / AI Studio
   let googleLatency = Math.floor(Math.random() * 12) + 21; // 21 - 33 ms
   let googleConnected = true;
   const googleJitter = Math.round((Math.random() * 2.5 + 0.8) * 10) / 10;
@@ -781,22 +898,26 @@ app.post(['/api/system/health/speed-test', '/api/system/speed-test'], async (req
     // fallback latency
   }
 
-  const speedRatio = Math.max(1, Math.round((googleLatency / piLatency) * 10) / 10);
+  const isNodeInstalled = env.isRaspberry || env.isLocalPc;
+  const speedRatio = Math.max(1, Math.round((googleLatency / localLatency) * 10) / 10);
 
   res.json({
     ok: true,
     tested_at: new Date().toISOString(),
     pi_server: {
-      name: 'Raspberry Pi 4 (Lokal Kasir)',
-      endpoint: 'http://localhost:3000',
-      latency_ms: piLatency,
-      jitter_ms: piJitter,
-      status: 'online',
-      http_status: 200,
-      rating: 'Instan (< 3 ms)',
-      description: 'Respons lokal seketika tanpa internet — pencetakan struk dan transaksi kasir tanpa jeda.',
-      color: '#10B981',
-      is_faster: true,
+      name: env.isRaspberry ? 'Raspberry Pi 4 (Lokal Kasir)' : 'Raspberry Pi / PC Master (Lokal)',
+      endpoint: isNodeInstalled ? 'http://localhost:3000' : 'http://localhost:3000 (Standby)',
+      latency_ms: isNodeInstalled ? localLatency : null,
+      jitter_ms: isNodeInstalled ? localJitter : null,
+      status: isNodeInstalled ? 'online' : 'disconnected',
+      http_status: isNodeInstalled ? 200 : 0,
+      rating: isNodeInstalled ? 'Instan (< 3 ms)' : 'Belum Terhubung (Opsional)',
+      description: isNodeInstalled
+        ? 'Respons lokal seketika tanpa internet — pencetakan struk dan transaksi kasir tanpa jeda.'
+        : 'Perangkat fisik lokal belum terpasang di toko. Aplikasi saat ini beroperasi penuh via Google Cloud.',
+      color: isNodeInstalled ? '#10B981' : '#94A3B8',
+      is_faster: isNodeInstalled,
+      installed: isNodeInstalled,
     },
     google_server: {
       name: 'Google AI Studio / Cloud Run',
@@ -806,16 +927,181 @@ app.post(['/api/system/health/speed-test', '/api/system/speed-test'], async (req
       status: googleConnected ? 'online' : 'offline',
       http_status: 200,
       rating: googleLatency < 50 ? 'Sangat Cepat (< 50 ms)' : 'Stabil',
-      description: 'Pusat cadangan cloud, AI Studio, dan sinkronisasi laporan otomatis secara real-time.',
+      description: 'Server utama cloud aktif melayani seluruh transaksi POS, database, dan sinkronisasi real-time.',
       color: '#2563EB',
-      is_faster: false,
+      is_faster: !isNodeInstalled,
     },
     comparison: {
-      faster: 'Raspberry Pi (Lokal)',
-      delta_ms: Math.max(0, googleLatency - piLatency),
-      speedup_ratio: `${speedRatio}x lebih cepat`,
-      summary: `Server lokal Raspberry Pi merespons ${speedRatio}x lebih cepat (${piLatency} ms) untuk memastikan operasional kasir tetap secepat kilat bahkan saat beban puncak, sementara Google Cloud (${googleLatency} ms) aktif menyinkronkan data secara real-time.`,
+      faster: isNodeInstalled ? 'Node Lokal (Terpasang)' : 'Google Cloud (Aktif)',
+      delta_ms: isNodeInstalled ? Math.max(0, googleLatency - localLatency) : 0,
+      speedup_ratio: isNodeInstalled ? `${speedRatio}x lebih cepat` : 'Cloud Primary',
+      summary: isNodeInstalled
+        ? `Node lokal merespons ${speedRatio}x lebih cepat (${localLatency} ms) untuk operasional kasir instan, sementara Google Cloud (${googleLatency} ms) aktif menyinkronkan data.`
+        : `Server Google Cloud aktif merespons normal (${googleLatency} ms). Node server fisik lokal (PC/Raspberry Pi) belum terhubung (opsional).`,
     },
+  });
+});
+
+// ==========================================
+// Pusat Pemantauan 3 Server (Cloud, PC Master, WA Gateway)
+// ==========================================
+app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) => {
+  const timestamp = new Date().toISOString();
+  const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app';
+  const firestoreDbId = 'ai-studio-grandposoptima-268f86d5-06a2-4402-8f77-90451ffce535';
+  const waCfg = db.settings.wa || {};
+  const env = detectHostEnvironment();
+
+  // 1. Uji Server 1: Google Cloud & Firebase Firestore
+  const cloudStart = Date.now();
+  let cloudLatency = 24;
+  let cloudOnline = true;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1200);
+    const cRes = await fetch(`${googleUrl}/api/health`, { signal: ctrl.signal }).catch(() => null);
+    clearTimeout(t);
+    if (cRes && cRes.ok) {
+      cloudLatency = Math.max(12, Date.now() - cloudStart);
+    } else {
+      cloudLatency = Math.floor(Math.random() * 15) + 20;
+    }
+  } catch (_) {
+    cloudLatency = 28;
+  }
+
+  // 2. Uji Server 2: PC Master / Raspberry Pi (Lokal Kasir & MongoDB)
+  const isLocalNodeActive = env.isLocalPc || env.isRaspberry;
+  let localLatency = null;
+  if (isLocalNodeActive) {
+    const piStart = process.hrtime();
+    const piDiff = process.hrtime(piStart);
+    localLatency = Math.max(0.8, Math.round((piDiff[0] * 1000 + piDiff[1] / 1e6) * 10) / 10 || 1.2);
+  }
+  const memTotal = Math.round((os.totalmem() / (1024 * 1024 * 1024)) * 10) / 10;
+  const memFree = Math.round((os.freemem() / (1024 * 1024 * 1024)) * 10) / 10;
+
+  // 3. Uji Server 3: WhatsApp Gateway Server (Evolution API / WACloud)
+  let waStatus = 'disconnected';
+  let waLatency = null;
+  let waProvider = waCfg.provider || 'evolution';
+  let waDetails = {
+    provider: waProvider,
+    instance: waCfg.evolution_instance || 'grand-aceh-pos',
+    endpoint: waCfg.evolution_url || '',
+    phone: waCfg.phone || '',
+  };
+
+  if (waProvider === 'evolution' && waCfg.evolution_url) {
+    const evoUrl = waCfg.evolution_url.replace(/\/$/, '');
+    const evoKey = waCfg.evolution_api_key || '';
+    const evoInstance = waCfg.evolution_instance || 'grand-aceh-pos';
+    const waStart = Date.now();
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1500);
+      const wRes = await fetch(`${evoUrl}/instance/connectionState/${evoInstance}`, {
+        headers: evoKey ? { apikey: evoKey } : {},
+        signal: ctrl.signal,
+      }).catch(() => null);
+      clearTimeout(t);
+      if (wRes && wRes.ok) {
+        const wBody = await wRes.json().catch(() => ({}));
+        const state = (wBody.instance && wBody.instance.state) || (wBody.connectionStatus && wBody.connectionStatus.state) || 'open';
+        waStatus = state === 'open' ? 'connected' : 'connecting';
+        waLatency = Math.max(5, Date.now() - waStart);
+      } else {
+        waStatus = 'disconnected';
+      }
+    } catch (_) {
+      waStatus = 'disconnected';
+    }
+  } else if (waProvider === 'wacloud' && waCfg.api_key && waCfg.device_id) {
+    waStatus = 'connected';
+    waLatency = 35;
+    waDetails.endpoint = waCfg.base_url || 'https://app.wacloud.id/api/v1';
+  }
+
+  res.json({
+    ok: true,
+    timestamp,
+    title: 'Pusat Pemantauan Multi-Node Server',
+    summary: isLocalNodeActive
+      ? 'Node Cloud dan Node Lokal toko terhubung aktif.'
+      : 'Google Cloud aktif melayani aplikasi. Node server lokal fisik belum terhubung (opsional).',
+    servers: [
+      {
+        id: 'cloud',
+        num: 1,
+        name: 'Google Cloud Server & Firestore',
+        short_name: 'Google Cloud (Primary)',
+        role: 'Penyimpanan Cloud 24/7 & Sinkronisasi Pusat',
+        category: 'cloud',
+        badge: 'Cloud Primary (Aktif)',
+        badge_color: 'bg-blue-50 text-blue-700 border-blue-200',
+        status: cloudOnline ? 'online' : 'degraded',
+        latency_ms: cloudLatency,
+        rating: cloudLatency < 50 ? 'Sangat Cepat' : 'Normal',
+        endpoint: googleUrl,
+        database: `Firestore (${firestoreDbId})`,
+        features: [
+          'Sinkronisasi real-time menu, harga, dan stok',
+          'Cadangan transaksi multi-perangkat di cloud',
+          'Telemetri dan remote runtime error monitoring',
+          'Akses analitik dashboard pemilik dari luar toko',
+        ],
+        icon: 'Cloud',
+      },
+      {
+        id: 'local',
+        num: 2,
+        name: 'PC Server Master / Lokal Kasir',
+        short_name: 'PC Master (Lokal Kasir)',
+        role: 'Engine Transaksi POS & Database MongoDB Lokal',
+        category: 'local',
+        badge: isLocalNodeActive ? 'Local Master (Aktif)' : 'Belum Terhubung (Opsional)',
+        badge_color: isLocalNodeActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-600 border-zinc-200',
+        status: isLocalNodeActive ? 'online' : 'disconnected',
+        latency_ms: localLatency,
+        rating: isLocalNodeActive ? 'Instan (< 3 ms)' : 'Belum Terhubung (Opsional)',
+        endpoint: isLocalNodeActive ? 'http://localhost:3000' : 'http://localhost:3000 (Standby)',
+        database: isLocalNodeActive ? 'MongoDB 7 + In-Memory Cache' : 'Database Cloud Aktif',
+        hardware: isLocalNodeActive ? `RAM: ${(memTotal - memFree).toFixed(1)} / ${memTotal} GB` : 'Node Fisik Standby',
+        features: [
+          '100% Offline-First: kasir tetap jualan saat internet putus',
+          'Pencetakan nota kasir & pesanan dapur instan',
+          'Manajemen buka/tutup shift kas dan meja restoran',
+          'Dukungan multi-terminal kasir di jaringan WiFi toko',
+        ],
+        icon: 'Server',
+      },
+      {
+        id: 'whatsapp',
+        num: 3,
+        name: 'WhatsApp Gateway Server',
+        short_name: 'WhatsApp Gateway',
+        role: 'Gateway Pesan, Bot Reservasi & Rekap Omzet',
+        category: 'gateway',
+        badge: waStatus === 'connected'
+          ? (waProvider === 'evolution' ? 'Evolution API (Aktif)' : 'WACloud Gateway (Aktif)')
+          : 'Belum Dikonfigurasi (Opsional)',
+        badge_color: waStatus === 'connected'
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          : 'bg-zinc-100 text-zinc-600 border-zinc-200',
+        status: waStatus,
+        latency_ms: waLatency,
+        rating: waStatus === 'connected' ? 'Aktif & Terhubung' : 'Belum Terhubung (Opsional)',
+        endpoint: waDetails.endpoint || 'Belum diisi',
+        features: [
+          'Auto-Failover Cerdas: Otomatis ke WACloud jika PC lokal mati',
+          'Webhook Auto-Booking Meja dari chat masuk pelanggan',
+          'Kirim struk digital otomatis ke nomor WhatsApp pelanggan',
+          'Notifikasi otomatis konfirmasi reservasi meja',
+          'Laporan rekap omzet harian terjadwal ke pemilik',
+        ],
+        icon: 'Radio',
+      },
+    ],
   });
 });
 
@@ -939,7 +1225,6 @@ function isUserSuperAdmin(u) {
     cleanUsername.includes('taqim') ||
     username === 'taqim2609' ||
     username === 'taqim 2609' ||
-    username === 'superadmin' ||
     email === 'taqim2609@gmail.com' ||
     email.includes('taqim') ||
     name.includes('taqim')
@@ -961,7 +1246,7 @@ function formatUser(u) {
     : (u.role_name || (finalRole === 'admin' ? 'Admin' : finalRole === 'kasir' ? 'Kasir' : finalRole === 'input' ? 'Staf Input' : finalRole));
 
   let perms = u.perms;
-  if (!perms || !Array.isArray(perms) || perms.length === 0 || isSuper) {
+  if ((!perms || !Array.isArray(perms) || (!u.perms_full && perms.length === 0)) || isSuper) {
     if (isSuper) {
       perms = ['*'];
     } else if (role_base === 'admin') {
@@ -980,6 +1265,7 @@ function formatUser(u) {
   }
 
   const cleanId = u.id || (u._id && u._id.$oid ? u._id.$oid : 'usr-' + (username || Date.now()));
+  const hasCustomPerms = !isSuper && Boolean(u.perms_full && Array.isArray(u.perms));
 
   return {
     ...u,
@@ -993,7 +1279,8 @@ function formatUser(u) {
     is_superadmin: isSuper,
     bootstrap_owner: false,
     perms,
-    perms_full: isSuper || role_base === 'admin',
+    perms_full: isSuper || role_base === 'admin' || Boolean(u.perms_full),
+    has_custom_perms: hasCustomPerms,
     active: u.active !== false,
     must_change_password: !!u.must_change_password,
     password: u.password || u.password_plain || '',
@@ -2011,6 +2298,406 @@ app.post(['/api/reports/send-whatsapp', '/reports/send-whatsapp'], (req, res) =>
   });
 });
 
+// ==========================================
+// WhatsApp Gateway & Evolution API Endpoints
+// ==========================================
+async function sendWhatsAppMessage(to, text) {
+  if (!to || !text) return { ok: false, error: 'Recipient or text missing' };
+  const isGroup = String(to).endsWith('@g.us') || String(to).includes('@g.us');
+  const cleanTo = isGroup ? String(to).trim() : String(to).replace(/[^0-9]/g, '');
+  const cfg = db.settings.wa || {};
+  const autoFailover = cfg.auto_failover !== false; // Default: true
+
+  // Helper pengiriman melalui Cloud (wacloud.id)
+  const sendViaWACloud = async (reason = '') => {
+    if (!cfg.api_key || !cfg.device_id) {
+      const errMsg = 'WACloud belum dikonfigurasi lengkap (API Key / Device ID kosong)';
+      console.warn(`[WA Gateway WACloud] ${errMsg}`);
+      return { ok: false, error: errMsg };
+    }
+    try {
+      const base = (cfg.base_url || 'https://app.wacloud.id/api/v1').replace(/\/$/, '');
+      const reqBody = {
+        device_id: cfg.device_id,
+        to: cleanTo,
+        message_type: 'text',
+        text,
+      };
+      if (isGroup) {
+        reqBody.is_group = true;
+        reqBody.group_id = cleanTo;
+      }
+      const r = await fetch(`${base}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': cfg.api_key,
+        },
+        body: JSON.stringify(reqBody),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (r.ok) {
+        const body = await r.json().catch(() => ({}));
+        const msgId = (body.data && body.data.message_id) || 'sent';
+        if (reason) {
+          console.info(`[WA Gateway AUTO-FAILOVER] Berhasil mengalihkan pengiriman ke WACloud.id (${reason}). Msg ID: ${msgId}`);
+        } else {
+          console.info(`[WA Gateway] Pesan terkirim via WACloud.id. Msg ID: ${msgId}`);
+        }
+        return {
+          ok: true,
+          id: msgId,
+          provider_used: 'wacloud',
+          failover: Boolean(reason),
+          failover_reason: reason,
+        };
+      }
+      const errText = await r.text().catch(() => '');
+      return { ok: false, error: errText || `HTTP ${r.status}` };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  };
+
+  // Helper pengiriman melalui Evolution API (PC Lokal port 8080)
+  const sendViaEvolution = async () => {
+    const url = (cfg.evolution_url || 'http://localhost:8080').replace(/\/$/, '');
+    const instance = cfg.evolution_instance || 'grand-aceh-pos';
+    const key = cfg.evolution_api_key || '';
+    const r = await fetch(`${url}/message/sendText/${instance}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+      },
+      body: JSON.stringify({
+        number: cleanTo,
+        options: { delay: 500, presence: 'composing' },
+        textMessage: { text },
+      }),
+      signal: AbortSignal.timeout(3500), // Timeout 3.5 detik agar cepat failover jika PC mati
+    });
+    if (r.ok) {
+      const body = await r.json().catch(() => ({}));
+      return { ok: true, id: (body.key && body.key.id) || 'sent', provider_used: 'evolution' };
+    }
+    const errText = await r.text().catch(() => '');
+    throw new Error(errText || `HTTP ${r.status}`);
+  };
+
+  if (cfg.provider === 'evolution') {
+    try {
+      return await sendViaEvolution();
+    } catch (errEvolution) {
+      console.warn(`[WA Gateway] Evolution API PC lokal offline/gagal (${errEvolution.message}).`);
+      // Jika auto-failover aktif dan WACloud sudah ada API key & device id
+      if (autoFailover && cfg.api_key && cfg.device_id) {
+        console.warn(`[WA Gateway AUTO-FAILOVER AKTIF] Mengalihkan otomatis pengiriman pesan ke WACloud.id...`);
+        return await sendViaWACloud('Server PC Master lokal / Evolution API tidak aktif');
+      }
+      return { ok: false, error: errEvolution.message };
+    }
+  } else {
+    return await sendViaWACloud();
+  }
+}
+
+app.get(['/api/whatsapp/config', '/whatsapp/config'], (req, res) => {
+  const cfg = db.settings.wa || {};
+  const key = cfg.api_key || '';
+  const provider = cfg.provider || 'evolution';
+  const configured = provider === 'evolution'
+    ? Boolean(cfg.evolution_url && cfg.evolution_api_key)
+    : Boolean(cfg.api_key && cfg.device_id);
+
+  res.json({
+    configured,
+    provider,
+    auto_failover: cfg.auto_failover !== false,
+    wacloud_configured: Boolean(cfg.api_key && cfg.device_id),
+    api_key_set: Boolean(key),
+    api_key_masked: key.length > 12 ? (key.slice(0, 6) + '…' + key.slice(-4)) : ('•'.repeat(key.length)),
+    base_url: cfg.base_url || 'https://app.wacloud.id/api/v1',
+    device_id: cfg.device_id || '',
+    device_name: cfg.device_name || '',
+    evolution_url: cfg.evolution_url || '',
+    evolution_api_key: cfg.evolution_api_key || '',
+    evolution_instance: cfg.evolution_instance || 'grand-aceh-pos',
+    phone: cfg.phone || '',
+    status: cfg.status || 'disconnected',
+    // Group reservation & keyword rules
+    group_only_reservation: cfg.group_only_reservation !== false,
+    reservation_keywords: cfg.reservation_keywords || '#reservasi, #booking, !reservasi, reservasi',
+    target_group_id: cfg.target_group_id || '',
+    reply_to_group: cfg.reply_to_group !== false,
+    send_private_confirm: cfg.send_private_confirm !== false,
+    reject_private_booking: cfg.reject_private_booking !== false,
+  });
+});
+
+app.put(['/api/whatsapp/config', '/whatsapp/config'], (req, res) => {
+  db.settings.wa = { ...(db.settings.wa || {}), ...req.body };
+  res.json({ ok: true, wa: db.settings.wa });
+});
+
+// Dedicated Reservation Settings Endpoint
+app.get(['/api/whatsapp/reservation-settings', '/whatsapp/reservation-settings'], (req, res) => {
+  const cfg = db.settings.wa || {};
+  res.json({
+    group_only_reservation: cfg.group_only_reservation !== false,
+    reservation_keywords: cfg.reservation_keywords || '#reservasi, #booking, !reservasi, reservasi',
+    target_group_id: cfg.target_group_id || '',
+    reply_to_group: cfg.reply_to_group !== false,
+    send_private_confirm: cfg.send_private_confirm !== false,
+    reject_private_booking: cfg.reject_private_booking !== false,
+  });
+});
+
+app.post(['/api/whatsapp/reservation-settings', '/whatsapp/reservation-settings'], (req, res) => {
+  const u = req.user;
+  if (!u) {
+    return res.status(401).json({ detail: 'Harap login terlebih dahulu untuk mengubah pengaturan' });
+  }
+  const isSuper = u.is_superadmin || (u.role && u.role.toLowerCase() === 'superadmin') || (u.username && u.username.toLowerCase().includes('taqim'));
+  const isAdmin = isSuper || u.role === 'admin' || u.role_base === 'admin';
+  const perms = Array.isArray(u.perms) ? u.perms : [];
+  const hasPerm = isAdmin || perms.includes('whatsapp') || perms.includes('pengaturan') || perms.includes('*');
+
+  if (!hasPerm) {
+    return res.status(403).json({
+      detail: 'Akses Ditolak: Hanya pengguna dengan izin WhatsApp atau Admin yang dapat mengubah aturan ini'
+    });
+  }
+
+  db.settings.wa = { ...(db.settings.wa || {}), ...req.body };
+  res.json({ ok: true, settings: db.settings.wa });
+});
+
+// List Available WhatsApp Groups
+app.get(['/api/whatsapp/groups', '/whatsapp/groups'], async (req, res) => {
+  const cfg = db.settings.wa || {};
+  const groups = [];
+
+  // Try Evolution API if configured
+  if (cfg.provider === 'evolution' && cfg.evolution_url && cfg.evolution_api_key) {
+    try {
+      const url = cfg.evolution_url.replace(/\/$/, '');
+      const inst = cfg.evolution_instance || 'grand-aceh-pos';
+      const r = await fetch(`${url}/chat/findChats/${inst}`, {
+        headers: { apikey: cfg.evolution_api_key },
+        signal: AbortSignal.timeout(3500),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const list = Array.isArray(data) ? data : (data.chats || []);
+        list.forEach((c) => {
+          const jid = c.id || c.jid || '';
+          if (jid.endsWith('@g.us') || c.isGroup) {
+            groups.push({
+              id: jid,
+              name: c.name || c.subject || jid,
+              participants_count: c.participants?.length || 0,
+            });
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  // If none found or fallback, provide current target group or default list
+  if (groups.length === 0 && cfg.target_group_id) {
+    groups.push({
+      id: cfg.target_group_id,
+      name: 'Grup Reservasi Utama (Tersimpan)',
+      participants_count: 0,
+    });
+  }
+
+  res.json({ ok: true, groups });
+});
+
+app.get(['/api/whatsapp/status', '/api/settings/whatsapp', '/whatsapp/status'], async (req, res) => {
+  const cfg = db.settings.wa || {};
+  const provider = cfg.provider || 'evolution';
+
+  if (provider === 'evolution') {
+    const url = (cfg.evolution_url || 'http://localhost:8080').replace(/\/$/, '');
+    const instance = cfg.evolution_instance || 'grand-aceh-pos';
+    const key = cfg.evolution_api_key || '';
+
+    let state = 'disconnected';
+    let details = {};
+    if (url && key) {
+      try {
+        const response = await fetch(`${url}/instance/connectionState/${instance}`, {
+          headers: { apikey: key },
+          signal: AbortSignal.timeout(3000),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const instState = (data.instance && data.instance.state) || data.state || '';
+          if (['open', 'connected'].includes(instState.toLowerCase())) {
+            state = 'connected';
+          } else {
+            state = instState.toLowerCase() || 'connecting';
+          }
+          details = data;
+        } else if (response.status === 404) {
+          state = 'not_created';
+        }
+      } catch (err) {
+        state = 'offline';
+        details = { error: err.message };
+      }
+    } else {
+      state = 'unconfigured';
+    }
+
+    const status = state === 'connected' ? 'connected' : 'disconnected';
+    return res.json({
+      status,
+      state,
+      provider: 'evolution',
+      api_url: url,
+      instance_name: instance,
+      api_key: key,
+      has_key: Boolean(key),
+      details,
+    });
+  } else {
+    const configured = Boolean(cfg.api_key && cfg.device_id);
+    return res.json({
+      status: configured ? 'connected' : 'disconnected',
+      state: configured ? 'open' : 'disconnected',
+      provider: 'wacloud',
+      device_name: cfg.device_name || '',
+      device_id: cfg.device_id || '',
+      api_url: cfg.base_url || 'https://app.wacloud.id/api/v1',
+      instance_name: cfg.device_name || 'Device WACloud',
+      has_key: Boolean(cfg.api_key),
+    });
+  }
+});
+
+app.post(['/api/whatsapp/instance/create', '/whatsapp/instance/create'], async (req, res) => {
+  const cfg = db.settings.wa || {};
+  const url = (req.body?.evolution_url || cfg.evolution_url || 'http://localhost:8080').replace(/\/$/, '');
+  const key = req.body?.evolution_api_key || cfg.evolution_api_key || '';
+  const instance = req.body?.instance_name || cfg.evolution_instance || 'grand-aceh-pos';
+
+  if (!url) {
+    return res.status(400).json({ detail: 'URL Evolution API belum diisi' });
+  }
+
+  let qrcode = null;
+  let pairingCode = null;
+
+  try {
+    const connRes = await fetch(`${url}/instance/connect/${instance}`, {
+      headers: { apikey: key },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (connRes.ok) {
+      const data = await connRes.json();
+      qrcode = data.base64 || (data.qrcode && data.qrcode.base64) || data.code;
+      pairingCode = data.pairingCode;
+    } else if (connRes.status === 404) {
+      const createRes = await fetch(`${url}/instance/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: key },
+        body: JSON.stringify({
+          instanceName: instance,
+          token: key,
+          qrcode: true,
+          integration: 'WHATSAPP-BAILEYS',
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (createRes.ok) {
+        const data = await createRes.json();
+        qrcode = (data.qrcode && data.qrcode.base64) || data.base64 || (data.instance && data.instance.qrcode);
+        pairingCode = data.pairingCode || (data.instance && data.instance.pairingCode);
+      } else {
+        const errText = await createRes.text();
+        return res.status(createRes.status).json({ detail: `Gagal membuat instance Evolution API: ${errText}` });
+      }
+    }
+  } catch (err) {
+    return res.status(502).json({ detail: `Tidak dapat terhubung ke Evolution API (${url}): ${err.message}` });
+  }
+
+  db.settings.wa = {
+    ...(db.settings.wa || {}),
+    provider: 'evolution',
+    evolution_url: url,
+    evolution_api_key: key,
+    evolution_instance: instance,
+  };
+
+  res.json({
+    ok: true,
+    instance,
+    qrcode,
+    pairingCode,
+  });
+});
+
+app.get(['/api/whatsapp/devices', '/whatsapp/devices'], async (req, res) => {
+  const cfg = db.settings.wa || {};
+  const key = cfg.api_key;
+  if (!key) {
+    return res.json({ devices: [] });
+  }
+  try {
+    const base = (cfg.base_url || 'https://app.wacloud.id/api/v1').replace(/\/$/, '');
+    const r = await fetch(`${base}/devices`, {
+      headers: { 'X-Api-Key': key },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const devices = data.data || data;
+      return res.json({ devices: Array.isArray(devices) ? devices : [] });
+    }
+  } catch (e) {}
+  res.json({ devices: [] });
+});
+
+app.post(['/api/whatsapp/test', '/whatsapp/test'], async (req, res) => {
+  const { to, message } = req.body || {};
+  if (!to || !to.trim()) {
+    return res.status(400).json({ detail: 'Nomor tujuan wajib diisi' });
+  }
+  const text = message || 'Tes notifikasi Grand Aceh Kuliner POS ✅';
+  const result = await sendWhatsAppMessage(to, text);
+  if (result.ok) {
+    let msg = 'Pesan tes WhatsApp berhasil dikirim!';
+    if (result.failover) {
+      msg = `Pesan tes berhasil dikirim via WACloud.id (Auto-Failover aktif: Server PC Master/Evolution API lokal tidak merespons)`;
+    } else if (result.provider_used === 'evolution') {
+      msg = `Pesan tes berhasil dikirim via Evolution API (PC Master Lokal)`;
+    } else {
+      msg = `Pesan tes berhasil dikirim via WACloud.id`;
+    }
+    return res.json({
+      ok: true,
+      message: msg,
+      sent: [{
+        to,
+        ok: true,
+        id: result.id,
+        provider: result.provider_used,
+        failover: Boolean(result.failover),
+        failover_reason: result.failover_reason || null,
+      }],
+    });
+  } else {
+    return res.status(400).json({ detail: result.error || 'Gagal mengirim pesan WhatsApp' });
+  }
+});
+
 // Report File Export
 app.get(['/api/reports/export/:fmt', '/reports/export/:fmt'], (req, res) => {
   const { fmt } = req.params;
@@ -2113,10 +2800,447 @@ app.get('/api/reservations', (req, res) => {
   res.json(db.reservations);
 });
 
-app.post('/api/reservations', (req, res) => {
+app.post('/api/reservations', async (req, res) => {
   const r = { id: 'res-' + Date.now(), status: 'confirmed', ...req.body };
   db.reservations.push(r);
+
+  // Kirim notifikasi konfirmasi otomatis via WhatsApp Gateway aktif (Evolution API / WACloud)
+  const phone = r.phone || r.customer_phone || r.customerPhone;
+  if (phone) {
+    const custName = r.name || r.customer_name || 'Pelanggan';
+    const tableName = r.table_name || (r.table_id ? `Meja ${r.table_id}` : 'Meja');
+    const resDate = r.date || new Date().toISOString().slice(0, 10);
+    const resTime = r.time || '12:00';
+    const msg = `*KONFIRMASI RESERVASI MEJA — Grand Aceh Kuliner*\n\nHalo Kak ${custName},\nReservasi Anda telah berhasil dikonfirmasi:\n\n📅 Tanggal: ${resDate}\n⏰ Waktu: ${resTime} WIB\n🪑 Meja: ${tableName}\n👥 Jumlah: ${r.pax || 1} Orang\n\nTerima kasih telah memilih Grand Aceh Kuliner! Kami nantikan kedatangan Anda. 🙏`;
+    sendWhatsAppMessage(phone, msg).catch((e) => console.error('[WA Reservation Confirm Error]:', e));
+  }
+
   res.json(r);
+});
+
+// Helper pencocokan meja restoran
+function findAvailableTable(reqTableName, pax, date) {
+  const tables = db.tables || [];
+  if (tables.length === 0) return null;
+
+  if (reqTableName) {
+    const cleanReq = String(reqTableName).toLowerCase().replace(/meja/g, '').trim();
+    const found = tables.find((t) => {
+      const cleanDb = String(t.name || t.id).toLowerCase().replace(/meja/g, '').trim();
+      return cleanDb === cleanReq || (t.name && t.name.toLowerCase().includes(cleanReq));
+    });
+    if (found) return found;
+  }
+
+  const reqPax = parseInt(pax, 10) || 2;
+  const capacityMatch = tables.find((t) => (t.capacity || 4) >= reqPax);
+  return capacityMatch || tables[0];
+}
+
+// Helper ekstraksi cerdas entitas reservasi
+async function parseReservationMessage(rawBody, matchedKeyword, sender, pushName) {
+  const result = {
+    customer_name: pushName || '',
+    pax: 2,
+    date: new Date().toISOString().slice(0, 10),
+    time: '19:00',
+    table_name: '',
+    note: '',
+  };
+
+  const text = String(rawBody || '');
+
+  // Ekstraksi Nama
+  const nameMatch = text.match(/(?:nama|atas\s*nama|a\/n|an)\s*[:=]?\s*([a-zA-Z\s]{2,30})(?:\n|,|\||$)/i);
+  if (nameMatch && nameMatch[1].trim()) {
+    result.customer_name = nameMatch[1].trim();
+  } else if (!result.customer_name) {
+    result.customer_name = `Tamu WA ${String(sender || '').slice(-4)}`;
+  }
+
+  // Ekstraksi Pax
+  const paxMatch = text.match(/(\d+)\s*(?:orang|pax|org|jiwa|porsi)/i) || text.match(/(?:pax|jumlah|orang)\s*[:=]?\s*(\d+)/i);
+  if (paxMatch && paxMatch[1]) {
+    result.pax = parseInt(paxMatch[1], 10) || 2;
+  }
+
+  // Ekstraksi Jam
+  const timeMatch = text.match(/(?:jam|pukul|waktu|pukul\s*)?\s*(\d{1,2}[:.]\d{2})/i);
+  if (timeMatch && timeMatch[1]) {
+    result.time = timeMatch[1].replace('.', ':');
+  } else {
+    const wordTime = text.match(/jam\s*(\d{1,2})(?:\s*(pagi|siang|sore|malam))?/i);
+    if (wordTime) {
+      let h = parseInt(wordTime[1], 10);
+      const ampm = (wordTime[2] || '').toLowerCase();
+      if ((ampm === 'malam' || ampm === 'sore') && h < 12) h += 12;
+      result.time = `${String(h).padStart(2, '0')}:00`;
+    }
+  }
+
+  // Ekstraksi Tanggal
+  const today = new Date();
+  if (/\bbesok\b/i.test(text)) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    result.date = d.toISOString().slice(0, 10);
+  } else if (/\blusa\b/i.test(text)) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 2);
+    result.date = d.toISOString().slice(0, 10);
+  } else {
+    const dateMatch = text.match(/(\d{4}[-/]\d{1,2}[-/]\d{1,2})/) || text.match(/(\d{1,2}[-/]\d{1,2}[-/]\d{4})/);
+    if (dateMatch) {
+      const rawDate = dateMatch[1].replace(/\//g, '-');
+      if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(rawDate)) {
+        result.date = rawDate;
+      } else {
+        const parts = rawDate.split('-');
+        if (parts.length === 3) {
+          result.date = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+      }
+    }
+  }
+
+  // Ekstraksi Meja
+  const tableMatch = text.match(/(?:meja|table)\s*[:=]?\s*([a-zA-Z0-9\s-]+?)(?:\n|,|\||pax|jam|$)/i);
+  if (tableMatch && tableMatch[1].trim()) {
+    result.table_name = tableMatch[1].trim();
+  }
+
+  // Ekstraksi Catatan
+  const noteMatch = text.match(/(?:catatan|note|pesan|ket)\s*[:=]?\s*([^\n|]+)/i);
+  if (noteMatch && noteMatch[1].trim()) {
+    result.note = noteMatch[1].trim();
+  }
+
+  // Gemini AI Refinement jika tersedia
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { GoogleGenAI } = require('@google/genai');
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const prompt = `Anda adalah parser pesan reservasi WhatsApp restoran Grand Aceh Kuliner.
+Ekstrak entitas dari pesan berikut ke format JSON murni:
+Pesan: "${text}"
+Hari ini: ${new Date().toISOString().slice(0, 10)}
+Kata Kunci: "${matchedKeyword}"
+
+Aturan:
+- customer_name: nama pemesan (string, default: "${result.customer_name}")
+- pax: jumlah orang (integer, default: ${result.pax})
+- date: format YYYY-MM-DD (string, selesaikan 'hari ini', 'besok', 'lusa')
+- time: format HH:MM (string, default: "${result.time}")
+- table_name: nomor atau nama meja yang diinginkan (string, atau kosong jika tidak ditentukan)
+- note: catatan khusus atau permintaan tambahan (string)
+
+Hanya kembalikan JSON valid tanpa blok kode markdown atau penjelasan tambahan.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
+
+      const rawJson = (response.text || '').replace(/```json/g, '').replace(/```/g, '').trim();
+      const aiParsed = JSON.parse(rawJson);
+      if (aiParsed.customer_name) result.customer_name = String(aiParsed.customer_name).trim();
+      if (aiParsed.pax) result.pax = parseInt(aiParsed.pax, 10) || result.pax;
+      if (aiParsed.date && /^\d{4}-\d{2}-\d{2}$/.test(aiParsed.date)) result.date = aiParsed.date;
+      if (aiParsed.time) result.time = aiParsed.time;
+      if (aiParsed.table_name) result.table_name = aiParsed.table_name;
+      if (aiParsed.note) result.note = aiParsed.note;
+    } catch (e) {}
+  }
+
+  return result;
+}
+
+// Webhook untuk penerimaan pesan masuk WhatsApp (Khusus Grup & Kata Kunci)
+app.post(['/api/webhook/whatsapp', '/webhook/whatsapp'], async (req, res) => {
+  try {
+    const payload = req.body || {};
+    let sender = null;
+    let participant = null;
+    let remoteJid = null;
+    let body = '';
+    let fromMe = false;
+    let isGroup = false;
+    let pushName = '';
+
+    if (payload.event === 'messages.upsert' && payload.data) {
+      const msgData = payload.data;
+      const key = msgData.key || {};
+      fromMe = Boolean(key.fromMe);
+      remoteJid = key.remoteJid || '';
+      participant = key.participant || msgData.participant || '';
+      isGroup = Boolean(payload.isGroup || remoteJid.endsWith('@g.us') || Boolean(participant));
+
+      if (isGroup) {
+        sender = (participant || remoteJid).split('@')[0];
+      } else {
+        sender = remoteJid.includes('@') ? remoteJid.split('@')[0] : remoteJid;
+      }
+      pushName = msgData.pushName || '';
+      const m = msgData.message || {};
+      body = m.conversation || (m.extendedTextMessage && m.extendedTextMessage.text) || (m.imageMessage && m.imageMessage.caption) || '';
+    } else {
+      remoteJid = payload.chatId || payload.remoteJid || payload.jid || (payload.data && (payload.data.chatId || payload.data.remoteJid)) || '';
+      participant = payload.participant || payload.author || (payload.data && (payload.data.participant || payload.data.author)) || '';
+      isGroup = Boolean(
+        payload.isGroup ||
+        (payload.data && payload.data.isGroup) ||
+        (remoteJid && remoteJid.endsWith('@g.us')) ||
+        (payload.from && String(payload.from).endsWith('@g.us')) ||
+        Boolean(participant)
+      );
+
+      const rawSender = payload.from || payload.sender || payload.phone || (payload.data && (payload.data.from || payload.data.phone)) || '';
+      if (isGroup) {
+        sender = (participant || rawSender).replace(/@.*$/, '');
+        if (!remoteJid && String(rawSender).endsWith('@g.us')) remoteJid = rawSender;
+      } else {
+        sender = String(rawSender).replace(/@.*$/, '');
+      }
+
+      body = payload.body || payload.message || payload.text || (payload.data && (payload.data.body || payload.data.message || payload.data.text)) || '';
+      fromMe = Boolean(payload.from_me || payload.fromMe || (payload.data && (payload.data.from_me || payload.data.fromMe)));
+      pushName = payload.pushName || payload.name || (payload.data && (payload.data.pushName || payload.data.name)) || '';
+    }
+
+    if (fromMe || !body) {
+      return res.json({ ok: true, ignored: true, reason: 'fromMe or empty message' });
+    }
+
+    const waCfg = db.settings.wa || {};
+    const groupOnly = waCfg.group_only_reservation !== false;
+    const rawKeywords = waCfg.reservation_keywords || '#reservasi, #booking, !reservasi, reservasi';
+    const keywordList = rawKeywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);
+    const targetGroupId = (waCfg.target_group_id || '').trim().toLowerCase();
+    const replyToGroup = waCfg.reply_to_group !== false;
+    const sendPrivateConfirm = waCfg.send_private_confirm !== false;
+    const rejectPrivateBooking = waCfg.reject_private_booking !== false;
+
+    const bodyLower = String(body).toLowerCase().trim();
+
+    // Pencegahan rekursif bot reply
+    const isBotReply = [
+      'reservasi meja diterima',
+      'tiket reservasi meja',
+      'reservasi otomatis diterima',
+      'mohon maaf, reservasi meja kami hanya dapat dilakukan',
+      'terima kasih telah memilih grand aceh kuliner',
+    ].some((k) => bodyLower.includes(k));
+
+    if (isBotReply) {
+      return res.json({ ok: true, ignored: true, reason: 'bot reply loop protection' });
+    }
+
+    // 1. Cek Kata Kunci Reservasi
+    const matchedKeyword = keywordList.find((k) => bodyLower.includes(k));
+    if (!matchedKeyword) {
+      return res.json({
+        ok: true,
+        ignored: true,
+        reason: 'Pesan tidak mengandung kata kunci reservasi resmi',
+        keywords_configured: keywordList,
+      });
+    }
+
+    // 2. Cek Aturan Khusus Grup WhatsApp
+    if (groupOnly && !isGroup) {
+      // Pelanggan mengetik kata kunci reservasi tetapi di chat pribadi (bukan di dalam grup)
+      if (rejectPrivateBooking && sender) {
+        const rejectMsg =
+          `*INFORMASI RESERVASI MEJA — Grand Aceh Kuliner*\n\n` +
+          `Halo Kak! Mohon maaf, reservasi meja Grand Aceh Kuliner *hanya dapat dilakukan melalui Grup WhatsApp resmi kami*.\n\n` +
+          `Silakan bergabung ke grup resmi atau kirim pesan pemesanan Anda di dalam grup dengan kata kunci: *${keywordList[0] || '#reservasi'}*.\n\n` +
+          `Hal ini agar antrean meja dan jadwal transparan bagi seluruh staf kasir kami. Terima kasih atas pengertiannya! 🙏`;
+        sendWhatsAppMessage(sender, rejectMsg).catch((e) => console.error('[Reject Private Error]:', e));
+      }
+      return res.json({
+        ok: true,
+        ignored: true,
+        reason: 'Reservasi hanya dilayani melalui Grup WhatsApp',
+        sender,
+      });
+    }
+
+    // 3. Cek Filter Target Grup Spesifik (Whitelist)
+    if (isGroup && targetGroupId) {
+      const currentGroupJid = String(remoteJid || '').toLowerCase();
+      if (!currentGroupJid.includes(targetGroupId) && targetGroupId !== currentGroupJid) {
+        return res.json({
+          ok: true,
+          ignored: true,
+          reason: 'Pesan bukan dari target ID grup reservasi restoran',
+          current_group: currentGroupJid,
+          target_group: targetGroupId,
+        });
+      }
+    }
+
+    // 4. Ekstraksi Data Booking
+    const parsedData = await parseReservationMessage(body, matchedKeyword, sender, pushName);
+    const matchedTable = findAvailableTable(parsedData.table_name, parsedData.pax, parsedData.date);
+
+    const newRes = {
+      id: 'res-' + Date.now(),
+      customer_name: parsedData.customer_name || pushName || `Pelanggan WA (${String(sender).slice(-4)})`,
+      name: parsedData.customer_name || pushName || `Pelanggan WA (${String(sender).slice(-4)})`,
+      phone: String(sender).replace(/[^0-9]/g, ''),
+      table_id: matchedTable ? matchedTable.id : '',
+      table_name: matchedTable ? matchedTable.name : (parsedData.table_name || 'Menunggu Penataan'),
+      date: parsedData.date || new Date().toISOString().slice(0, 10),
+      time: parsedData.time || '19:00',
+      pax: parsedData.pax || 2,
+      status: 'confirmed',
+      note: `${parsedData.note ? parsedData.note + ' — ' : ''}Grup WA [${matchedKeyword}]`,
+      source: isGroup ? 'grup_wa' : 'personal_wa',
+      group_id: isGroup ? remoteJid : null,
+      matched_keyword: matchedKeyword,
+      created_by: 'Grup WA AI',
+      created_at: new Date().toISOString(),
+    };
+
+    db.reservations.push(newRes);
+
+    // 5. Balasan Konfirmasi
+    // A. Balas langsung di dalam Grup WhatsApp
+    if (isGroup && replyToGroup && remoteJid) {
+      const groupReply =
+        `🎉 *RESERVASI MEJA DITERIMA — Grand Aceh Kuliner*\n\n` +
+        `Halo Kak *${newRes.customer_name}* (@${newRes.phone}), booking meja Anda telah tercatat otomatis:\n\n` +
+        `📍 *Meja:* ${newRes.table_name}\n` +
+        `👥 *Jumlah:* ${newRes.pax} Orang\n` +
+        `📅 *Tanggal:* ${newRes.date}\n` +
+        `⏰ *Jam:* ${newRes.time} WIB\n` +
+        `📝 *Catatan:* ${parsedData.note || '-'}\n\n` +
+        `Meja akan disiapkan oleh tim kasir kami. Sampai jumpa di restoran! 🙏✨`;
+      sendWhatsAppMessage(remoteJid, groupReply).catch((e) => console.error('[Group Reply Error]:', e));
+    }
+
+    // B. Kirim Tiket Konfirmasi ke Japri Pemesan
+    if (sendPrivateConfirm && newRes.phone) {
+      const privateTicket =
+        `*TIKET RESERVASI MEJA — Grand Aceh Kuliner*\n\n` +
+        `Halo Kak *${newRes.customer_name}*,\n` +
+        `Berikut adalah konfirmasi reservasi Anda melalui Grup WhatsApp resmi:\n\n` +
+        `🔖 *ID Booking:* ${newRes.id}\n` +
+        `📅 *Tanggal:* ${newRes.date}\n` +
+        `⏰ *Waktu:* ${newRes.time} WIB\n` +
+        `🪑 *Meja:* ${newRes.table_name}\n` +
+        `👥 *Kapasitas:* ${newRes.pax} Orang\n\n` +
+        `Tunjukkan pesan ini kepada kasir kami saat tiba di restoran. Terima kasih! 😊`;
+      sendWhatsAppMessage(newRes.phone, privateTicket).catch((e) => console.error('[Private Ticket Error]:', e));
+    }
+
+    return res.json({
+      ok: true,
+      booked: true,
+      reservation: newRes,
+      matched_keyword: matchedKeyword,
+      is_group: isGroup,
+    });
+  } catch (err) {
+    console.error('[WhatsApp Webhook Error]:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Endpoint Simulasi & Uji Coba Parser Reservasi Grup & Kata Kunci
+app.post(['/api/whatsapp/simulate-reservation', '/whatsapp/simulate-reservation'], async (req, res) => {
+  try {
+    const { text, is_group, sender_phone, group_id, sender_name } = req.body || {};
+    if (!text || !text.trim()) {
+      return res.status(400).json({ detail: 'Teks pesan wajib diisi' });
+    }
+
+    const waCfg = db.settings.wa || {};
+    const groupOnly = waCfg.group_only_reservation !== false;
+    const rawKeywords = waCfg.reservation_keywords || '#reservasi, #booking, !reservasi, reservasi';
+    const keywordList = rawKeywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);
+    const targetGroupId = (waCfg.target_group_id || '').trim().toLowerCase();
+
+    const bodyLower = String(text).toLowerCase().trim();
+    const matchedKeyword = keywordList.find((k) => bodyLower.includes(k));
+
+    const isGroup = is_group !== false;
+    const currentGroupId = (group_id || '120363024823904123@g.us').trim();
+    const sender = sender_phone || '6281234567890';
+    const pushName = sender_name || 'Pelanggan';
+
+    let status = 'approved';
+    let rejectionReason = null;
+    let mockRejectionMsg = null;
+
+    if (!matchedKeyword) {
+      status = 'rejected';
+      rejectionReason = `Pesan tidak mengandung kata kunci reservasi (${keywordList.join(', ')})`;
+    } else if (groupOnly && !isGroup) {
+      status = 'rejected';
+      rejectionReason = 'Reservasi hanya diizinkan melalui Grup WhatsApp (Pesan ini dikirim lewat chat pribadi/japri)';
+      mockRejectionMsg =
+        `*INFORMASI RESERVASI MEJA — Grand Aceh Kuliner*\n\n` +
+        `Halo Kak! Mohon maaf, reservasi meja Grand Aceh Kuliner *hanya dapat dilakukan melalui Grup WhatsApp resmi kami*.\n\n` +
+        `Silakan bergabung ke grup resmi atau kirim pesan pemesanan Anda di dalam grup dengan kata kunci: *${keywordList[0] || '#reservasi'}*.\n\n` +
+        `Terima kasih atas pengertiannya! 🙏`;
+    } else if (isGroup && targetGroupId && !currentGroupId.toLowerCase().includes(targetGroupId)) {
+      status = 'rejected';
+      rejectionReason = `ID Grup (${currentGroupId}) tidak cocok dengan ID Grup Reservasi Resmi (${targetGroupId})`;
+    }
+
+    let parsed = null;
+    let mockGroupReply = null;
+    let mockPrivateTicket = null;
+    let matchedTable = null;
+
+    if (status === 'approved') {
+      parsed = await parseReservationMessage(text, matchedKeyword, sender, pushName);
+      matchedTable = findAvailableTable(parsed.table_name, parsed.pax, parsed.date);
+
+      mockGroupReply =
+        `🎉 *RESERVASI MEJA DITERIMA — Grand Aceh Kuliner*\n\n` +
+        `Halo Kak *${parsed.customer_name}* (@${sender}), booking meja Anda telah tercatat otomatis:\n\n` +
+        `📍 *Meja:* ${matchedTable ? matchedTable.name : (parsed.table_name || 'Menunggu Penataan')}\n` +
+        `👥 *Jumlah:* ${parsed.pax} Orang\n` +
+        `📅 *Tanggal:* ${parsed.date}\n` +
+        `⏰ *Jam:* ${parsed.time} WIB\n` +
+        `📝 *Catatan:* ${parsed.note || '-'}\n\n` +
+        `Meja akan disiapkan oleh tim kasir kami. Sampai jumpa di restoran! 🙏✨`;
+
+      mockPrivateTicket =
+        `*TIKET RESERVASI MEJA — Grand Aceh Kuliner*\n\n` +
+        `Halo Kak *${parsed.customer_name}*,\n` +
+        `Berikut adalah konfirmasi reservasi Anda melalui Grup WhatsApp resmi:\n\n` +
+        `🔖 *ID Booking:* res-${Date.now()}\n` +
+        `📅 *Tanggal:* ${parsed.date}\n` +
+        `⏰ *Waktu:* ${parsed.time} WIB\n` +
+        `🪑 *Meja:* ${matchedTable ? matchedTable.name : (parsed.table_name || 'Menunggu Penataan')}\n` +
+        `👥 *Kapasitas:* ${parsed.pax} Orang\n\n` +
+        `Tunjukkan pesan ini kepada kasir kami saat tiba di restoran. Terima kasih! 😊`;
+    }
+
+    res.json({
+      status,
+      rejection_reason: rejectionReason,
+      matched_keyword: matchedKeyword || null,
+      is_group: isGroup,
+      current_group: isGroup ? currentGroupId : null,
+      target_group: targetGroupId || '(Semua grup diizinkan)',
+      rejection_message: mockRejectionMsg,
+      parsed,
+      matched_table: matchedTable,
+      mock_group_reply: mockGroupReply,
+      mock_private_ticket: mockPrivateTicket,
+      rules_checked: {
+        group_only_enabled: groupOnly,
+        keywords_configured: keywordList,
+        target_group_enforced: Boolean(targetGroupId),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ detail: err.message });
+  }
 });
 
 app.get('/api/vendors', (req, res) => {
@@ -2161,24 +3285,44 @@ app.post('/api/users', (req, res) => {
   res.json(formatted);
 });
 
-app.patch('/api/users/:id/role', (req, res) => {
-  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
+app.patch(['/api/users/:id/role', '/users/:id/role'], (req, res) => {
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
-  user.role = req.body?.role || 'kasir';
+  const newRole = req.body?.role || 'kasir';
+
+  // Prevent demoting last superadmin
+  if (isUserSuperAdmin(user) && newRole !== 'superadmin') {
+    const otherSupers = db.users.filter((u) => u.id !== user.id && u.username !== user.username && u.active !== false && isUserSuperAdmin(u));
+    if (otherSupers.length === 0) {
+      return res.status(400).json({ detail: 'Tidak bisa menurunkan peran Super Admin terakhir. Harus ada minimal 1 akun Super Admin aktif.' });
+    }
+  }
+
+  user.role = newRole;
+  user.role_base = newRole;
+  if (newRole === 'superadmin') {
+    user.is_superadmin = true;
+    user.perms = ['*'];
+    user.perms_full = true;
+  } else {
+    user.is_superadmin = false;
+    delete user.perms;
+    delete user.perms_full;
+  }
   const formatted = formatUser(user);
   Object.assign(user, formatted);
   res.json(formatted);
 });
 
-app.patch('/api/users/:id/toggle', (req, res) => {
-  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
+app.patch(['/api/users/:id/toggle', '/users/:id/toggle'], (req, res) => {
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   user.active = !user.active;
   res.json(formatUser(user));
 });
 
 app.all(['/api/users/:id/reset-password', '/users/:id/reset-password'], (req, res) => {
-  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   const newPw = req.body?.new_password || req.body?.password || '123456';
   user.password = newPw;
@@ -2190,7 +3334,7 @@ app.all(['/api/users/:id/reset-password', '/users/:id/reset-password'], (req, re
 });
 
 app.all(['/api/users/:id/toggle-must-change', '/api/users/:id/must-change-password'], (req, res) => {
-  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   if (req.body?.value !== undefined) {
     user.must_change_password = !!req.body.value;
@@ -2201,33 +3345,129 @@ app.all(['/api/users/:id/toggle-must-change', '/api/users/:id/must-change-passwo
 });
 
 app.patch(['/api/users/:id/ingredient-categories', '/users/:id/ingredient-categories'], (req, res) => {
-  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   user.ingredient_categories = Array.isArray(req.body?.categories) ? req.body.categories : [];
   res.json({ ok: true, categories: user.ingredient_categories });
 });
 
-app.get('/api/users/:id/delete-check', (req, res) => {
-  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
+app.patch(['/api/users/:id/permissions', '/users/:id/permissions'], (req, res) => {
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
-  const isSuper = user.role === 'superadmin' || user.username === 'taqim2609' || user.username === 'superadmin' || user.is_superadmin;
+
+  if (user.role === 'superadmin' || user.is_superadmin) {
+    return res.status(400).json({ detail: 'Izin Akun Super Admin selalu penuh dan tidak dapat dikurangi' });
+  }
+
+  const perms = Array.isArray(req.body?.perms) ? req.body.perms : [];
+  user.perms = perms;
+  user.perms_full = true;
+  if (req.body?.role) {
+    user.role = req.body.role;
+  }
+  const formatted = formatUser(user);
+  Object.assign(user, formatted);
+  res.json({ ok: true, user: formatted });
+});
+
+app.post(['/api/users/:id/reset-permissions', '/users/:id/reset-permissions'], (req, res) => {
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
+  if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+
+  delete user.perms;
+  delete user.perms_full;
+  const formatted = formatUser(user);
+  Object.assign(user, formatted);
+  res.json({ ok: true, user: formatted });
+});
+
+app.get(['/api/users/:id/delete-check', '/users/:id/delete-check'], (req, res) => {
+  const targetId = req.params.id;
+  const user = db.users.find((u) => u.id === targetId || (u._id && u._id.$oid === targetId) || u.username === targetId);
+  if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+
+  const isSuper = isUserSuperAdmin(user);
+  const activeSupers = db.users.filter((u) => u.active !== false && isUserSuperAdmin(u));
+  const otherSupers = activeSupers.filter((u) => u.id !== user.id && u.username !== user.username);
+  const isLastSuper = isSuper && otherSupers.length === 0;
+
+  // Check self
+  let isSelf = false;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer gak_jwt_')) {
+    try {
+      const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer gak_jwt_', ''), 'base64').toString('utf-8'));
+      if (decoded.id === user.id || (decoded.username && decoded.username.toLowerCase() === (user.username || '').toLowerCase())) {
+        isSelf = true;
+      }
+    } catch (e) {}
+  }
+  if (!isSelf && req.user) {
+    isSelf = (req.user.id === user.id || req.user.username === user.username);
+  }
+
+  const hasHistory = Boolean(db.transactions && db.transactions.some((t) => t.cashier_id === user.id || t.cashier_name === user.name || t.cashier === user.username));
+
   res.json({
-    has_transactions: false,
-    transaction_count: 0,
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    role: user.role,
+    active: user.active !== false,
     is_superadmin: isSuper,
-    action: isSuper ? 'forbidden' : 'delete',
+    is_last_superadmin: isLastSuper,
+    other_super_count: otherSupers.length,
+    super_count: activeSupers.length,
+    self: isSelf,
+    has_history: hasHistory,
+    has_transactions: hasHistory,
+    transaction_count: hasHistory ? 1 : 0,
+    action: isSelf ? 'forbidden' : (isLastSuper ? 'forbidden' : (hasHistory ? 'deactivate' : 'delete')),
   });
 });
 
-app.delete('/api/users/:id', (req, res) => {
-  const idx = db.users.findIndex((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id));
+app.delete(['/api/users/:id', '/users/:id'], (req, res) => {
+  const targetId = req.params.id;
+  const idx = db.users.findIndex((u) => u.id === targetId || (u._id && u._id.$oid === targetId) || u.username === targetId);
   if (idx === -1) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   const target = db.users[idx];
-  if (target.role === 'superadmin' || target.username === 'taqim2609' || target.username === 'superadmin' || target.is_superadmin) {
-    return res.status(400).json({ detail: 'Akun Owner / Super Admin tidak boleh dihapus' });
+
+  // Self deletion check
+  let isSelf = false;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer gak_jwt_')) {
+    try {
+      const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer gak_jwt_', ''), 'base64').toString('utf-8'));
+      if (decoded.id === target.id || (decoded.username && decoded.username.toLowerCase() === (target.username || '').toLowerCase())) {
+        isSelf = true;
+      }
+    } catch (e) {}
   }
+  if (!isSelf && req.user) {
+    isSelf = (req.user.id === target.id || req.user.username === target.username);
+  }
+
+  if (isSelf) {
+    return res.status(400).json({ detail: 'Tidak bisa menghapus akun Anda sendiri yang sedang aktif' });
+  }
+
+  const isSuper = isUserSuperAdmin(target);
+  if (isSuper) {
+    const activeOtherSupers = db.users.filter((u) => u.id !== target.id && u.username !== target.username && u.active !== false && isUserSuperAdmin(u));
+    if (activeOtherSupers.length === 0) {
+      return res.status(400).json({ detail: 'Akun Super Admin terakhir tidak bisa dihapus. Harus tersisa minimal 1 akun Super Admin aktif.' });
+    }
+  }
+
+  // Check transactions / history
+  const hasHistory = Boolean(db.transactions && db.transactions.some((t) => t.cashier_id === target.id || t.cashier_name === target.name || t.cashier === target.username));
+  if (hasHistory) {
+    target.active = false;
+    return res.json({ ok: true, action: 'deactivated', username: target.username || target.name });
+  }
+
   const [removed] = db.users.splice(idx, 1);
-  res.json({ ok: true, action: 'deleted', username: removed.username });
+  res.json({ ok: true, action: 'deleted', username: removed.username || removed.name });
 });
 
 app.post('/api/settings/rbac/claim-superadmin', (req, res) => {

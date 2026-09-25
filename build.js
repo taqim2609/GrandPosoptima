@@ -32,8 +32,32 @@ function copyRecursiveSync(src, dest) {
 console.log('[Build] Checking React frontend build status...');
 const hasFrontendBuild = fs.existsSync(srcDir) && fs.existsSync(path.join(srcDir, 'index.html')) && fs.existsSync(path.join(srcDir, 'static', 'js'));
 
-if (!hasFrontendBuild) {
-  console.log('[Build] Frontend build not found. Running build in project/frontend...');
+const forceRebuild = process.argv.includes('--rebuild') || process.env.REBUILD_FRONTEND === 'true';
+let srcNewer = false;
+const buildIndex = path.join(srcDir, 'index.html');
+if (fs.existsSync(buildIndex)) {
+  const buildMtime = fs.statSync(buildIndex).mtimeMs;
+  const checkNewer = (dir) => {
+    if (!fs.existsSync(dir)) return false;
+    const entries = fs.readdirSync(dir);
+    for (const e of entries) {
+      const full = path.join(dir, e);
+      const stat = fs.statSync(full);
+      if (stat.isDirectory()) {
+        if (checkNewer(full)) return true;
+      } else if (stat.mtimeMs > buildMtime) {
+        return true;
+      }
+    }
+    return false;
+  };
+  srcNewer = checkNewer(path.join(frontendDir, 'src'));
+}
+
+const shouldBuild = !hasFrontendBuild || srcNewer || forceRebuild;
+
+if (shouldBuild) {
+  console.log(`[Build] Rebuilding frontend (hasBuild: ${hasFrontendBuild}, srcNewer: ${srcNewer}, force: ${forceRebuild})...`);
   try {
     const hasNodeModules = fs.existsSync(path.join(frontendDir, 'node_modules', '@craco', 'craco'));
     if (!hasNodeModules) {

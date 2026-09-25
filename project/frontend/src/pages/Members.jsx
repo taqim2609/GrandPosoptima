@@ -19,7 +19,11 @@ export default function Members() {
   const [saving, setSaving] = useState(false);
 
   const load = () => api.get("/members", { params: { q } }).then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch((e) => toast.error(apiError(e.response?.data?.detail)));
-  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [q]);
+  useEffect(() => {
+    const t = setTimeout(load, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("Nama wajib");
