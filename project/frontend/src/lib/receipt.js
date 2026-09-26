@@ -314,8 +314,8 @@ export function generateReceiptHtml(order, cfg, logoB64) {
     .font-heavy { font-weight: 800; }
     
     /* Header Outlet */
-    .logo-wrap { text-align: center; margin-bottom: 8px; }
-    .logo-img { max-width: 110px; max-height: 48px; object-fit: contain; filter: grayscale(100%) contrast(150%); }
+    .logo-wrap { margin-bottom: 8px; }
+    .logo-img { max-width: 140px; max-height: 58px; object-fit: contain; filter: contrast(130%); }
     .outlet-name {
       font-family: 'Plus Jakarta Sans', 'JetBrains Mono', sans-serif;
       font-size: 15px;
@@ -504,7 +504,7 @@ export function generateReceiptHtml(order, cfg, logoB64) {
 </head>
 <body>
   <div class="receipt-card">
-    ${logoB64 ? `<div class="logo-wrap"><img class="logo-img" src="${logoB64}" alt="Logo Outlet" /></div>` : ""}
+    ${logoB64 ? `<div class="logo-wrap" style="text-align:${alignCss(cfg.headerAlign)}"><img class="logo-img" src="${logoB64}" alt="Logo Outlet" /></div>` : ""}
 
     <div style="text-align:${alignCss(cfg.headerAlign)}">
       <div class="outlet-name">${esc(cfg.outletName || "GRANDPOS OPTIMA")}</div>

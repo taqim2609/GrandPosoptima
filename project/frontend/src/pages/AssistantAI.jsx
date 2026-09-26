@@ -3,11 +3,12 @@ import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { can, isSuperAdmin, roleNameOf, moduleLabel } from "@/lib/rbac";
 import { collectVersions } from "@/lib/versions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Bot, Send, Loader2, Sparkles, User, Cpu, CheckCircle2, X, Wand2, Settings as SettingsIcon,
-  History, Plus, Trash2, MessageSquare, Lightbulb, ShoppingCart, FileUp,
+  History, Plus, Trash2, MessageSquare, Lightbulb, ShoppingCart, FileUp, ShieldAlert, ShieldCheck, Shield,
 } from "lucide-react";
 
 const SUGGESTIONS = [
@@ -35,6 +36,20 @@ const ACTION_LABEL = {
   delete_category: "Hapus Kategori",
 };
 
+const ACTION_REQUIRED_MODULE = {
+  create_category: "produk",
+  deactivate_category: "produk",
+  delete_category: "produk",
+  create_product: "produk",
+  create_products_bulk: "produk",
+  update_product: "produk",
+  deactivate_product: "produk",
+  delete_product: "produk",
+  create_vendor: "vendor",
+  create_payment_method: "pengaturan",
+  import_excel: "produk",
+};
+
 const DESTRUCTIVE = new Set(["delete_product", "delete_category"]);
 
 const FIELD_LABEL = {
@@ -43,7 +58,7 @@ const FIELD_LABEL = {
   category_name: "Kategori", vendor_name: "Vendor", sold_out: "Habis", active: "Aktif",
 };
 
-function ActionCard({ action, state, result, onApply, canApply }) {
+function ActionCard({ action, state, result, onApply, user }) {
   const danger = DESTRUCTIVE.has(action.type);
   const isBulk = action.type === "create_products_bulk";
   const isExcel = action.type === "import_excel";
@@ -53,6 +68,11 @@ function ActionCard({ action, state, result, onApply, canApply }) {
   const titleColor = danger ? "text-[#B91C1C]" : "text-[#1D4ED8]";
   const excelRows = isExcel && Array.isArray(action.rows) ? action.rows : [];
   const s = action.summary || {};
+
+  const isSuper = isSuperAdmin(user);
+  const reqMod = ACTION_REQUIRED_MODULE[action.type];
+  const canApply = isSuper || (reqMod ? can(user, reqMod) : false);
+
   return (
     <div className={`mt-3 rounded-xl border-2 ${border} p-3.5`} data-testid="assistant-action-card">
       <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -120,9 +140,9 @@ function ActionCard({ action, state, result, onApply, canApply }) {
       ) : state === "cancelled" ? (
         <div className="mt-2.5 flex items-center gap-1.5 text-[#71717A] font-bold text-sm"><X size={16} /> Dibatalkan</div>
       ) : (
-        <div className="mt-2.5 flex gap-2">
+        <div className="mt-2.5 space-y-2">
           {canApply ? (
-            <>
+            <div className="flex gap-2">
               <button data-testid="assistant-apply-btn" onClick={() => onApply("apply")} disabled={state === "applying"}
                 className={`tap flex-1 h-10 rounded-lg text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-60 ${danger ? "bg-[#DC2626]" : "bg-[#2563EB]"}`}>
                 {state === "applying" ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Terapkan
@@ -131,9 +151,14 @@ function ActionCard({ action, state, result, onApply, canApply }) {
                 className="tap h-10 px-4 rounded-lg border-2 border-[#71717A] text-[#52525B] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-60">
                 <X size={15} /> Batal
               </button>
-            </>
+            </div>
           ) : (
-            <div className="text-xs font-bold text-[#71717A] flex items-center gap-1.5"><X size={14} /> Penerapan aksi hanya untuk admin</div>
+            <div className="rounded-lg bg-[#FFFBEB] border border-[#FDE68A] p-2.5 text-xs text-[#92400E] flex items-start gap-2">
+              <ShieldAlert size={16} className="shrink-0 text-[#D97706] mt-0.5" />
+              <span>
+                Aksi ini membutuhkan izin modul <b>{moduleLabel(reqMod)}</b>. Akun Anda (<b>{roleNameOf(user)}</b>) tidak memiliki wewenang untuk mengeksekusinya. Hubungi <b>Super Admin</b>.
+              </span>
+            </div>
           )}
         </div>
       )}
@@ -332,19 +357,30 @@ export default function AssistantAI() {
             <History size={15} /> Riwayat
           </button>
         </div>
-        {user.role === "admin" && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[#71717A] hidden sm:block">Provider:</span>
-            <button data-testid="assistant-provider-gemini" onClick={() => pickProvider("gemini")} disabled={savingProvider}
-              className={`tap h-9 px-3 rounded-lg border-2 font-bold text-sm flex items-center gap-1.5 ${provider === "gemini" ? "bg-[#2563EB] border-[#2563EB] text-white" : "border-[#BFDBFE] text-[#2563EB]"}`}>
-              <Sparkles size={14} /> Gemini AI
-            </button>
-            <button data-testid="assistant-provider-chenzk" onClick={() => pickProvider("chenzk")} disabled={savingProvider}
-              className={`tap h-9 px-3 rounded-lg border-2 font-bold text-sm flex items-center gap-1.5 ${provider === "chenzk" ? "bg-[#0A0A0A] border-[#0A0A0A] text-white" : "border-[#D4D4D8] text-[#0A0A0A]"}`}>
-              <Cpu size={14} /> chenzk
-            </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border bg-[#F8FAFC] shadow-2xs">
+            <ShieldCheck size={14} className={isSuperAdmin(user) ? "text-[#E63946]" : "text-[#2563EB]"} />
+            <span className="text-[#334155]">{roleNameOf(user)}</span>
+            {isSuperAdmin(user) ? (
+              <span className="bg-[#FEF2F2] text-[#DC2626] text-[10px] px-1.5 py-0.5 rounded-full font-black border border-[#FECACA]">AKSES PENUH</span>
+            ) : (
+              <span className="bg-[#EFF6FF] text-[#1D4ED8] text-[10px] px-1.5 py-0.5 rounded-full font-black border border-[#BFDBFE]">TERBATAS ROLE</span>
+            )}
           </div>
-        )}
+          {(isSuperAdmin(user) || user.role === "admin") && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-[#71717A] hidden sm:block">Provider:</span>
+              <button data-testid="assistant-provider-gemini" onClick={() => pickProvider("gemini")} disabled={savingProvider}
+                className={`tap h-9 px-3 rounded-lg border-2 font-bold text-sm flex items-center gap-1.5 ${provider === "gemini" ? "bg-[#2563EB] border-[#2563EB] text-white" : "border-[#BFDBFE] text-[#2563EB]"}`}>
+                <Sparkles size={14} /> Gemini AI
+              </button>
+              <button data-testid="assistant-provider-chenzk" onClick={() => pickProvider("chenzk")} disabled={savingProvider}
+                className={`tap h-9 px-3 rounded-lg border-2 font-bold text-sm flex items-center gap-1.5 ${provider === "chenzk" ? "bg-[#0A0A0A] border-[#0A0A0A] text-white" : "border-[#D4D4D8] text-[#0A0A0A]"}`}>
+                <Cpu size={14} /> chenzk
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Control Strip for Model & Role Selection */}
@@ -437,7 +473,7 @@ export default function AssistantAI() {
                 {m.text}
               </div>
               {m.action && (
-                <ActionCard action={m.action} state={m.actionState} result={m.actionResult} canApply={user.role === "admin"} onApply={(mode) => handleAction(i, mode)} />
+                <ActionCard action={m.action} state={m.actionState} result={m.actionResult} user={user} onApply={(mode) => handleAction(i, mode)} />
               )}
             </div>
           </div>

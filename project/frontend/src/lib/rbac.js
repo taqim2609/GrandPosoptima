@@ -69,22 +69,18 @@ export const moduleLabel = (code) => RBAC_MODULES.find((m) => m.code === code)?.
 
 export const isSuperAdmin = (u) => {
   if (!u) return false;
-  const cleanUser = (u.username || "").replace(/[\s_-]+/g, "").toLowerCase();
-  const cleanEmail = (u.email || "").toLowerCase();
-  const cleanName = (u.name || "").replace(/[\s_-]+/g, "").toLowerCase();
   const rawRole = (u.role || "").trim().toLowerCase();
   const rawBase = (u.role_base || "").trim().toLowerCase();
+
+  // Role non-superadmin bawaan tidak pernah dianggap superadmin
+  if (["kasir", "input", "input_pembayaran", "stok_opname"].includes(rawRole) || ["kasir", "input", "input_pembayaran", "stok_opname"].includes(rawBase)) {
+    return false;
+  }
 
   return Boolean(
     u.is_superadmin ||
     rawRole === "superadmin" ||
-    rawBase === "superadmin" ||
-    cleanUser === "taqim2609" ||
-    cleanUser === "taqim" ||
-    cleanUser.includes("taqim") ||
-    cleanEmail === "taqim2609@gmail.com" ||
-    cleanEmail.includes("taqim") ||
-    cleanName.includes("taqim")
+    rawBase === "superadmin"
   );
 };
 

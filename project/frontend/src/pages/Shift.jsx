@@ -12,6 +12,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
 import { printText as printText_, printShiftClosingReport } from "@/lib/print";
+import ShiftClosingReportView from "@/components/ShiftClosingReportView";
 
 const DEF_CATS = ["Bahan Baku", "Belanja Operasional", "Bayar Supplier", "Kasbon", "Lainnya"];
 
@@ -84,6 +85,7 @@ export default function Shift() {
   const [latestShiftId, setLatestShiftId] = useState("");
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [selectedHistoryReport, setSelectedHistoryReport] = useState(null);
   const [sendingWa, setSendingWa] = useState(false);
   const [vendorPreview, setVendorPreview] = useState([]);
   // paid[row.vendor_id] = berapa yang diberikan ke vendor
@@ -1167,317 +1169,154 @@ export default function Shift() {
       )}
 
       {report && (
-        <div className="max-w-xl bg-white rounded-2xl border p-6 mt-6" data-testid="shift-report">
-          <h3 className="font-extrabold text-lg mb-3">Laporan Shift</h3>
-          <Row l="Dibuka oleh" v={report.dibuka_oleh || "-"} />
-          <Row l="Ditutup oleh" v={report.ditutup_oleh || report.closed_by || "-"} />
-          <Row l="Total Order" v={report.order_count} />
-          <Row l="Total Penjualan" v={rupiah(report.total_sales)} />
-          <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">
-            {lb.fnb}</div></div>
-          <Row l="Dine-In" v={rupiah(report.by_type?.dine_in || 0)} />
-          <Row l="Take Away" v={rupiah(report.by_type?.take_away || 0)} />
-          <Row l={`Subtotal ${lb.fnb}`} v={rupiah(report.fnb_total)} accent />
-          <Row l={`Kas awal ${lb.fnb}`} v={rupiah(report.opening_cash_fnb ?? report.opening_cash ?? 0)} />
-          <Row l={`Kas akhir ${lb.fnb}`} v={rupiah(report.closing_cash_fnb ?? 0)} />
-          <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">
-            {lb.retail}</div></div>
-          <Row l={lb.retail} v={rupiah(report.retail_total)} accent />
-          <Row l={`Kas awal ${lb.retail}`} v={rupiah(report.opening_cash_retail ?? 0)} />
-          <Row l={`Kas akhir ${lb.retail}`} v={rupiah(report.closing_cash_retail ?? 0)} />
-          <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">Laba Kotor</div></div>
-          <Row l={`Laba ${lb.fnb}`} v={rupiah(report.gross_profit_fnb)} accent />
-          <Row l={`Laba ${lb.retail}`} v={rupiah(report.gross_profit_retail)} accent />
-          {(report.void_count || 0) > 0 && (
-            <>
-              <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">Pembatalan / Refund</div></div>
-              <Row l="Jumlah transaksi" v={`${report.void_count}×`} />
-              <Row l="Nilai dibatalkan (tidak masuk penjualan)" v={rupiah(report.void_amount || 0)} warn />
-            </>
-          )}
-          <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">Pengeluaran</div></div>
-          <Row l={lb.fnb} v={rupiah(report.cash_out_fnb)} />
-          <Row l={lb.retail} v={rupiah(report.cash_out_retail)} />
-          {(report.transport || 0) > 0 && (
-            <Row l={`Termasuk uang transport (wajib, ${lb.fnb})`} v={rupiah(report.transport)} />
-          )}
-          {(report.expenses_created || []).length > 0 && (
-            <div className="text-[11px] text-[#15803D] font-bold mt-1" data-testid="shift-expenses-created">
-              {(report.expenses_created || []).map((x, i) => (
-                <div key={x.id || i}>
-                  Pengeluaran saat tutup: {x.scope === "retail" ? lb.retail : lb.fnb} · {x.category} {rupiah(x.amount)}
-                  {x.note ? ` · ${x.note}` : ""}
-                </div>
-              ))}
-            </div>
-          )}
-          {report.expenses_empty && (
-            <div data-testid="report-expense-warning"
-              className="mt-2 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] px-3 py-2 text-[11px] text-[#92400E] font-bold flex gap-2">
-              <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-              <span>Laporan pengeluaran harian belum diisi (F&amp;B &amp; Retail kosong) — sudah dikonfirmasi
-                bahwa memang tidak ada pengeluaran. Catatan ini ikut tercetak &amp; terkirim ke WhatsApp.</span>
-            </div>
-          )}
-          {Object.keys(report.by_payment || {}).length > 0 && (
-            <>
-              <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">Metode Pembayaran</div></div>
-              {Object.entries(report.by_payment || {}).map(([k, v]) => (
-                <Row key={k} l={k} v={rupiah(v)} />
-              ))}
-            </>
-          )}
-          <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">Sisa Kas Tunai (tunai − pengeluaran)</div></div>
-          <Row l={`Penjualan tunai ${lb.fnb}`} v={rupiah(report.cash_sales_fnb || 0)} />
-          <Row l={`Sisa kas tunai ${lb.fnb}`} v={rupiah(report.sisa_cash_fnb || 0)} warn={(report.sisa_cash_fnb || 0) < 0} />
-          <Row l={`Penjualan tunai ${lb.retail}`} v={rupiah(report.cash_sales_retail || 0)} />
-          <Row l={`Sisa kas tunai ${lb.retail}`} v={rupiah(report.sisa_cash_retail || 0)} warn={(report.sisa_cash_retail || 0) < 0} />
-          <div className="flex justify-between items-center pt-1" data-testid="report-sisa-cash">
-            <span className="font-extrabold text-base">Total sisa kas tunai</span>
-            <span className={`font-num font-extrabold text-lg ${(report.sisa_cash || 0) < 0 ? "text-[#B45309]" : "text-[#047857]"}`}>
-              {rupiah(report.sisa_cash || 0)}
-            </span>
-          </div>
-          <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">Perkiraan Kas</div></div>
-          <Row l={`Perkiraan kas ${lb.fnb} (awal + tunai − keluar)`} v={rupiah(reportsByScope?.fnb?.expected_cash ?? report.expected_cash)} />
-          {reportsByScope?.retail && (
-            <Row l={`Perkiraan kas ${lb.retail}`} v={rupiah(reportsByScope.retail.expected_cash)} />
-          )}
-
-          {/* Laporan Selisih Kas & Rekonsiliasi Fisik */}
-          {(report.variance_report || report.closing_cash_fnb !== undefined) && (
-            <div className="mt-4 p-4 rounded-xl border bg-[#FAFAFA]" data-testid="report-variance-card">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider flex items-center gap-1.5">
-                  <Scale size={14} className="text-[#E63946]" /> Laporan Selisih Kas Fisik (Rekonsiliasi)
-                </span>
-                {report.variance_report?.total ? (
-                  <span
-                    className={`px-2 py-0.5 rounded text-[11px] font-extrabold ${
-                      report.variance_report.total.status === "match"
-                        ? "bg-[#DCFCE7] text-[#166534]"
-                        : report.variance_report.total.status === "surplus"
-                        ? "bg-[#DBEAFE] text-[#1E40AF]"
-                        : "bg-[#FEE2E2] text-[#991B1B]"
-                    }`}
-                  >
-                    {report.variance_report.total.status === "match"
-                      ? "✓ Kas Seimbang"
-                      : report.variance_report.total.status === "surplus"
-                      ? "Lebih Kas (Surplus)"
-                      : "Kurang Kas (Shortage)"}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="space-y-1 text-xs">
-                <Row l="Kas Diharapkan Sistem (Total)" v={rupiah(report.variance_report?.total?.expected ?? report.expected_cash)} />
-                <Row l="Kas Fisik Kasir (Total)" v={rupiah(report.variance_report?.total?.actual ?? (Number(report.closing_cash_fnb || 0) + Number(report.closing_cash_retail || 0)))} />
-                <Row
-                  l="Selisih Kas (Fisik − Sistem)"
-                  v={`${(report.variance_report?.total?.variance ?? 0) >= 0 ? "+" : ""}${rupiah(report.variance_report?.total?.variance ?? 0)}`}
-                  warn={(report.variance_report?.total?.variance ?? 0) !== 0}
-                  accent={(report.variance_report?.total?.variance ?? 0) === 0}
-                />
-              </div>
-
-              {report.variance_report?.fnb && report.variance_report?.retail && (
-                <div className="mt-3 pt-2 border-t border-[#E4E4E7] grid grid-cols-2 gap-3 text-[11px]">
-                  <div className="p-2 rounded bg-white border">
-                    <div className="font-bold text-[#52525B] mb-1">{lb.fnb}</div>
-                    <div>Sistem: <b className="font-num">{rupiah(report.variance_report.fnb.expected)}</b></div>
-                    <div>Fisik: <b className="font-num">{rupiah(report.variance_report.fnb.actual)}</b></div>
-                    <div className="mt-0.5">Selisih: <b className={`font-num ${report.variance_report.fnb.variance !== 0 ? "text-[#B91C1C]" : "text-[#15803D]"}`}>
-                      {report.variance_report.fnb.variance >= 0 ? "+" : ""}{rupiah(report.variance_report.fnb.variance)}
-                    </b></div>
-                  </div>
-                  <div className="p-2 rounded bg-white border">
-                    <div className="font-bold text-[#52525B] mb-1">{lb.retail}</div>
-                    <div>Sistem: <b className="font-num">{rupiah(report.variance_report.retail.expected)}</b></div>
-                    <div>Fisik: <b className="font-num">{rupiah(report.variance_report.retail.actual)}</b></div>
-                    <div className="mt-0.5">Selisih: <b className={`font-num ${report.variance_report.retail.variance !== 0 ? "text-[#B91C1C]" : "text-[#15803D]"}`}>
-                      {report.variance_report.retail.variance >= 0 ? "+" : ""}{rupiah(report.variance_report.retail.variance)}
-                    </b></div>
-                  </div>
-                </div>
-              )}
-
-              {report.variance_report?.variance_reason && (
-                <div className="mt-2.5 p-2 rounded-lg bg-white border border-[#E4E4E7] text-[11px]">
-                  <span className="font-bold text-[#52525B] block">Alasan / Catatan Selisih:</span>
-                  <span className="text-[#0A0A0A] italic">"{report.variance_report.variance_reason}"</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {(report.vendor_share || []).length > 0 && (
-            <>
-              <div className="pt-2"><div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">Bagi Hasil Vendor</div></div>
-              {(report.vendor_share || []).map((v) => (
-                <div key={v.vendor_id} className="rounded-lg bg-[#FAFAFA] border border-[#E4E4E7] px-3 py-2 my-1.5">
-                  <div className="font-bold text-sm">{v.vendor_name}</div>
-                  <Row l="Omzet vendor" v={rupiah(v.gross)} />
-                  <Row l="Bagi hasil (expected)" v={rupiah(v.share)} />
-                  <Row l="Bagi hasil (real, diberikan)" v={rupiah(v.paid)} />
-                  <Row l="Selisih" v={`${v.difference >= 0 ? "" : "-"}${rupiah(Math.abs(v.difference))}`} warn={v.difference !== 0} />
-                  <Row l="Bagian outlet (omzet − bagi hasil)" v={rupiah(v.outlet_share ?? 0)} />
-                  {(v.items || []).length > 0 && (
-                    <>
-                      <button data-testid={`report-toggle-${v.vendor_id}`} onClick={() => setOpenDetail((o) => ({ ...o, [`rp-${v.vendor_id}`]: !o[`rp-${v.vendor_id}`] }))}
-                        className="tap mt-1 text-[11px] font-bold text-[#E63946] flex items-center gap-1">
-                        {openDetail[`rp-${v.vendor_id}`] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                        {openDetail[`rp-${v.vendor_id}`] ? "Sembunyikan detail produk" : `${(v.items || []).length} produk — lihat detail penjualan`}
-                      </button>
-                      {openDetail[`rp-${v.vendor_id}`] && (
-                        <div className="mt-1.5 space-y-1 border-t border-[#F1F1F4] pt-1.5" data-testid={`report-items-${v.vendor_id}`}>
-                          {v.items.map((im) => (
-                            <div key={im.product_id || im.name} className="flex justify-between text-[11px] gap-2">
-                              <span className="font-bold truncate">{im.name} <span className="text-[#a1a1aa] font-normal">×{im.qty}</span></span>
-                              <span className="font-num shrink-0">{rupiah(im.gross)} <span className="text-[#E63946]">(vendor {rupiah(im.vendor_share)})</span></span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              ))}
-              <Row l="Total Omzet Vendor" v={rupiah((report.vendor_share || []).reduce((a, v) => a + (v.gross || 0), 0))} />
-              <Row l="Total Bagi Hasil (expected)" v={rupiah(report.vendor_total_share)} />
-              <Row l="Total Diberikan (real)" v={rupiah(report.vendor_total_paid)} />
-              <Row l="Total Selisih" v={`${report.vendor_total_difference >= 0 ? "" : "-"}${rupiah(Math.abs(report.vendor_total_difference))}`} warn={report.vendor_total_difference !== 0} />
-              <Row l="Total Bagian Outlet" v={rupiah(report.vendor_total_outlet ?? 0)} />
-              {(report.vendor_settled_paid || 0) > 0 && (
-                <Row l="Sudah dibayar via Settlement (masuk pengeluaran)" v={rupiah(report.vendor_settled_paid)} />
-              )}
-              {(report.vendor_settlements_created || []).length > 0 && (
-                <div className="text-[11px] text-[#15803D] font-bold mt-1" data-testid="shift-settlements-created">
-                  {(report.vendor_settlements_created || []).map((x) => (
-                    <div key={x.id || x.settlement_no}>
-                      Bukti {x.settlement_no}: {x.vendor_name} {rupiah(x.paid)} (utang setelahnya {rupiah(x.carry_out)})
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-          <div className="pt-3 mt-1 border-t-2 border-dashed">
-            <div className="text-xs font-extrabold text-[#52525B] uppercase tracking-wider mb-1">Uang Bersih (setelah bagi hasil vendor)</div>
-            <Row l={lb.fnb} v={rupiah(report.net_cash_fnb)} accent />
-            <Row l={lb.retail} v={rupiah(report.net_cash_retail)} accent />
-            <div className="flex justify-between items-center pt-1">
-              <span className="font-extrabold text-base">Total ({lb.fnb} + {lb.retail})</span>
-              <span className="font-num font-extrabold text-lg text-[#047857]" data-testid="report-net-total">{rupiah(report.net_cash)}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-              <button data-testid="shift-print" onClick={() => latestShiftId && loadPrint(latestShiftId)}
-                disabled={printLoading || !latestShiftId}
-                className="tap h-11 rounded-xl bg-[#0A0A0A] hover:bg-[#27272A] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50 text-xs sm:text-sm">
-                {printLoading ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />} Pratinjau &amp; Cetak
-              </button>
-              <button data-testid="shift-print-sunmi" onClick={() => {
-                if (report) {
-                  printShiftClosingReport(report, {
-                    outletName: biz?.name || "KASIR AKUNTANSI",
-                    openedBy: report.dibuka_oleh,
-                    closedBy: report.ditutup_oleh,
-                  });
-                } else if (latestShiftId) {
-                  loadPrint(latestShiftId);
-                }
-              }}
-                disabled={!report && !latestShiftId}
-                className="tap h-11 rounded-xl bg-[#E63946] hover:bg-[#D62839] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50 text-xs sm:text-sm">
-                <Printer size={16} /> Cetak Thermal Sunmi (AAR)
-              </button>
-            </div>
-            <button data-testid="shift-send-wa" onClick={sendWa} disabled={sendingWa || !latestShiftId}
-              className="tap mt-2 w-full h-11 rounded-xl bg-[#25D366] hover:bg-[#1EBE5B] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-              {sendingWa ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />} Kirim Laporan Shift ke WhatsApp
-            </button>
-          </div>
+        <div className="mt-6 max-w-4xl">
+          <ShiftClosingReportView
+            report={report}
+            reportsByScope={reportsByScope}
+            shiftId={latestShiftId}
+            biz={biz}
+            onSendWa={sendWa}
+            sendingWa={sendingWa}
+            onPrintPreview={() => latestShiftId && loadPrint(latestShiftId)}
+            printLoading={printLoading}
+          />
         </div>
       )}
 
       {/* Histori shift — dikelompokkan per sesi (F&B + Retail satu baris) */}
-      <div className="max-w-xl mt-6">
-        <button data-testid="toggle-shift-history" onClick={() => setShowHistory((v) => !v)}
-          className="tap w-full h-11 rounded-xl bg-white border font-bold text-sm flex items-center justify-center gap-2">
-          {showHistory ? "Sembunyikan" : "Lihat"} Histori Laporan Shift ({history.length})
+      <div className="max-w-4xl mt-8">
+        <button
+          data-testid="toggle-shift-history"
+          onClick={() => setShowHistory((v) => !v)}
+          className="tap w-full h-12 rounded-2xl bg-white border border-zinc-200/90 font-bold text-sm text-zinc-800 hover:bg-zinc-50 flex items-center justify-center gap-2 shadow-xs transition"
+        >
+          <Clock size={16} className="text-zinc-500" />
+          {showHistory ? "Sembunyikan" : "Buka"} Riwayat Penutupan Shift Sebelumnya ({history.length})
         </button>
+
         {showHistory && (
-          <div className="mt-3 space-y-3">
-            {history.length === 0 && <div className="text-center text-[#a1a1aa] py-6 bg-white rounded-2xl border">Belum ada shift ditutup.</div>}
+          <div className="mt-4 space-y-4">
+            {history.length === 0 && (
+              <div className="text-center text-zinc-400 py-10 bg-white rounded-2xl border border-zinc-200">
+                Belum ada shift yang ditutup dalam riwayat.
+              </div>
+            )}
             {history.map((s) => (
-              <div key={s.id} className="bg-white rounded-2xl border p-4 text-sm" data-testid={`shift-history-${s.id}`}>
-                <div className="flex justify-between items-center">
-                  <span className="font-extrabold">
-                    {s.opened_at ? new Date(s.opened_at).toLocaleDateString("id-ID") : "-"}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <button onClick={() => loadPrint(s.id)} className="tap h-7 px-2.5 rounded-lg bg-[#F4F5F7] font-bold text-xs flex items-center gap-1" title="Cetak laporan shift ini"><Printer size={12} /> Cetak</button>
-                    <span className="text-[11px] text-[#52525B]">{new Date(s.opened_at).toLocaleTimeString("id-ID")} – {s.closed_at ? new Date(s.closed_at).toLocaleTimeString("id-ID") : "-"}</span>
-                  </span>
+              <div
+                key={s.id}
+                className="bg-white rounded-2xl border border-zinc-200/90 p-5 shadow-xs hover:border-zinc-300 transition space-y-3"
+                data-testid={`shift-history-${s.id}`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 pb-3">
+                  <div>
+                    <span className="font-extrabold text-base text-zinc-900">
+                      {s.opened_at ? new Date(s.opened_at).toLocaleDateString("id-ID", { dateStyle: "full" }) : "-"}
+                    </span>
+                    <div className="text-xs text-zinc-500 mt-0.5">
+                      Dibuka: <b className="text-zinc-700" data-testid={`history-opened-by-${s.id}`}>{s.opened_by || s.cashier_name || "-"}</b>
+                      {" · "}
+                      Ditutup: <b className="text-zinc-700" data-testid={`history-closed-by-${s.id}`}>{s.closed_by || "-"}</b>
+                      {" · "}
+                      <span className="font-mono text-[11px]">
+                        {new Date(s.opened_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} – {s.closed_at ? new Date(s.closed_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedHistoryReport(s)}
+                      className="tap h-8 px-3 rounded-lg bg-zinc-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs hover:bg-zinc-800 transition"
+                    >
+                      <FileText size={13} /> Laporan Lengkap
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loadPrint(s.id)}
+                      className="tap h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs flex items-center gap-1 transition"
+                      title="Cetak struk laporan shift ini"
+                    >
+                      <Printer size={13} /> Cetak
+                    </button>
+                  </div>
                 </div>
-                <div className="text-[11px] text-[#52525B] mt-1">
-                  Dibuka: <b data-testid={`history-opened-by-${s.id}`}>{s.opened_by || s.cashier_name || "-"}</b>
-                  {" · "}Ditutup: <b data-testid={`history-closed-by-${s.id}`}>{s.closed_by || "-"}</b>
-                </div>
-                <div className="mt-1.5 grid grid-cols-2 gap-x-3 text-[13px]">
-                  <Row l="Penjualan" v={rupiah(s.total_sales)} />
-                  <Row l="Order" v={s.order_count} />
-                  <Row l={lb.fnb} v={rupiah(s.fnb_total)} />
-                  <Row l={lb.retail} v={rupiah(s.retail_total)} />
-                  <Row l={`Kas awal ${lb.fnb}`} v={rupiah(s.opening_cash_fnb || 0)} />
-                  <Row l={`Kas awal ${lb.retail}`} v={rupiah(s.opening_cash_retail || 0)} />
-                  <Row l={`Uang bersih ${lb.fnb}`} v={rupiah(s.net_cash_fnb || 0)} />
-                  <Row l={`Uang bersih ${lb.retail}`} v={rupiah(s.net_cash_retail || 0)} />
-                  <Row l="Uang bersih total" v={rupiah(s.net_cash)} accent />
-                  <Row l="Pengeluaran" v={rupiah(s.cash_out || 0)} />
-                  <Row l="Uang transport" v={rupiah(s.transport || 0)} />
-                  <Row l="Sisa kas tunai" v={rupiah(s.sisa_cash || 0)} />
-                  {s.variance_report?.total && (
-                    <Row
-                      l="Selisih fisik"
-                      v={`${s.variance_report.total.variance >= 0 ? "+" : ""}${rupiah(s.variance_report.total.variance)}`}
-                      warn={s.variance_report.total.variance !== 0}
-                    />
-                  )}
-                </div>
-                {s.variance_report?.total && (
-                  <div className="mt-2 pt-1.5 border-t flex flex-wrap items-center justify-between gap-1 text-[11px]">
-                    <span className="text-[#52525B]">Rekonsiliasi Kas:</span>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Omzet Penjualan</span>
+                    <span className="text-sm font-black text-zinc-900 font-mono mt-0.5 block">{rupiah(s.total_sales)}</span>
+                    <span className="text-[10px] text-zinc-500">{s.order_count || 0} Order</span>
+                  </div>
+
+                  <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100">
+                    <span className="text-[10px] text-emerald-700 font-bold uppercase block">Uang Bersih (Net)</span>
+                    <span className="text-sm font-black text-emerald-700 font-mono mt-0.5 block">{rupiah(s.net_cash)}</span>
+                    <span className="text-[10px] text-emerald-600/80">{lb.fnb}: {rupiah(s.net_cash_fnb || 0)}</span>
+                  </div>
+
+                  <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Sisa Kas Tunai</span>
+                    <span className="text-sm font-black text-zinc-900 font-mono mt-0.5 block">{rupiah(s.sisa_cash || 0)}</span>
+                    <span className="text-[10px] text-zinc-500">Keluar: {rupiah(s.cash_out || 0)}</span>
+                  </div>
+
+                  <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Rekonsiliasi Kas</span>
                     <span
-                      className={`px-2 py-0.5 rounded font-extrabold ${
-                        s.variance_report.total.status === "match"
-                          ? "bg-[#DCFCE7] text-[#166534]"
-                          : s.variance_report.total.status === "surplus"
-                          ? "bg-[#DBEAFE] text-[#1E40AF]"
-                          : "bg-[#FEE2E2] text-[#991B1B]"
+                      className={`text-xs font-black mt-1 inline-block px-1.5 py-0.5 rounded ${
+                        s.variance_report?.total?.status === "match" || (s.variance_report?.total?.variance ?? 0) === 0
+                          ? "bg-emerald-100 text-emerald-800"
+                          : (s.variance_report?.total?.variance ?? 0) > 0
+                          ? "bg-blue-100 text-blue-800"
+                          : "bg-rose-100 text-rose-800"
                       }`}
                     >
-                      {s.variance_report.total.status === "match"
-                        ? "✓ Kas Seimbang"
-                        : s.variance_report.total.status === "surplus"
-                        ? `Lebih ${rupiah(s.variance_report.total.variance)}`
-                        : `Kurang ${rupiah(Math.abs(s.variance_report.total.variance))}`}
+                      {s.variance_report?.total?.status === "match" || (s.variance_report?.total?.variance ?? 0) === 0
+                        ? "✓ Match (Seimbang)"
+                        : `${(s.variance_report?.total?.variance ?? 0) >= 0 ? "+" : ""}${rupiah(s.variance_report?.total?.variance ?? 0)}`}
                     </span>
-                    {s.variance_report.variance_reason && (
-                      <div className="w-full text-[#71717A] italic mt-0.5">
-                        Alasan: "{s.variance_report.variance_reason}"
-                      </div>
-                    )}
                   </div>
-                )}
-                {s.vendor_total_share > 0 && (
-                  <div className="text-[11px] text-[#52525B] mt-1">Vendor: share {rupiah(s.vendor_total_share)} · diberikan {rupiah(s.vendor_total_paid)}{s.vendor_settled_paid ? ` · settlement ${rupiah(s.vendor_settled_paid)}` : ""}</div>
+                </div>
+
+                {s.variance_report?.variance_reason && (
+                  <div className="text-[11px] text-zinc-600 italic bg-amber-50/60 border border-amber-200/60 p-2 rounded-lg">
+                    Alasan selisih kasir: "{s.variance_report.variance_reason}"
+                  </div>
                 )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Modal Laporan Lengkap untuk item histori yang dipilih */}
+      <Dialog
+        open={selectedHistoryReport !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedHistoryReport(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-2 sm:p-4 bg-transparent border-0 shadow-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Detail Laporan Tutup Shift Lengkap</DialogTitle>
+          </DialogHeader>
+          {selectedHistoryReport && (
+            <ShiftClosingReportView
+              report={selectedHistoryReport}
+              shiftId={selectedHistoryReport.id}
+              biz={biz}
+              onSendWa={() => {
+                setLatestShiftId(selectedHistoryReport.id);
+                sendWa();
+              }}
+              sendingWa={sendingWa}
+              onPrintPreview={() => loadPrint(selectedHistoryReport.id)}
+              printLoading={printLoading}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog pratinjau cetak laporan shift */}
       <Dialog open={printText != null || printLoading} onOpenChange={(o) => { if (!o) setPrintText(null); }}>

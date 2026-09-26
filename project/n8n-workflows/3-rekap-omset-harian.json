@@ -1,0 +1,53 @@
+{
+  "name": "POS - Rekap Omset Harian Malam",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 23 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Cron Jam 23:00 Malam",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/reports/dashboard-summary",
+        "options": {}
+      },
+      "name": "Get Summary Penjualan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 300]
+    }
+  ],
+  "connections": {
+    "Cron Jam 23:00 Malam": {
+      "main": [
+        [
+          {
+            "node": "Get Summary Penjualan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "POS Grand Aceh"
+    }
+  ]
+}

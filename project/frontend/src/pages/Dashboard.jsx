@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, memo } from "react";
+import { useEffect, useState, useCallback, useMemo, memo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { apiError } from "@/lib/api";
 import { rupiah, ORDER_TYPE_LABEL, wibToday } from "@/lib/format";
@@ -7,24 +7,70 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { isSuperAdmin, roleBaseOf, isAdmin } from "@/lib/rbac";
 import {
-  subscribeFirestoreSync,
-  testFirestoreConnection,
-  firestoreDatabaseId,
-  firebaseProjectId,
-} from "@/lib/firebase";
-import {
   LayoutDashboard, TrendingUp, Utensils, ShoppingBag, Store, Coffee,
   Sparkles, Loader2, Receipt, Percent, AlertTriangle, PackageX, Coins, Wallet, MessageCircle, RefreshCw,
-  Settings2, Eye, EyeOff, ChevronUp, ChevronDown, X, Save, LayoutGrid, AlertCircle,
-  Database, ShieldCheck, CheckCircle2, Cloud,
+  Settings2, Eye, EyeOff, ChevronUp, ChevronDown, Save, LayoutGrid, AlertCircle,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, LineChart, Line, CartesianGrid } from "recharts";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
 import { useFeatures } from "@/lib/features";
 import { useUI, orderWidgets } from "@/lib/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { WidgetKustomCard, FillDataDialog } from "@/components/WidgetKustom";
-import VisualSyncStatusCard from "@/components/VisualSyncStatus";
+
+// Lazy-loaded heavy components for optimal Time to Interactive (TTI)
+const VisualSyncStatusCard = lazy(() => import("@/components/VisualSyncStatus"));
+const LazyWidgetTrend = lazy(() =>
+  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.WidgetTrend }))
+);
+const LazyWidgetTerlaris = lazy(() =>
+  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.WidgetTerlaris }))
+);
+const LazyWidgetKustomCard = lazy(() =>
+  import("@/components/WidgetKustom").then((m) => ({ default: m.WidgetKustomCard }))
+);
+const LazyFillDataDialog = lazy(() =>
+  import("@/components/WidgetKustom").then((m) => ({ default: m.FillDataDialog }))
+);
+
+// Lightweight skeleton fallbacks during lazy load
+const SyncStatusSkeleton = () => (
+  <div className="rounded-2xl border border-neutral-200/80 bg-white p-5 animate-pulse shadow-xs">
+    <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-neutral-100" />
+        <div className="space-y-1.5">
+          <div className="h-4 w-44 bg-neutral-200 rounded" />
+          <div className="h-3 w-64 bg-neutral-100 rounded" />
+        </div>
+      </div>
+      <div className="h-9 w-32 bg-neutral-100 rounded-xl" />
+    </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="h-16 bg-neutral-50 rounded-xl border border-neutral-100" />
+      ))}
+    </div>
+  </div>
+);
+
+const ChartSkeleton = ({ height = 240, title = "Memuat Grafik..." }) => (
+  <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 animate-pulse shadow-xs">
+    <div className="flex items-center justify-between mb-4">
+      <div className="h-4 w-36 bg-neutral-200 rounded" />
+      <div className="h-7 w-28 bg-neutral-100 rounded-lg" />
+    </div>
+    <div style={{ height: `${height}px` }} className="w-full bg-neutral-50/70 rounded-xl flex flex-col items-center justify-center gap-2 border border-neutral-100/80">
+      <Loader2 size={20} className="animate-spin text-neutral-400" />
+      <span className="text-xs text-neutral-400 font-medium">{title}</span>
+    </div>
+  </div>
+);
+
+const CustomWidgetSkeleton = () => (
+  <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 animate-pulse shadow-xs">
+    <div className="h-4 w-40 bg-neutral-200 rounded mb-3" />
+    <div className="h-16 bg-neutral-50 rounded-xl border border-neutral-100" />
+  </div>
+);
 
 /* ================================================================
    DASHBOARD WIDGET — bisa ditambah/dihapus/disusun ulang.
@@ -54,145 +100,6 @@ export const DASH_ROLE_DEFAULT = {
   kasir: ["firestore", "kpi", "jenis", "finansial", "trend", "terlaris", "metode"],
   input: ["firestore", "lowstock"],
 };
-
-// ---------- Widget kecil & Status ----------
-const WidgetFirestorePersistence = memo(function WidgetFirestorePersistence() {
-  const [status, setStatus] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [lastCheck, setLastCheck] = useState(null);
-
-  const checkConnection = useCallback(async (silent = true) => {
-    if (!silent) setTesting(true);
-    const res = await testFirestoreConnection();
-    setStatus(res);
-    setLastCheck(new Date());
-    if (!silent) setTesting(false);
-    return res;
-  }, []);
-
-  useEffect(() => {
-    checkConnection(true);
-    const unsub = subscribeFirestoreSync((active) => {
-      setSyncing(active);
-    });
-    const timer = setInterval(() => {
-      checkConnection(true);
-    }, 25000);
-    return () => {
-      unsub();
-      clearInterval(timer);
-    };
-  }, [checkConnection]);
-
-  const handleTestClick = async () => {
-    setTesting(true);
-    toast.info("Memverifikasi koneksi database Firestore...");
-    const res = await checkConnection(false);
-    setTesting(false);
-    if (res.ok) {
-      toast.success(`Firestore Aktif (${res.latencyMs}ms) — Persistensi Cloud 100% Terverifikasi!`, {
-        description: `Database ID: ${res.databaseId}`,
-      });
-    } else {
-      toast.warning("Status Firestore: Offline / Cache lokal aktif", {
-        description: res.error || "Menggunakan cache lokal saat terputus dari cloud",
-      });
-    }
-  };
-
-  const isConnected = status?.ok !== false;
-
-  return (
-    <div
-      id="widget-firestore-persistence"
-      data-testid="widget-firestore-persistence"
-      className="rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-xs transition-all hover:border-neutral-300"
-    >
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-xl border ${isConnected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
-            <Database size={22} className={isConnected ? "text-emerald-600" : "text-amber-600"} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-extrabold text-base text-neutral-900">
-                Status Koneksi Cloud Firestore
-              </h3>
-              {syncing && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 animate-pulse">
-                  <RefreshCw size={11} className="animate-spin" /> Menyinkronkan...
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-neutral-500 mt-0.5">Pemantau persistensi data cloud otomatis (Anti-hilang saat publish / restart)</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            id="btn-verify-firestore"
-            data-testid="btn-verify-firestore"
-            onClick={handleTestClick}
-            disabled={testing}
-            className="tap h-9 px-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-50 transition-all shadow-xs"
-          >
-            <RefreshCw size={12} className={testing ? "animate-spin" : ""} />
-            {testing ? "Menguji..." : "Uji Koneksi & Persistensi"}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 my-3">
-        <div className="p-3.5 rounded-xl bg-neutral-50/80 border border-neutral-100">
-          <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Status Koneksi</div>
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
-            <span className="font-extrabold text-sm text-neutral-900">
-              {isConnected ? "Terhubung & Aktif" : "Offline (Cache)"}
-            </span>
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-neutral-50/80 border border-neutral-100">
-          <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Latensi Cloud (Ping)</div>
-          <div className="font-num font-extrabold text-sm text-neutral-900 mt-1.5">
-            {status?.latencyMs ? `${status.latencyMs} ms` : "Aktif (<50ms)"}
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-neutral-50/80 border border-neutral-100">
-          <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">ID Database Cloud</div>
-          <div className="text-xs font-mono font-bold text-neutral-700 truncate mt-1.5" title={firestoreDatabaseId}>
-            {firestoreDatabaseId}
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-neutral-50/80 border border-neutral-100">
-          <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Jaminan Persistensi</div>
-          <div className="text-xs font-extrabold text-emerald-700 flex items-center gap-1 mt-1.5">
-            <ShieldCheck size={14} className="text-emerald-600" /> 100% Cloud-Persistent
-          </div>
-        </div>
-      </div>
-
-      <div className="pt-2.5 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="flex items-center gap-1 font-medium text-emerald-700">
-            <CheckCircle2 size={13} className="text-emerald-600" /> Seluruh Menu & Transaksi Disimpan Aman di Google Firestore
-          </span>
-          <span className="hidden md:inline text-neutral-300">·</span>
-          <span className="hidden md:inline">Data permanen saat deploy/publish ulang</span>
-        </div>
-        {lastCheck && (
-          <div className="text-[11px] text-neutral-400 font-num">
-            Terakhir diverifikasi: {lastCheck.toLocaleTimeString("id-ID")}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
 
 const WStat = memo(({ icon: Icon, label, value, accent }) => (
   <div className={`rounded-2xl border p-5 ${accent ? "bg-[#E63946] text-white border-[#E63946]" : "bg-white"}`}>
@@ -276,62 +183,6 @@ const WidgetFinansial = memo(function WidgetFinansial({ data, view, lb }) {
   );
 });
 
-const WidgetTrend = memo(function WidgetTrend({ view }) {
-  const [period, setPeriod] = useState("week");
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const days = period === "week" ? 7 : 30;
-    const end = wibToday();
-    const start = new Date(Date.now() + 7 * 3600 * 1000 - (days - 1) * 86400000).toISOString().slice(0, 10);
-    setLoading(true);
-    api.get("/reports/range", { params: { start, end } })
-      .then((r) => {
-        const map = {};
-        (Array.isArray(r.data?.daily) ? r.data.daily : []).forEach((d) => { map[d.date] = d; });
-        const out = [];
-        for (let i = days - 1; i >= 0; i--) {
-          const d = new Date(Date.now() + 7 * 3600 * 1000 - i * 86400000).toISOString().slice(0, 10);
-          const rec = map[d] || { total: 0, count: 0, fnb: 0, retail: 0 };
-          out.push({ date: d, label: d.slice(5), total: view === "retail" ? (rec.retail || 0) : (rec.fnb || rec.total || 0), count: rec.count });
-        }
-        setRows(out);
-      })
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
-  }, [period, view]);
-  const totalPeriod = rows.reduce((s, r) => s + r.total, 0);
-  return (
-    <div className="bg-white rounded-2xl border p-5" data-testid="trend-chart">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h3 className="font-extrabold flex items-center gap-2"><TrendingUp size={18} className="text-[#E63946]" /> Tren Penjualan</h3>
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-[#52525B] font-bold">Total periode: <span className="font-num text-[#0A0A0A]">{rupiah(totalPeriod)}</span></div>
-          <div className="flex gap-1">
-            {["week", "month"].map((p) => (
-              <button key={p} data-testid={`trend-${p}`} onClick={() => setPeriod(p)}
-                className={`tap h-8 px-3 rounded-lg text-xs font-bold ${period === p ? "bg-[#E63946] text-white" : "bg-[#F4F5F7]"}`}>
-                {p === "week" ? "7 Hari" : "30 Hari"}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      {loading ? <div className="h-[240px] grid place-items-center"><Loader2 className="animate-spin text-[#E63946]" /></div> : (
-        <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={rows} margin={{ left: 10, right: 24 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F1F1F4" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={period === "week" ? 0 : "preserveStartEnd"} padding={{ right: 12 }} />
-            <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => "Rp" + (v >= 1000 ? v / 1000 + "k" : v)} />
-            <Tooltip formatter={(v) => rupiah(v)} labelFormatter={(l) => `Tanggal ${l}`} />
-            <Line type="monotone" dataKey="total" stroke="#E63946" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Penjualan" />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-    </div>
-  );
-});
-
 const WidgetKategori = memo(function WidgetKategori({ data }) {
   const cr = data?.category_report || {};
   const groups = [
@@ -368,57 +219,6 @@ const WidgetKategori = memo(function WidgetKategori({ data }) {
           );
         })}
       </div>
-    </div>
-  );
-});
-
-const WidgetTerlaris = memo(function WidgetTerlaris({ data, view, lb }) {
-  const viewProducts = view === "fnb" ? (data?.top_fnb || data?.top_products || []) : (data?.top_retail || data?.top_products || []);
-  const chartData = (Array.isArray(viewProducts) ? viewProducts : []).map((p) => ({
-    name: (p.name || "").length > 12 ? (p.name || "").slice(0, 12) + "…" : (p.name || ""),
-    total: p.total || 0,
-  }));
-  return (
-    <div className="bg-white rounded-2xl border p-5">
-      <h3 className="font-extrabold mb-4">Produk Terlaris & Margin</h3>
-      {chartData.length === 0 ? (
-        <p className="text-sm text-[#a1a1aa]">Belum ada penjualan {view === "fnb" ? lb.fnb : lb.retail} hari ini.</p>
-      ) : (
-        <>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData} layout="vertical" margin={{ left: 10 }}>
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v) => rupiah(v)} />
-              <Bar dataKey="total" radius={[0, 6, 6, 0]}>
-                {chartData.map((entry) => <Cell key={entry.name} fill="#E63946" />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="mt-3 border rounded-xl overflow-hidden" data-testid="margin-table">
-            <table className="w-full text-sm">
-              <thead className="bg-[#F4F5F7] text-[#52525B] text-xs uppercase tracking-wider">
-                <tr><th className="text-left p-2.5">Produk</th><th className="text-right p-2.5">Qty</th><th className="text-right p-2.5">Omzet</th><th className="text-right p-2.5">Laba</th><th className="text-right p-2.5">Margin</th></tr>
-              </thead>
-              <tbody>
-                {viewProducts.map((p) => (
-                  <tr key={p.name} className="border-t">
-                    <td className="p-2.5 font-bold truncate max-w-[160px]">{p.name}</td>
-                    <td className="p-2.5 text-right font-num">{p.qty}</td>
-                    <td className="p-2.5 text-right font-num">{rupiah(p.total)}</td>
-                    <td className="p-2.5 text-right font-num font-bold text-[#047857]">{rupiah(p.profit || 0)}</td>
-                    <td className="p-2.5 text-right">
-                      <span className={`font-num font-bold px-2 py-0.5 rounded ${(p.margin || 0) >= 40 ? "bg-[#D1FAE5] text-[#047857]" : (p.margin || 0) >= 15 ? "bg-[#FEF3C7] text-[#B45309]" : "bg-[#FEE2E2] text-[#EF4444]"}`}>
-                        {(p.margin || 0).toFixed(1)}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
     </div>
   );
 });
@@ -784,17 +584,40 @@ export default function Dashboard() {
 
   const renderWidget = (id) => {
     switch (id) {
-      case "firestore": return <VisualSyncStatusCard />;
-      case "kpi": return data && <WidgetKpi data={data} view={view} lb={lb} />;
-      case "jenis": return data && <WidgetJenis data={data} view={view} />;
-      case "finansial": return data && <WidgetFinansial data={data} view={view} lb={lb} />;
-      case "trend": return hasSummary ? <WidgetTrend view={view} /> : null;
-      case "kategori": return data && <WidgetKategori data={data} />;
-      case "terlaris": return data && <WidgetTerlaris data={data} view={view} lb={lb} />;
-      case "metode": return data && <WidgetMetode data={data} />;
-      case "ai": return hasSummary && aiWidgetOk && <WidgetAi onGen={genAi} ai={ai} aiLoading={aiLoading} aiError={aiError} date={date} />;
-      case "lowstock": return <WidgetLowstock lowStock={data?.low_stock || []} lowStockThr={lowStockThr} isInput={!hasSummary} products={prods} />;
-      default: return null;
+      case "firestore":
+        return (
+          <Suspense fallback={<SyncStatusSkeleton />}>
+            <VisualSyncStatusCard />
+          </Suspense>
+        );
+      case "kpi":
+        return data && <WidgetKpi data={data} view={view} lb={lb} />;
+      case "jenis":
+        return data && <WidgetJenis data={data} view={view} />;
+      case "finansial":
+        return data && <WidgetFinansial data={data} view={view} lb={lb} />;
+      case "trend":
+        return hasSummary ? (
+          <Suspense fallback={<ChartSkeleton height={240} title="Memuat Tren Penjualan..." />}>
+            <LazyWidgetTrend view={view} />
+          </Suspense>
+        ) : null;
+      case "kategori":
+        return data && <WidgetKategori data={data} />;
+      case "terlaris":
+        return data ? (
+          <Suspense fallback={<ChartSkeleton height={200} title="Memuat Produk Terlaris..." />}>
+            <LazyWidgetTerlaris data={data} view={view} lb={lb} />
+          </Suspense>
+        ) : null;
+      case "metode":
+        return data && <WidgetMetode data={data} />;
+      case "ai":
+        return hasSummary && aiWidgetOk && <WidgetAi onGen={genAi} ai={ai} aiLoading={aiLoading} aiError={aiError} date={date} />;
+      case "lowstock":
+        return <WidgetLowstock lowStock={data?.low_stock || []} lowStockThr={lowStockThr} isInput={!hasSummary} products={prods} />;
+      default:
+        return null;
     }
   };
 
@@ -804,8 +627,10 @@ export default function Dashboard() {
       const d = cwById[cwid];
       if (!d || !d.enabled) return null;
       return (
-        <WidgetKustomCard key={id} def={d} daily={cwDailyOf(cwid)} summary={data} date={date}
-          fillable onFill={(def) => setCwFill({ def })} />
+        <Suspense key={id} fallback={<CustomWidgetSkeleton />}>
+          <LazyWidgetKustomCard def={d} daily={cwDailyOf(cwid)} summary={data} date={date}
+            fillable onFill={(def) => setCwFill({ def })} />
+        </Suspense>
       );
     }
     return (
@@ -946,14 +771,16 @@ export default function Dashboard() {
 
       {/* Dialog isi data harian widget kustom */}
       {cwFill && (
-        <FillDataDialog
-          open={!!cwFill}
-          onOpenChange={(v) => { if (!v) setCwFill(null); }}
-          def={cwFill.def}
-          date={date}
-          daily={cwDailyOf(cwFill.def.id)}
-          onSaved={(dly) => setCwEntries((prev) => ({ ...prev, [cwFill.def.id]: { date, daily: dly } }))}
-        />
+        <Suspense fallback={null}>
+          <LazyFillDataDialog
+            open={!!cwFill}
+            onOpenChange={(v) => { if (!v) setCwFill(null); }}
+            def={cwFill.def}
+            date={date}
+            daily={cwDailyOf(cwFill.def.id)}
+            onSaved={(dly) => setCwEntries((prev) => ({ ...prev, [cwFill.def.id]: { date, daily: dly } }))}
+          />
+        </Suspense>
       )}
     </div>
   );

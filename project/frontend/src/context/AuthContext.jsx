@@ -17,28 +17,24 @@ export function AuthProvider({ children }) {
     const rawRole = (u.role || "").trim().toLowerCase();
     const rawBase = (u.role_base || "").trim().toLowerCase();
 
-    const isSuper = Boolean(
+    // Akun dengan role kasir / non-superadmin TIDAK BOLEH dianggap superadmin
+    const isExplicitNonSuper = ["kasir", "input", "input_pembayaran", "stok_opname"].includes(rawRole) || ["kasir", "input", "input_pembayaran", "stok_opname"].includes(rawBase);
+
+    const isSuper = !isExplicitNonSuper && Boolean(
       u.is_superadmin ||
       rawRole === "superadmin" ||
-      rawBase === "superadmin" ||
-      cleanUser === "taqim2609" ||
-      cleanUser === "taqim" ||
-      cleanUser.includes("taqim") ||
-      cleanUser === "superadmin" ||
-      cleanEmail === "taqim2609@gmail.com" ||
-      cleanEmail.includes("taqim") ||
-      cleanName.includes("taqim")
+      rawBase === "superadmin"
     );
     const base = isSuper ? "superadmin" : (u.role_base || u.role || "kasir");
     return {
       ...u,
-      role: isSuper ? "superadmin" : base,
+      role: isSuper ? "superadmin" : (u.role || base),
       role_base: base,
       role_name: isSuper ? "Super Admin (Owner)" : (u.role_name || u.role),
       is_superadmin: isSuper,
       bootstrap_owner: !isSuper && Boolean(u.bootstrap_owner),
       perms: isSuper ? ["*"] : (Array.isArray(u.perms) && u.perms.length > 0 ? u.perms : (base === "admin" ? ["*"] : [])),
-      perms_full: isSuper || base === "admin",
+      perms_full: isSuper || (base === "admin" && !Array.isArray(u.perms)),
       // Wajib ganti password (login pertama / setelah direset admin) — dipakai
       // ProtectedRoute untuk menahan akses sampai password diganti.
       must_change_password: !!u.must_change_password,
@@ -86,6 +82,19 @@ export function AuthProvider({ children }) {
     return u;
   }, [normalize]);
 
+  // Login cepat menggunakan PIN 6 Digit (untuk kasir / staf outlet)
+  const loginPin = useCallback(async (pin, username) => {
+    const { data } = await api.post("/auth/login-pin", { pin, username });
+    if (!data || !data.token || !data.user) {
+      throw { response: { status: 502, data: { detail: "Server menjawab tidak wajar. Coba lagi beberapa saat." } } };
+    }
+    localStorage.setItem("gak_token", data.token);
+    const u = normalize(data.user);
+    localStorage.setItem("gak_user", JSON.stringify(u));
+    setUser(u);
+    return u;
+  }, [normalize]);
+
   // Ambil ulang data user dari server (dipakai setelah perubahan role, mis. jadi Super Admin).
   const refresh = useCallback(async () => {
     try {
@@ -104,7 +113,7 @@ export function AuthProvider({ children }) {
     window.location.href = "/login";
   }, []);
 
-  const value = useMemo(() => ({ user, loading, login, logout, refresh }), [user, loading, login, logout, refresh]);
+  const value = useMemo(() => ({ user, loading, login, loginPin, logout, refresh }), [user, loading, login, loginPin, logout, refresh]);
 
   return (
     <AuthContext.Provider value={value}>

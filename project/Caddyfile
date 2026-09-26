@@ -1,0 +1,67 @@
+# Caddyfile untuk Grand Aceh POS + n8n 1.110.1 + Evolution API WA
+# Mengelola Sertifikat SSL HTTPS otomatis via Let's Encrypt / ZeroSSL
+
+# 1. Domain POS Frontend & API Backend
+{$DOMAIN_POS:localhost} {
+    tls {$SSL_EMAIL:admin@yourdomain.com}
+
+    # Compress responses (gzip & zstd)
+    encode zstd gzip
+
+    # Route /api ke Backend FastAPI
+    handle /api/* {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Static uploads
+    handle /uploads/* {
+        reverse_proxy backend:8000
+    }
+
+    # Semua route UI ke Frontend React Nginx
+    handle {
+        reverse_proxy frontend:80 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
+
+# 2. Domain n8n v1.110.1 Workflow Engine
+{$DOMAIN_N8N:n8n.localhost} {
+    tls {$SSL_EMAIL:admin@yourdomain.com}
+
+    encode zstd gzip
+
+    # Proxy ke n8n service
+    reverse_proxy n8n:5678 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        # WebSocket support untuk canvas live & execution log
+        header_up Upgrade {http.upgrade}
+        header_up Connection {http.connection}
+    }
+}
+
+# 3. Domain Evolution API (WhatsApp Gateway)
+{$DOMAIN_WA:wa.localhost} {
+    tls {$SSL_EMAIL:admin@yourdomain.com}
+
+    encode zstd gzip
+
+    reverse_proxy evolution-api:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

@@ -44,6 +44,7 @@ import {
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
 import EvolutionDetectionCard from "@/components/EvolutionDetectionCard";
 import TailscaleDashboard from "@/components/TailscaleDashboard";
+import GlobalErrorDiagnosticPanel from "@/components/GlobalErrorDiagnosticPanel";
 
 export default function Diagnostik() {
   const [report, setReport] = useState("");
@@ -53,7 +54,7 @@ export default function Diagnostik() {
   const [fixingAll, setFixingAll] = useState(false);
   const [fixingStepId, setFixingStepId] = useState(null);
   const [diagScore, setDiagScore] = useState(100);
-  const [activeTab, setActiveTab] = useState("auto-diagnosa"); // "auto-diagnosa" | "firestore-logs" | "technical-report"
+  const [activeTab, setActiveTab] = useState("auto-diagnosa"); // "auto-diagnosa" | "global-errors" | "hybrid-sync" | "firestore-logs" | "technical-report"
 
   // Firestore Remote Error Logs State
   const [remoteLogs, setRemoteLogs] = useState([]);
@@ -857,6 +858,17 @@ export default function Diagnostik() {
             Auto Diagnosa &amp; Perbaikan
           </button>
           <button
+            onClick={() => setActiveTab("global-errors")}
+            className={`px-5 py-3 font-bold text-sm whitespace-nowrap transition relative flex items-center gap-2 ${
+              activeTab === "global-errors"
+                ? "text-zinc-950 border-b-2 border-zinc-950"
+                : "text-zinc-400 hover:text-zinc-600"
+            }`}
+          >
+            <ShieldCheck size={16} className={activeTab === "global-errors" ? "text-amber-500" : ""} />
+            Error Boundary &amp; Koneksi
+          </button>
+          <button
             onClick={() => setActiveTab("hybrid-sync")}
             className={`px-5 py-3 font-bold text-sm whitespace-nowrap transition relative flex items-center gap-2 ${
               activeTab === "hybrid-sync"
@@ -1007,6 +1019,12 @@ export default function Diagnostik() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {activeTab === "global-errors" && (
+          <div className="space-y-6">
+            <GlobalErrorDiagnosticPanel embedded={true} />
           </div>
         )}
 

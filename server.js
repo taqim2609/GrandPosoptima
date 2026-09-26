@@ -75,6 +75,9 @@ app.use((req, res, next) => {
     const cleanPath = req.path.replace(/\/$/, ''); // Remove trailing slash
     const publicPaths = [
       '/api/auth/login',
+      '/api/auth/login-pin',
+      '/api/auth/pin-users',
+      '/api/auth/verify-pin',
       '/api/health',
       '/api/system/health',
       '/api/system-health',
@@ -259,67 +262,18 @@ const db = {
   },
   users: [
     {
-      id: 'usr-admin',
-      username: 'admin',
-      email: 'admin@grandacehkuliner.com',
-      name: 'Administrator',
-      role: 'admin',
-      role_base: 'admin',
-      role_name: 'Admin',
-      perms: ['*'],
-      perms_full: true,
-      active: true,
-      must_change_password: false,
-    },
-    {
-      id: 'usr-kasir',
-      username: 'kasir',
-      email: 'kasir@grandacehkuliner.com',
-      name: 'Kasir 1',
-      role: 'kasir',
-      role_base: 'kasir',
-      role_name: 'Kasir',
-      perms: ['pos', 'shift', 'pengeluaran', 'dashboard', 'laporan', 'reservasi', 'void'],
-      active: true,
-      must_change_password: false,
-    },
-    {
-      id: 'usr-input',
-      username: 'input',
-      email: 'input@grandacehkuliner.com',
-      name: 'Staf Gudang/Input',
-      role: 'input',
-      role_base: 'input',
-      role_name: 'Staf Input',
-      perms: ['dashboard', 'produk'],
-      active: true,
-      must_change_password: false,
-    },
-    {
       id: 'usr-taqim2609',
       username: 'taqim2609',
       email: 'taqim2609@gmail.com',
       name: 'Owner (Taqim)',
+      password: 'admin123',
+      password_plain: 'admin123',
       role: 'superadmin',
       role_base: 'superadmin',
       role_name: 'Super Admin (Owner)',
+      pin: '260900',
       is_superadmin: true,
-      bootstrap_owner: false,
-      perms: ['*'],
-      perms_full: true,
-      active: true,
-      must_change_password: false,
-    },
-    {
-      id: 'usr-owner',
-      username: 'superadmin',
-      email: 'owner@grandacehkuliner.com',
-      name: 'Owner (Super Admin)',
-      role: 'superadmin',
-      role_base: 'superadmin',
-      role_name: 'Super Admin (Owner)',
-      is_superadmin: true,
-      bootstrap_owner: false,
+      bootstrap_owner: true,
       perms: ['*'],
       perms_full: true,
       active: true,
@@ -1266,6 +1220,7 @@ function formatUser(u) {
 
   const cleanId = u.id || (u._id && u._id.$oid ? u._id.$oid : 'usr-' + (username || Date.now()));
   const hasCustomPerms = !isSuper && Boolean(u.perms_full && Array.isArray(u.perms));
+  const userPin = u.pin ? String(u.pin).trim() : '';
 
   return {
     ...u,
@@ -1284,6 +1239,9 @@ function formatUser(u) {
     active: u.active !== false,
     must_change_password: !!u.must_change_password,
     password: u.password || u.password_plain || '',
+    pin: userPin || (isSuper ? '260900' : ''),
+    pin_enabled: u.pin_enabled !== false && Boolean(userPin || isSuper),
+    has_pin: Boolean(userPin || isSuper),
   };
 }
 
@@ -1322,12 +1280,132 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(403).json({ detail: 'Akun dinonaktifkan' });
   }
 
+  const inputPassword = String(password || '').trim();
+  if (!inputPassword) {
+    return res.status(400).json({ detail: 'Password wajib diisi' });
+  }
+
+  // Verifikasi Password Akun
+  const validPassword = String(matched.password || matched.password_plain || 'admin123').trim();
+  if (inputPassword !== validPassword) {
+    return res.status(401).json({ detail: 'Username atau password salah' });
+  }
+
   const formattedUser = formatUser(matched);
   const token = 'gak_jwt_' + Buffer.from(JSON.stringify({ id: formattedUser.id, username: formattedUser.username, role: formattedUser.role })).toString('base64');
   res.json({
     token,
     user: formattedUser,
   });
+});
+
+// Login menggunakan PIN 6 Digit (Cepat & Praktis untuk Kasir / Terminal POS)
+app.post('/api/auth/login-pin', (req, res) => {
+  const { pin, username } = req.body || {};
+  const rawPin = String(pin || '').trim();
+
+  if (!rawPin) {
+    return res.status(400).json({ detail: 'PIN 6 digit wajib diisi' });
+  }
+
+  if (!/^\d{4,8}$/.test(rawPin)) {
+    return res.status(400).json({ detail: 'PIN harus berupa angka (6 digit)' });
+  }
+
+  // Cari user berdasarkan username jika disediakan, atau cocokkan PIN langsung
+  let matched = null;
+
+  if (username) {
+    const qUser = String(username).trim().toLowerCase();
+    matched = db.users.find((u) => {
+      if (u.pin_enabled === false) return false;
+      const uName = (u.username || '').toLowerCase();
+      const uEmail = (u.email || '').toLowerCase();
+      const uPin = String(u.pin || (isUserSuperAdmin(u) ? '260900' : '')).trim();
+      return (uName === qUser || uEmail === qUser || u.id === username) && Boolean(uPin) && uPin === rawPin;
+    });
+  } else {
+    // Mode PIN Cepat: cari akun aktif yang memiliki PIN tersebut
+    matched = db.users.find((u) => {
+      if (u.active === false || u.pin_enabled === false) return false;
+      const uPin = String(u.pin || (isUserSuperAdmin(u) ? '260900' : '')).trim();
+      return Boolean(uPin) && uPin === rawPin;
+    });
+  }
+
+  if (!matched) {
+    return res.status(401).json({ detail: 'PIN salah atau akun tidak ditemukan / tidak diizinkan menggunakan PIN.' });
+  }
+
+  if (matched.active === false) {
+    return res.status(403).json({ detail: 'Akun ini dinonaktifkan oleh administrator.' });
+  }
+
+  const formattedUser = formatUser(matched);
+  const token = 'gak_jwt_' + Buffer.from(JSON.stringify({ id: formattedUser.id, username: formattedUser.username, role: formattedUser.role })).toString('base64');
+  res.json({
+    token,
+    user: formattedUser,
+  });
+});
+
+// Verifikasi PIN untuk Otorisasi Fitur Terkunci (mis. Pengaturan Perangkat & Struk)
+app.post('/api/auth/verify-pin', (req, res) => {
+  const { pin } = req.body || {};
+  const rawPin = String(pin || '').trim();
+
+  if (!rawPin || !/^\d{6}$/.test(rawPin)) {
+    return res.status(400).json({ detail: 'PIN harus tepat 6 digit angka' });
+  }
+
+  const matched = db.users.find((u) => {
+    if (u.active === false || u.pin_enabled === false) return false;
+    const uPin = String(u.pin || (isUserSuperAdmin(u) ? '260900' : '')).trim();
+    return Boolean(uPin) && uPin === rawPin;
+  });
+
+  if (!matched) {
+    return res.status(401).json({ detail: 'PIN 6 digit salah atau tidak memiliki izin' });
+  }
+
+  const formatted = formatUser(matched);
+  const isSuper = formatted.is_superadmin || formatted.role === 'superadmin';
+  const hasPerm = isSuper || formatted.role === 'admin' || (Array.isArray(formatted.perms) && (formatted.perms.includes('*') || formatted.perms.includes('pengaturan')));
+
+  if (hasPerm) {
+    return res.json({
+      ok: true,
+      authorized: true,
+      user: {
+        id: formatted.id,
+        name: formatted.name,
+        username: formatted.username,
+        role: formatted.role,
+        role_name: formatted.role_name,
+      },
+    });
+  }
+
+  return res.status(403).json({ detail: `Akun @${formatted.username} (${formatted.role}) tidak memiliki hak otorisasi pengaturan` });
+});
+
+// Daftar pengguna untuk pilihan PIN Cepat (hanya akun yang pin_enabled !== false)
+app.get('/api/auth/pin-users', (req, res) => {
+  const users = (db.users || [])
+    .filter((u) => u.active !== false && u.pin_enabled !== false)
+    .map((u) => {
+      const formatted = formatUser(u);
+      return {
+        id: formatted.id,
+        name: formatted.name,
+        username: formatted.username,
+        role: formatted.role,
+        role_base: formatted.role_base,
+        role_name: formatted.role_name,
+        has_pin: true,
+      };
+    });
+  res.json({ users });
 });
 
 app.get('/api/auth/me', (req, res) => {
@@ -1616,12 +1694,81 @@ app.post(['/api/orders', '/orders'], (req, res) => {
   const seq = String(db.orders.length + 1).padStart(3, '0');
   const orderNumber = `GAK-${dateStr}-${seq}`;
 
+  // Resolve items: enrich with name, price, subtotal
+  const resolvedItems = (req.body.items || []).map((it) => {
+    const prod = (db.products || []).find((p) => p.id === it.product_id || p.id === it.id || p.sku === it.product_id) || {};
+    const price = Number(it.price !== undefined ? it.price : prod.price || 0) || 0;
+    const cost = Number(it.cost !== undefined ? it.cost : prod.cost || 0) || 0;
+    const qty = Number(it.qty || 1) || 1;
+    const name = it.name || prod.name || 'Produk';
+    const type = it.type || prod.type || 'fnb';
+    return {
+      product_id: prod.id || it.product_id || ('p-' + Date.now()),
+      name,
+      price,
+      cost,
+      qty,
+      type,
+      weight: it.weight || null,
+      weight_unit: it.weight_unit || prod.weight_unit || null,
+      notes: it.notes || null,
+      subtotal: price * qty,
+    };
+  });
+
+  const subtotal = Number(req.body.subtotal !== undefined ? req.body.subtotal : resolvedItems.reduce((s, i) => s + (i.price * i.qty), 0)) || 0;
+  
+  let discount = 0;
+  if (req.body.discount !== undefined) {
+    discount = Number(req.body.discount) || 0;
+  } else if (req.body.discount_type === 'percent') {
+    discount = (subtotal * (Number(req.body.discount_value) || 0)) / 100;
+  } else if (req.body.discount_type === 'amount') {
+    discount = Number(req.body.discount_value) || 0;
+  }
+
+  const serviceTax = Number(req.body.service_tax || 0);
+  const total = Number(req.body.total !== undefined ? req.body.total : Math.max(0, subtotal - discount + serviceTax)) || 0;
+
+  // Resolve cashier name
+  let cashierName = req.body.cashier_name || db.currentShift?.opened_by || db.currentShift?.user_name || 'Kasir';
+  let cashierId = req.body.cashier_id || db.currentShift?.opened_by_id || db.currentShift?.user_id || 'kasir-1';
+
+  // Resolve Payment Method Name
+  let paymentMethodName = req.body.payment_method_name || 'Tunai';
+  const pmId = req.body.payment_method;
+  const pmObj = (db.paymentMethods || []).find((p) => p.id === pmId || p.type === pmId);
+  if (pmObj) {
+    paymentMethodName = pmObj.name;
+  } else if (pmId === 'cash' || pmId === 'tunai') {
+    paymentMethodName = 'Tunai';
+  } else if (pmId === 'qris') {
+    paymentMethodName = 'QRIS';
+  } else if (pmId === 'card') {
+    paymentMethodName = 'Kartu Debit/Kredit';
+  }
+
+  const amountPaid = Number(req.body.amount_paid !== undefined && req.body.amount_paid !== null ? req.body.amount_paid : total);
+  const change = Number(req.body.change !== undefined ? req.body.change : Math.max(0, amountPaid - total));
+
   const order = {
     id: 'ord-' + Date.now(),
     order_number: orderNumber,
     created_at: new Date().toISOString(),
     status: req.body.status || (req.body.pay_now ? 'completed' : 'open_bill'),
     ...req.body,
+    items: resolvedItems,
+    subtotal,
+    discount,
+    service_tax: serviceTax,
+    total,
+    cashier_name: cashierName,
+    cashier_id: cashierId,
+    payment_method: pmId || 'cash',
+    payment_method_name: paymentMethodName,
+    amount_paid: amountPaid,
+    change,
+    paid_at: req.body.pay_now ? new Date().toISOString() : null,
   };
 
   // If dine-in, mark table status if open bill
@@ -1644,13 +1791,13 @@ app.post(['/api/orders', '/orders'], (req, res) => {
 
   // Update current shift sales
   if (db.currentShift && order.status === 'completed') {
-    const total = Number(order.total) || 0;
-    if (order.payment_method === 'cash') {
-      db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + total;
+    const orderTot = Number(order.total) || 0;
+    if (order.payment_method === 'cash' || order.payment_method_type === 'cash') {
+      db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + orderTot;
     } else {
-      db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + total;
+      db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + orderTot;
     }
-    db.currentShift.total_sales = (db.currentShift.total_sales || 0) + total;
+    db.currentShift.total_sales = (db.currentShift.total_sales || 0) + orderTot;
     db.currentShift.orders_count = (db.currentShift.orders_count || 0) + 1;
   }
 
@@ -1718,8 +1865,8 @@ app.post(['/api/shifts/open', '/shifts/open'], (req, res) => {
   const totalStart = (openFnb + openRetail) || Number(req.body.start_cash) || 200000;
   db.currentShift = {
     id: 's-' + Date.now(),
-    user_id: 'usr-kasir',
-    user_name: req.body.user_name || 'Kasir 1',
+    user_id: req.user?.id || req.body.user_id || 'usr-taqim2609',
+    user_name: req.user?.name || req.body.user_name || 'Kasir',
     start_cash: totalStart,
     opening_cash_fnb: openFnb || 100000,
     opening_cash_retail: openRetail || 100000,
@@ -1737,8 +1884,8 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
   const summary = getReportSummary(new Date().toISOString().slice(0, 10));
   const shift = db.currentShift || {
     id: 's-' + Date.now(),
-    user_id: 'usr-kasir',
-    user_name: 'Kasir 1',
+    user_id: req.user?.id || 'usr-taqim2609',
+    user_name: req.user?.name || 'Kasir',
     start_cash: 200000,
     opening_cash_fnb: 100000,
     opening_cash_retail: 100000,
@@ -3270,12 +3417,14 @@ app.get('/api/users', (req, res) => {
 
 app.post('/api/users', (req, res) => {
   const role = req.body?.role || 'kasir';
+  const rawPin = req.body?.pin ? String(req.body.pin).trim() : '';
   const u = {
     id: 'usr-' + Date.now(),
     name: req.body?.name || 'User',
     username: (req.body?.username || '').trim().toLowerCase(),
     email: req.body?.email || `${(req.body?.username || '').trim().toLowerCase()}@grandacehkuliner.com`,
     password: req.body?.password || '',
+    pin: rawPin || (role === 'superadmin' ? '260900' : role === 'admin' ? '123456' : role === 'kasir' ? '111222' : '333444'),
     role,
     active: true,
     must_change_password: !!req.body?.must_change_password,
@@ -3283,6 +3432,28 @@ app.post('/api/users', (req, res) => {
   const formatted = formatUser(u);
   db.users.push(formatted);
   res.json(formatted);
+});
+
+app.all(['/api/users/:id/pin', '/users/:id/pin', '/api/users/:id/reset-pin', '/users/:id/reset-pin'], (req, res) => {
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
+  if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+  const rawPin = String(req.body?.pin || req.body?.new_pin || '').trim();
+  if (!rawPin || !/^\d{4,8}$/.test(rawPin)) {
+    return res.status(400).json({ detail: 'PIN harus terdiri dari 6 digit angka' });
+  }
+  user.pin = rawPin;
+  const formatted = formatUser(user);
+  Object.assign(user, formatted);
+  res.json({ ok: true, pin: rawPin, user: formatted });
+});
+
+app.patch(['/api/users/:id/pin-enabled', '/users/:id/pin-enabled'], (req, res) => {
+  const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
+  if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+  user.pin_enabled = req.body?.enabled !== false;
+  const formatted = formatUser(user);
+  Object.assign(user, formatted);
+  res.json({ ok: true, pin_enabled: user.pin_enabled, user: formatted });
 });
 
 app.patch(['/api/users/:id/role', '/users/:id/role'], (req, res) => {
@@ -3591,8 +3762,26 @@ app.put('/api/settings/ui', (req, res) => { db.settings.ui = { ...db.settings.ui
 app.get('/api/settings/features', (req, res) => res.json(db.settings.features));
 app.put('/api/settings/features', (req, res) => { db.settings.features = { ...db.settings.features, ...req.body }; res.json(db.settings.features); });
 
-app.get('/api/settings/outlet', (req, res) => res.json(db.settings.business));
-app.put('/api/settings/outlet', (req, res) => { db.settings.business = { ...db.settings.business, ...req.body }; res.json(db.settings.business); });
+app.get(['/api/settings/outlet', '/settings/outlet'], (req, res) => res.json(db.settings.business || {}));
+app.put(['/api/settings/outlet', '/settings/outlet'], (req, res) => {
+  db.settings.business = { ...(db.settings.business || {}), ...req.body };
+  res.json(db.settings.business);
+});
+app.post(['/api/settings/outlet/logo', '/settings/outlet/logo', '/api/settings/platform/logo', '/settings/platform/logo'], upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ detail: "File logo tidak ditemukan" });
+    }
+    const mime = req.file.mimetype || "image/png";
+    const b64 = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+    if (!db.settings.business) db.settings.business = {};
+    db.settings.business.logo_url = b64;
+    if (db.settings.platform) db.settings.platform.logo_url = b64;
+    return res.json({ ok: true, url: b64 });
+  } catch (err) {
+    return res.status(500).json({ detail: err.message || "Gagal mengunggah logo" });
+  }
+});
 
 app.get('/api/settings/report', (req, res) => res.json(db.settings.report));
 app.put('/api/settings/report', (req, res) => { db.settings.report = { ...db.settings.report, ...req.body }; res.json(db.settings.report); });
@@ -3936,7 +4125,8 @@ app.post('/api/backup/import', upload.single('file'), (req, res) => {
       }
     });
 
-    // Pastikan superadmin & akun bawaan tetap ada jika hilang
+    // Pastikan superadmin Owner tetap ada dan bersihkan akun demo
+    const demoUsernames = ['admin', 'kasir', 'input', 'superadmin'];
     if (!db.users || !Array.isArray(db.users) || db.users.length === 0) {
       db.users = [
         {
@@ -3944,24 +4134,12 @@ app.post('/api/backup/import', upload.single('file'), (req, res) => {
           username: 'taqim2609',
           email: 'taqim2609@gmail.com',
           name: 'Owner (Taqim)',
+          password: 'admin123',
+          password_plain: 'admin123',
           role: 'superadmin',
           role_base: 'superadmin',
           role_name: 'Super Admin (Owner)',
-          is_superadmin: true,
-          bootstrap_owner: true,
-          perms: ['*'],
-          perms_full: true,
-          active: true,
-          must_change_password: false,
-        },
-        {
-          id: 'usr-owner',
-          username: 'superadmin',
-          email: 'owner@grandacehkuliner.com',
-          name: 'Owner (Super Admin)',
-          role: 'superadmin',
-          role_base: 'superadmin',
-          role_name: 'Super Admin (Owner)',
+          pin: '260900',
           is_superadmin: true,
           bootstrap_owner: true,
           perms: ['*'],
@@ -3971,6 +4149,8 @@ app.post('/api/backup/import', upload.single('file'), (req, res) => {
         }
       ];
     } else {
+      // Hapus akun demo
+      db.users = db.users.filter((u) => !demoUsernames.includes((u.username || '').toLowerCase()));
       // Pastikan ada role superadmin aktif dan normalisasikan taqim2609
       let hasSuper = false;
       db.users.forEach((u) => {
@@ -3989,6 +4169,10 @@ app.post('/api/backup/import', upload.single('file'), (req, res) => {
           u.perms = ['*'];
           u.perms_full = true;
           u.active = true;
+          if (!u.password && !u.password_plain) {
+            u.password = 'admin123';
+            u.password_plain = 'admin123';
+          }
         }
       });
 
@@ -4070,11 +4254,22 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
         systemPrompt = `Anda adalah Gemini Chatbot, spesialis menu makanan/minuman dan kepuasan pelanggan Grand Aceh Kuliner di Banda Aceh. Bantu mengoptimalkan deskripsi produk yang menarik, strategi harga psikologis, penanganan keluhan meja, dan pengelolaan reservasi dengan hangat, solutif, dan komunikatif dalam Bahasa Indonesia.`;
       }
 
+      // Compute rich live POS statistics
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayOrders = (db.orders || []).filter(o => (o.created_at || '').startsWith(todayStr));
+      const todayRev = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+      const lowStockProducts = (db.products || []).filter(p => p.track_stock && Number(p.stock) <= 5);
+      const lowStockIngredients = (db.ingredients || []).filter(i => Number(i.stock) <= Number(i.min_stock || 5));
+      const activeShift = (db.shifts || []).find(s => s.status === 'open');
+
       // Add context about current system state
-      systemPrompt += `\n\nData Restoran Saat Ini:
-- Produk aktif: ${db.products ? db.products.length : 0}
-- Total meja: ${db.tables ? db.tables.length : 0}
-- Order hari ini: ${db.orders ? db.orders.length : 0}`;
+      systemPrompt += `\n\nData Restoran Realtime Saat Ini (${todayStr}):
+- Omzet Penjualan Hari Ini: Rp ${todayRev.toLocaleString('id-ID')} (${todayOrders.length} transaksi)
+- Shift Kasir: ${activeShift ? `Sedang Aktif (dibuka oleh ${activeShift.user_name || activeShift.opened_by || 'Kasir'})` : 'Belum Dibuka'}
+- Produk Aktif: ${db.products ? db.products.length : 0} item
+- Stok Produk Kritis (<= 5): ${lowStockProducts.map(p => `${p.name} (sisa ${p.stock})`).join(', ') || 'Semua aman'}
+- Bahan Baku Menipis: ${lowStockIngredients.map(i => `${i.name} (sisa ${i.stock} ${i.unit || 'satuan'})`).join(', ') || 'Semua aman'}
+- Total Meja: ${db.tables ? db.tables.length : 0} meja (${(db.tables || []).filter(t => t.status === 'occupied').length} terisi)`;
 
       // Format full history for the multi-turn generateContent API
       const contents = session.messages.map(m => ({
@@ -4083,12 +4278,12 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
       }));
 
       // Selection of model based on requirement (Lite, Flash, Pro)
-      const selectedModel = model || 'gemini-3.5-flash';
+      const selectedModel = model || 'gemini-2.5-flash';
       const candidateModels = [
         selectedModel,
-        'gemini-3.5-flash',
-        'gemini-3.1-flash-lite',
-        'gemini-3.8-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
         'gemini-flash-latest'
       ].filter((v, idx, arr) => arr.indexOf(v) === idx);
 
@@ -4130,15 +4325,29 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
   }
 
   // Smart Indonesian POS Assistant fallback response
-  let answer = 'Halo! Saya asisten AI Grand Aceh Kuliner POS. Ada yang bisa saya bantu terkait transaksi POS, stok produk, meja, atau laporan hari ini?';
+  let answer = 'Halo Superadmin! Saya asisten AI Grand Aceh Kuliner POS. Ada yang bisa saya bantu terkait omzet, kasir, meja, bahan baku, atau pengiriman tugas ke AI Studio?';
   const qLower = userText.toLowerCase();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayOrders = (db.orders || []).filter(o => (o.created_at || '').startsWith(todayStr));
+  const todayRev = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+  const lowStockProds = (db.products || []).filter(p => p.track_stock && Number(p.stock) <= 5);
+  const lowStockIngs = (db.ingredients || []).filter(i => Number(i.stock) <= Number(i.min_stock || 5));
+
   if (qLower.includes('menu') || qLower.includes('produk') || qLower.includes('makanan')) {
-    answer = `Saat ini tersedia ${db.products.length} produk di Grand Aceh Kuliner, termasuk Makanan Utama (Nasi Goreng Aceh, Mie Aceh Goreng, Ayam Tangkap), Cemilan (Roti Cane Kari, Pisang Goreng), dan Minuman Khas (Kopi Sanger, Teh Tarik).`;
-  } else if (qLower.includes('laporan') || qLower.includes('omset') || qLower.includes('penjualan')) {
-    const rev = db.orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
-    answer = `Ringkasan Penjualan: Total penjualan tercatat sebesar Rp ${rev.toLocaleString('id-ID')} dari ${db.orders.length} transaksi selesai.`;
+    answer = `Saat ini ada ${db.products.length} menu aktif. Produk terlaris meliputi Mie Aceh Spesial, Nasi Goreng Aceh, Ayam Tangkap, dan Kopi Sanger.`;
+  } else if (qLower.includes('laporan') || qLower.includes('omset') || qLower.includes('omzet') || qLower.includes('penjualan')) {
+    answer = `📊 *Laporan Penjualan Hari Ini (${todayStr})*:\n• Total Omzet: Rp ${todayRev.toLocaleString('id-ID')}\n• Jumlah Transaksi: ${todayOrders.length} pesanan\n• Status Kasir: ${(db.shifts || []).some(s => s.status === 'open') ? '🟢 Shift Aktif' : '🔴 Shift Ditutup'}`;
+  } else if (qLower.includes('stok') || qLower.includes('bahan') || qLower.includes('kritis') || qLower.includes('habis')) {
+    if (lowStockProds.length || lowStockIngs.length) {
+      answer = `⚠️ *Peringatan Stok Rendah*:\n` +
+        (lowStockProds.length ? `• Produk: ${lowStockProds.map(p => `${p.name} (${p.stock} porsi)`).join(', ')}\n` : '') +
+        (lowStockIngs.length ? `• Bahan Baku: ${lowStockIngs.map(i => `${i.name} (${i.stock} ${i.unit || 'satuan'})`).join(', ')}` : '');
+    } else {
+      answer = `✅ Semua stok produk dan bahan baku dalam kondisi aman (di atas batas minimum).`;
+    }
   } else if (qLower.includes('meja') || qLower.includes('table')) {
-    answer = `Terdapat ${db.tables.length} meja aktif di restoran: Area Indoor (Meja 1-4), VIP (VIP 1 & 2), dan Outdoor (Out 1 & 2).`;
+    const occupied = (db.tables || []).filter(t => t.status === 'occupied').length;
+    answer = `🪑 Status Meja: Total ${db.tables.length} meja (${occupied} sedang terisi, ${db.tables.length - occupied} kosong).`;
   }
 
   res.json({

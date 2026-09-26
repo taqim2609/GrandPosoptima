@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { CheckCircle2, Copy, Check, Printer, MessageCircle, Send, Loader2, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CheckCircle2, Copy, Check, Printer, MessageCircle, Send, Loader2, X, Image as ImageIcon, Upload } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { printReceipt } from "@/lib/receipt";
@@ -14,13 +14,16 @@ export default function ReceiptModal({
   title = "Transaksi Sukses",
   subtitle = "Pembayaran telah dicatat & diverifikasi",
   showNewTransactionBtn = true,
-  outlet = null,
+  outlet: propOutlet = null,
   cfg = null,
 }) {
   const [waPhone, setWaPhone] = useState("");
   const [waSending, setWaSending] = useState(false);
   const [showWaInput, setShowWaInput] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [currentLogo, setCurrentLogo] = useState("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef(null);
 
   useEffect(() => {
     if (order) {
@@ -30,7 +33,38 @@ export default function ReceiptModal({
     }
   }, [order]);
 
+  useEffect(() => {
+    const cached = localStorage.getItem("gak_logo_b64");
+    if (cached) {
+      setCurrentLogo(cached);
+    } else if (propOutlet?.logo_url) {
+      setCurrentLogo(propOutlet.logo_url);
+    }
+  }, [propOutlet]);
+
   if (!order && !open) return null;
+
+  const handleUploadLogo = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await api.post("/settings/outlet/logo", fd);
+      const url = res.data?.url;
+      if (url) {
+        setCurrentLogo(url);
+        try { localStorage.setItem("gak_logo_b64", url); } catch (_) {}
+        toast.success("Logo toko berhasil dipasang pada struk!");
+      }
+    } catch (err) {
+      toast.error("Gagal mengunggah logo: " + (err.response?.data?.detail || err.message));
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
 
   const handleCopyText = () => {
     if (!order) return;
@@ -96,19 +130,39 @@ export default function ReceiptModal({
 
   return (
     <Dialog open={open ?? !!order} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-md max-h-[92vh] overflow-hidden flex flex-col p-0 bg-[#F4F5F7] border border-[#E4E4E7] shadow-2xl">
+      <DialogContent className="max-w-md max-h-[92dvh] sm:max-h-[88vh] overflow-hidden flex flex-col p-0 bg-[#F4F5F7] border border-[#E4E4E7] shadow-2xl rounded-2xl">
         {/* Header Title */}
-        <div className="p-4 pb-3 bg-white border-b flex items-center justify-between">
+        <div className="p-4 pb-3 bg-white border-b flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl bg-[#ECFDF5] text-[#059669] grid place-items-center font-bold">
               <CheckCircle2 size={20} />
             </div>
             <div>
-              <h2 className="font-extrabold text-base text-[#111827] leading-tight">{title}</h2>
+              <DialogTitle className="font-extrabold text-base text-[#111827] leading-tight">{title}</DialogTitle>
               <p className="text-xs text-[#6B7280]">{subtitle}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              className="hidden"
+              onChange={handleUploadLogo}
+            />
+            <button
+              onClick={() => logoInputRef.current?.click()}
+              disabled={uploadingLogo}
+              title={currentLogo ? "Ganti logo struk" : "Unggah logo toko ke struk"}
+              className="tap h-8 px-2.5 rounded-lg border bg-[#FAFAFA] hover:bg-[#F3F4F6] text-xs font-bold text-[#374151] flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {uploadingLogo ? (
+                <Loader2 size={13} className="animate-spin text-[#E63946]" />
+              ) : (
+                <ImageIcon size={13} className="text-[#E63946]" />
+              )}
+              <span className="hidden sm:inline">{currentLogo ? "Ganti Logo" : "Pasang Logo"}</span>
+            </button>
             <button
               onClick={handleCopyText}
               title="Salin teks struk"
@@ -126,12 +180,29 @@ export default function ReceiptModal({
           </div>
         </div>
 
+        {/* Highlight Banner Kembalian */}
+        {order && order.change > 0 && (
+          <div className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between shadow-xs border-b border-emerald-700 shrink-0" data-testid="receipt-modal-change-banner">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-emerald-200 flex items-center gap-1">
+                KEMBALIAN UANG TUNAI
+              </div>
+              <div className="text-2xl font-black font-num tracking-tight">{rupiah(order.change)}</div>
+            </div>
+            <div className="text-right text-[11px] text-emerald-100">
+              <div>Total: <strong className="text-white font-num">{rupiah(order.total)}</strong></div>
+              <div>Diterima: <strong className="text-white font-num">{rupiah(order.amount_paid || order.total)}</strong></div>
+            </div>
+          </div>
+        )}
+
         {/* Scrollable Receipt Paper Preview Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex justify-center bg-[#F4F5F7]">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-5 flex justify-center items-start bg-[#F4F5F7]">
           {order && (
             <ReceiptPaper
               order={order}
-              outlet={outlet}
+              outlet={propOutlet}
+              logoUrl={currentLogo}
               cfg={cfg}
             />
           )}

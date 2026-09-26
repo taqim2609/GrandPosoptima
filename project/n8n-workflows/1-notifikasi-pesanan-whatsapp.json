@@ -1,0 +1,93 @@
+{
+  "name": "POS - Notifikasi Pesanan Lunas ke WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pos-order-paid",
+        "options": {}
+      },
+      "name": "Webhook Order Paid",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "pos-order-paid-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.event }}",
+              "value2": "order.paid"
+            }
+          ]
+        }
+      },
+      "name": "Cek Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/message/sendText/grand-aceh-pos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "grandpos_vps_wa_secret_2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.body.data.customer_phone || '628123456789' }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"*TERIMA KASIH TELAH BERBELANJA DI GRAND ACEH KULINER*\\n\\nNo. Nota: {{ $json.body.data.order_number }}\\nKasir: {{ $json.body.data.cashier_name }}\\nTotal Pembayaran: Rp {{ $json.body.data.total_amount.toLocaleString('id-ID') }}\\nMetode: {{ $json.body.data.payment_method }}\\n\\nSemoga harimu menyenangkan! 🎉\"\n  }\n}",
+        "options": {}
+      },
+      "name": "Kirim WA via Evolution API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 200]
+    }
+  ],
+  "connections": {
+    "Webhook Order Paid": {
+      "main": [
+        [
+          {
+            "node": "Cek Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek Event": {
+      "main": [
+        [
+          {
+            "node": "Kirim WA via Evolution API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "POS Grand Aceh"
+    }
+  ]
+}

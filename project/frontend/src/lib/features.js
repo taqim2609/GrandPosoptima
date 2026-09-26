@@ -5,7 +5,7 @@ import api from "@/lib/api";
 // FEAT_DEFAULTS dipakai bila cache lokal belum ada (render pertama sebelum fetch).
 export const FEAT_KEY = "gak_feat_v2";
 export const FEAT_DEFAULTS = {
-  ai: { enabled: true, summary: true, vision: true, description: true, image: true, assistant: true },
+  ai: { enabled: true, summary: true, vision: true, description: true, image: true, assistant: true, pos_chat: true },
   wa: { enabled: true },
   ota: { autocheck: true },
   update: { banner: true },

@@ -1,7 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { Printer, Server, Store, Save, ReceiptText, Upload, Loader2, Bluetooth, Wifi, Wallet, Cpu, CheckCircle2, Eye, RefreshCw } from "lucide-react";
+import { Printer, Server, Store, Save, ReceiptText, Upload, Loader2, Bluetooth, Wifi, Wallet, Cpu, CheckCircle2, Eye, RefreshCw, Lock, KeyRound, Shield, ShieldCheck, Delete } from "lucide-react";
 import api, { apiError } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { can, isSuperAdmin } from "@/lib/rbac";
 import { getDeviceConfig, setDeviceConfig, getServerUrl, setServerUrl, sampleOrder, getPrinterStatus, openCashDrawer, getSunmiHardwareProfile } from "@/lib/device";
 import { printReceipt } from "@/lib/receipt";
 import { requestBluetoothPrinter, clearBluetoothPrinter } from "@/lib/bluetooth";
@@ -9,6 +11,7 @@ import ReceiptPaper from "@/components/ReceiptPaper";
 import ReceiptModal from "@/components/ReceiptModal";
 
 export default function DeviceSettings() {
+  const { user } = useAuth();
   const [cfg, setCfg] = useState(getDeviceConfig());
   const [srv, setSrv] = useState(getServerUrl());
   const [outlet, setOutlet] = useState(null); // data global server (outlet & logo)
@@ -16,6 +19,90 @@ export default function DeviceSettings() {
   const [hwProfile, setHwProfile] = useState(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const upd = (patch) => setCfg((c) => ({ ...c, ...patch }));
+
+  // Otorisasi PIN Lock untuk Akun tanpa Izin Langsung
+  const hasDirectPermission = Boolean(
+    user && (
+      isSuperAdmin(user) ||
+      user.role === "admin" ||
+      user.role === "superadmin" ||
+      user.is_superadmin ||
+      can(user, "pengaturan")
+    )
+  );
+
+  const [unlocked, setUnlocked] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinErrorShake, setPinErrorShake] = useState(false);
+  const [authorizedBy, setAuthorizedBy] = useState(null);
+
+  const isUnlocked = hasDirectPermission || unlocked;
+
+  const submitUnlockPin = useCallback(async (pinCode) => {
+    if (!pinCode || pinCode.length !== 6) return;
+    setPinLoading(true);
+    try {
+      const res = await api.post("/auth/verify-pin", { pin: pinCode });
+      if (res.data?.authorized) {
+        setUnlocked(true);
+        setAuthorizedBy(res.data.user);
+        toast.success(`Pengaturan dibuka oleh ${res.data.user?.name || "Supervisor"}!`);
+      }
+    } catch (err) {
+      setPinErrorShake(true);
+      setTimeout(() => setPinErrorShake(false), 600);
+      setPin("");
+      toast.error(apiError(err.response?.data?.detail) || "PIN salah atau akun tidak memiliki izin");
+    } finally {
+      setPinLoading(false);
+    }
+  }, []);
+
+  // Listener keyboard untuk PIN unlock
+  useEffect(() => {
+    if (isUnlocked || pinLoading) return;
+
+    const handleKeyDown = (e) => {
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        setPin((prev) => {
+          if (prev.length < 6) return prev + e.key;
+          return prev;
+        });
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        setPin((prev) => prev.slice(0, -1));
+      } else if (e.key === "Escape" || e.key === "Delete") {
+        e.preventDefault();
+        setPin("");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isUnlocked, pinLoading]);
+
+  // Auto submit ketika 6 digit tercapai
+  useEffect(() => {
+    if (!isUnlocked && pin.length === 6 && !pinLoading) {
+      submitUnlockPin(pin);
+    }
+  }, [pin, isUnlocked, pinLoading, submitUnlockPin]);
+
+  const handleKeypadPress = (val) => {
+    if (pinLoading) return;
+    if (val === "clear") {
+      setPin("");
+    } else if (val === "backspace") {
+      setPin((prev) => prev.slice(0, -1));
+    } else if (typeof val === "number" || typeof val === "string") {
+      setPin((prev) => {
+        if (prev.length < 6) return prev + String(val);
+        return prev;
+      });
+    }
+  };
 
   const previewOrder = useMemo(() => sampleOrder(), []);
 
@@ -127,12 +214,136 @@ export default function DeviceSettings() {
     } catch (err) { toast.error(apiError(err.response?.data?.detail)); }
   };
 
+  if (!isUnlocked) {
+    return (
+      <div className="h-full overflow-y-auto p-6 lg:p-8 flex items-center justify-center bg-[#F8FAFC]" data-testid="device-settings-locked">
+        <div className="w-full max-w-md bg-white rounded-3xl border border-[#E2E8F0] p-6 sm:p-8 shadow-xl space-y-5">
+          <div className="text-center space-y-2">
+            <div className="h-16 w-16 rounded-2xl bg-[#FEF2F2] border border-[#FEE2E2] text-[#E63946] mx-auto flex items-center justify-center shadow-sm">
+              <Lock size={30} />
+            </div>
+            <h2 className="text-xl font-extrabold text-[#09090B]">Pengaturan Perangkat Terkunci</h2>
+            <p className="text-xs text-[#52525B] max-w-sm mx-auto">
+              Halaman pengaturan printer, laci kasir, dan format struk dilindungi PIN. Masukkan <b>PIN 6 Digit Supervisor / Admin</b> untuk membuka.
+            </p>
+          </div>
+
+          {/* 6 Digit PIN Display Boxes */}
+          <div className="text-center py-1">
+            <div
+              data-testid="device-pin-slots"
+              className={`flex items-center justify-center gap-2.5 sm:gap-3 transition-transform ${
+                pinErrorShake ? "animate-bounce" : ""
+              }`}
+            >
+              {[0, 1, 2, 3, 4, 5].map((idx) => {
+                const isFilled = pin.length > idx;
+                const isActive = pin.length === idx;
+                return (
+                  <div
+                    key={idx}
+                    data-testid={`device-pin-slot-${idx}`}
+                    className={`w-11 h-13 sm:w-12 sm:h-14 rounded-2xl flex items-center justify-center text-xl font-extrabold transition-all duration-150 border-2 ${
+                      isFilled
+                        ? "bg-[#E63946] border-[#E63946] text-white shadow-md scale-105"
+                        : isActive
+                        ? "bg-white border-[#E63946] ring-4 ring-[#E63946]/15 shadow-sm"
+                        : "bg-[#F4F4F5] border-[#E4E4E7] text-transparent"
+                    }`}
+                  >
+                    {isFilled ? "●" : ""}
+                  </div>
+                );
+              })}
+            </div>
+
+            {pinLoading && (
+              <div className="flex items-center justify-center gap-2 mt-3 text-xs font-bold text-[#E63946]">
+                <Loader2 size={15} className="animate-spin" />
+                <span>Memverifikasi PIN otorisasi...</span>
+              </div>
+            )}
+          </div>
+
+          {/* Numeric Touch Keypad */}
+          <div className="grid grid-cols-3 gap-2 max-w-[320px] mx-auto pt-1" data-testid="device-touch-keypad">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+              <button
+                key={num}
+                type="button"
+                data-testid={`device-keypad-${num}`}
+                onClick={() => handleKeypadPress(num)}
+                disabled={pinLoading}
+                className="tap h-13 sm:h-14 rounded-2xl bg-[#F8F9FA] hover:bg-[#E4E4E7] active:bg-[#D4D4D8] border border-[#E4E4E7] text-xl font-extrabold text-[#09090B] flex items-center justify-center shadow-xs transition-colors disabled:opacity-50"
+              >
+                {num}
+              </button>
+            ))}
+            
+            <button
+              type="button"
+              data-testid="device-keypad-clear"
+              onClick={() => handleKeypadPress("clear")}
+              disabled={pinLoading || pin.length === 0}
+              className="tap h-13 sm:h-14 rounded-2xl bg-[#FEF2F2] hover:bg-[#FEE2E2] active:bg-[#FECACA] border border-[#FCA5A5] text-xs font-extrabold text-[#DC2626] flex items-center justify-center transition-colors disabled:opacity-40"
+            >
+              Hapus
+            </button>
+
+            <button
+              type="button"
+              data-testid="device-keypad-0"
+              onClick={() => handleKeypadPress(0)}
+              disabled={pinLoading}
+              className="tap h-13 sm:h-14 rounded-2xl bg-[#F8F9FA] hover:bg-[#E4E4E7] active:bg-[#D4D4D8] border border-[#E4E4E7] text-xl font-extrabold text-[#09090B] flex items-center justify-center shadow-xs transition-colors disabled:opacity-50"
+            >
+              0
+            </button>
+
+            <button
+              type="button"
+              data-testid="device-keypad-backspace"
+              onClick={() => handleKeypadPress("backspace")}
+              disabled={pinLoading || pin.length === 0}
+              className="tap h-13 sm:h-14 rounded-2xl bg-[#F8F9FA] hover:bg-[#E4E4E7] active:bg-[#D4D4D8] border border-[#E4E4E7] text-base font-bold text-[#52525B] flex items-center justify-center transition-colors disabled:opacity-40"
+            >
+              <Delete size={20} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto p-6 lg:p-8" data-testid="device-settings-page">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-3xl font-extrabold flex items-center gap-2"><Printer className="text-[#E63946]" /> Pengaturan Perangkat &amp; Struk</h1>
-          <p className="text-[#52525B] text-sm mt-1">Identitas outlet &amp; logo disimpan di server (dipakai semua perangkat); format struk &amp; setelan printer tersimpan per perangkat ini.</p>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-3xl font-extrabold flex items-center gap-2"><Printer className="text-[#E63946]" /> Pengaturan Perangkat &amp; Struk</h1>
+            <p className="text-[#52525B] text-sm mt-1">Identitas outlet &amp; logo disimpan di server (dipakai semua perangkat); format struk &amp; setelan printer tersimpan per perangkat ini.</p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {hasDirectPermission ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-extrabold border border-emerald-200">
+                <ShieldCheck size={14} /> Akses Langsung ({user?.role_name || user?.role})
+              </span>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-extrabold border border-blue-200">
+                  <KeyRound size={14} /> Dibuka via PIN ({authorizedBy?.name || "Supervisor"})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setUnlocked(false); setAuthorizedBy(null); }}
+                  className="tap px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-xs font-bold text-zinc-700 flex items-center gap-1.5 border border-zinc-200"
+                >
+                  <Lock size={13} /> Kunci Kembali
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">

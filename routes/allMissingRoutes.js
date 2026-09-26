@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
 
@@ -2433,20 +2434,52 @@ Keluarkan JSON dengan format:
     });
   });
 
-  // POST /api/feature-request/send & /feature-request/send
-  app.post(['/api/feature-request/send', '/feature-request/send'], (req, res) => {
-    const msg = (req.body.message || '').trim();
-    if (!msg) return res.status(400).json({ detail: 'Pesan usulan tidak boleh kosong' });
-    db.featureRequests.unshift({
+  // POST & GET /api/feature-requests & /api/feature-request/send
+  const handleFeatureRequest = (req, res) => {
+    const msg = (req.body?.message || req.body?.prompt || req.body?.text || '').trim();
+    if (!msg) return res.status(400).json({ detail: 'Pesan instruksi/fitur tidak boleh kosong' });
+
+    const priority = req.body?.priority || 'normal';
+    const sender = req.body?.user_name || req.body?.sender || 'Superadmin (POS)';
+    const item = {
       id: 'fr-' + Date.now(),
       message: msg,
+      priority,
+      sender,
       created_at: new Date().toISOString(),
       status: 'submitted',
-    });
+    };
+
+    if (!db.featureRequests) db.featureRequests = [];
+    db.featureRequests.unshift(item);
+    if (db.featureRequests.length > 100) db.featureRequests = db.featureRequests.slice(0, 100);
+
+    // Persist to feature-requests.jsonl
+    try {
+      const jsonlPath = path.join(__dirname, '..', 'feature-requests.jsonl');
+      const entry = JSON.stringify({
+        ts: new Date().toISOString(),
+        user: sender,
+        priority,
+        message: msg,
+        context: req.body?.context || 'POS Live Superadmin Widget',
+      }) + '\n';
+      fs.appendFileSync(jsonlPath, entry, 'utf-8');
+    } catch (fsErr) {
+      console.warn('[FeatureRequest JSONL append error]:', fsErr.message);
+    }
+
     res.json({
       success: true,
-      message: 'Permintaan fitur berhasil dikirim ke antrean pengembang Google AI Studio.',
+      ok: true,
+      data: item,
+      message: 'Instruksi / permintaan fitur berhasil dikirim ke antrean pengembang Google AI Studio.',
     });
+  };
+
+  app.post(['/api/feature-requests', '/feature-requests', '/api/feature-request/send', '/feature-request/send'], handleFeatureRequest);
+  app.get(['/api/feature-requests', '/feature-requests'], (req, res) => {
+    res.json(db.featureRequests || []);
   });
 
   // ==========================================

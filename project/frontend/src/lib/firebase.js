@@ -2,11 +2,12 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import {
   getFirestore,
+  initializeFirestore,
   collection,
   doc,
   setDoc,
   getDocs,
-  getDocFromServer,
+  getDoc,
   query,
   orderBy,
   limit,
@@ -19,7 +20,27 @@ import firebaseConfig from "../firebase-applet-config.json";
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Use initializeFirestore with auto-detect long polling to ensure reliable connectivity across sandboxes, iframes, and mobile networks
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(
+    app,
+    {
+      experimentalAutoDetectLongPolling: true,
+      ignoreUndefinedProperties: true,
+    },
+    firebaseConfig.firestoreDatabaseId
+  );
+} catch (e) {
+  try {
+    firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  } catch (e2) {
+    firestoreDb = getFirestore(app);
+  }
+}
+
+export const db = firestoreDb;
 export const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId || "default";
 export const firebaseProjectId = firebaseConfig.projectId || "";
 
@@ -62,8 +83,9 @@ export function subscribeFirestoreSync(callback) {
 
 export function handleFirestoreError(error, operationType, path) {
   setFirestoreSyncing(false);
+  const errMsg = error instanceof Error ? error.message : String(error);
   const errInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: auth.currentUser?.uid || null,
       email: auth.currentUser?.email || null,
@@ -73,16 +95,23 @@ export function handleFirestoreError(error, operationType, path) {
     operationType,
     path,
   };
-  console.error("[Firestore Error Details]:", JSON.stringify(errInfo));
+  
+  // Suppress spamming console when operating in expected offline mode
+  const isOffline = errMsg.includes("unavailable") || errMsg.includes("offline") || errMsg.includes("could not reach");
+  if (!isOffline) {
+    console.warn("[Firestore Operation Notice]:", operationType, path, errMsg);
+  }
   return errInfo;
 }
 
 // Test Connection on Boot & Detailed Persistence Verification
 export async function testFirestoreConnection() {
   const startTime = performance.now();
-  setFirestoreSyncing(true, 1200);
+  setFirestoreSyncing(true, 1000);
   try {
-    await getDocFromServer(doc(db, "test", "connection"));
+    const testDoc = doc(db, "test", "connection");
+    // Attempt reading test document
+    await getDoc(testDoc);
     const latencyMs = Math.round(performance.now() - startTime);
     setFirestoreSyncing(false);
     updateLastSyncInfo({ ok: true, latencyMs });
@@ -90,14 +119,13 @@ export async function testFirestoreConnection() {
   } catch (error) {
     setFirestoreSyncing(false);
     const latencyMs = Math.round(performance.now() - startTime);
-    if (error instanceof Error && error.message.includes("the client is offline")) {
-      console.warn("[Firestore] Client is offline or unreachable.");
-    }
-    updateLastSyncInfo({ ok: false, latencyMs, error: error?.message || String(error) });
+    const errMsg = error?.message || String(error);
+    const isOffline = errMsg.includes("unavailable") || errMsg.includes("offline") || errMsg.includes("could not reach");
+    updateLastSyncInfo({ ok: !isOffline, latencyMs, error: isOffline ? "Offline mode active" : errMsg });
     return {
       ok: false,
       latencyMs,
-      error: error?.message || String(error),
+      error: errMsg,
       databaseId: firestoreDatabaseId,
       projectId: firebaseProjectId,
     };
@@ -248,6 +276,17 @@ export async function syncAllMenuAndStockToFirestore(products = [], categories =
 // Global runtime error logger to Firestore
 export async function logRuntimeErrorToFirestore(errorData) {
   try {
+    const errorMsg = String(errorData.message || errorData.msg || errorData.error || "").toLowerCase();
+    // Do not attempt to log firestore unavailable / network disconnect errors to Firestore to prevent loops
+    if (
+      (typeof navigator !== "undefined" && !navigator.onLine) ||
+      errorMsg.includes("unavailable") ||
+      errorMsg.includes("could not reach cloud firestore") ||
+      errorMsg.includes("client is offline")
+    ) {
+      return { success: false, offline: true };
+    }
+
     const errorId = `err_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     let user = null;
     try {
@@ -283,7 +322,6 @@ export async function logRuntimeErrorToFirestore(errorData) {
 
     const docRef = doc(db, "error_logs", errorId);
     await setDoc(docRef, payload);
-    console.info(`[Firestore Telemetry] Runtime error logged successfully to Firestore: ${errorId}`);
     return { success: true, id: errorId };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, "error_logs");

@@ -580,22 +580,25 @@ def _owner_identifiers():
     return {email, email.split("@")[0]}
 
 async def _is_super(role_or_user):
-    """True bila: role bawaan 'superadmin', role kustom dgn dasar superadmin,
-    ATAU akun itu sendiri adalah AKUN OWNER (ADMIN_EMAIL) — jaring pengaman supaya
-    pemilik tidak pernah terkunci dari Pengaturan → Roles & Izin meskipun kolom
-    role di database belum/tidak berisi superadmin."""
+    """True bila: role bawaan 'superadmin', atau role kustom dgn dasar superadmin.
+    Role 'kasir', 'input', 'input_pembayaran', 'stok_opname' TIDAK PERNAH dianggap superadmin."""
     role = role_or_user
     if isinstance(role_or_user, dict):
+        user_role = str(role_or_user.get("role") or "").strip().lower()
+        if user_role in ("kasir", "input", "input_pembayaran", "stok_opname"):
+            return False
+        if user_role == "superadmin":
+            return True
         ident = _owner_identifiers()
         if ident:
             uname = str(role_or_user.get("username") or "").lower()
             mail = str(role_or_user.get("email") or "").lower()
-            if uname and uname in ident:
-                return True
-            if mail and mail in ident:
+            if (uname and uname in ident) or (mail and mail in ident):
                 return True
         role = role_or_user.get("role")
-    role = str(role or "")
+    role = str(role or "").strip().lower()
+    if role in ("kasir", "input", "input_pembayaran", "stok_opname"):
+        return False
     if role == "superadmin":
         return True
     info = (await _rbac_doc()).get(role)
@@ -827,11 +830,26 @@ class LoginIn(BaseModel):
     def ident(self) -> str:
         return str(self.username or self.email or "").strip().lower()
 
+class LoginPinIn(BaseModel):
+    pin: str
+    username: Optional[str] = None
+
+class UserPinIn(BaseModel):
+    pin: str
+
+class UserPinEnabledIn(BaseModel):
+    enabled: bool
+
+class VerifyPinIn(BaseModel):
+    pin: str
+
 class UserCreate(BaseModel):
     name: str
     username: str
     password: str
     role: str = "kasir"
+    pin: Optional[str] = "123456"
+    pin_enabled: Optional[bool] = True
     # None = bawaan (True: semua akun baru wajib ganti password saat login pertama),
     # bisa dimatikan per akun lewat PATCH /users/{uid}/must-change-password.
     must_change_password: Optional[bool] = None
@@ -1757,15 +1775,110 @@ async def login(body: LoginIn):
     uv["id"], uv["name"], uv["email"], uv["role"] = user["id"], user["name"], user["email"], user["role"]
     return {"token": create_token(safe), "user": uv}
 
+@api.get("/auth/pin-users")
+async def get_pin_users():
+    """Daftar akun aktif yang diizinkan masuk menggunakan PIN 6 digit untuk dropdown di halaman login."""
+    users = await db.users.find(
+        {"active": True, "pin_enabled": {"$ne": False}},
+        {"_id": 0, "id": 1, "name": 1, "username": 1, "email": 1, "role": 1, "pin": 1}
+    ).sort("name", 1).to_list(100)
+    
+    rbac = await _rbac_doc()
+    out = []
+    for u in users:
+        role = u.get("role") or "kasir"
+        role_label = RBAC_MODULE_LABELS.get(role) or (rbac.get(role, {}).get("label") if isinstance(rbac.get(role), dict) else None) or role.replace("_", " ").title()
+        if role == "superadmin":
+            role_label = "Super Admin (Owner)"
+        elif role == "admin":
+            role_label = "Administrator"
+        elif role == "kasir":
+            role_label = "Kasir POS"
+        elif role == "input":
+            role_label = "Staf Input"
+            
+        out.append({
+            "id": u.get("id"),
+            "name": u.get("name") or u.get("username") or "Pengguna",
+            "username": u.get("username") or u.get("email") or "",
+            "role": role,
+            "role_name": role_label,
+            "has_pin": bool(u.get("pin")),
+        })
+    return {"ok": True, "users": out}
+
+@api.post("/auth/login-pin")
+async def login_pin(body: LoginPinIn):
+    """Login cepat kasir & staf menggunakan PIN 6 digit."""
+    clean_pin = str(body.pin or "").strip()
+    if not clean_pin or len(clean_pin) != 6 or not clean_pin.isdigit():
+        raise HTTPException(400, "PIN harus tepat 6 digit angka")
+    
+    clean_user = str(body.username or "").strip().lower()
+    
+    query = {"active": True, "pin_enabled": {"$ne": False}}
+    if clean_user:
+        query["$or"] = [{"username": clean_user}, {"email": clean_user}]
+        user = await db.users.find_one(query)
+        if not user or str(user.get("pin") or "").strip() != clean_pin:
+            raise HTTPException(401, f"PIN 6 digit salah untuk akun @{clean_user}")
+    else:
+        # Deteksi otomatis pengguna berdasarkan PIN yang cocok
+        query["pin"] = clean_pin
+        user = await db.users.find_one(query)
+        if not user:
+            raise HTTPException(401, "PIN 6 digit tidak cocok dengan akun aktif manapun")
+            
+    if not user.get("active", True):
+        raise HTTPException(403, "Akun dinonaktifkan")
+        
+    safe = {"id": user["id"], "name": user["name"], "email": user.get("email", ""), "role": user["role"]}
+    uv = await _user_view(user)
+    uv["id"], uv["name"], uv["email"], uv["role"] = user["id"], user["name"], user.get("email", ""), user["role"]
+    return {"token": create_token(safe), "user": uv}
+
+@api.post("/auth/verify-pin")
+async def verify_pin(body: VerifyPinIn):
+    """Verifikasi PIN 6 digit untuk otorisasi akses fitur sensitif seperti Pengaturan Perangkat & Struk."""
+    clean_pin = str(body.pin or "").strip()
+    if not clean_pin or len(clean_pin) != 6 or not clean_pin.isdigit():
+        raise HTTPException(400, "PIN harus tepat 6 digit angka")
+        
+    # Cari akun aktif pemilik PIN ini
+    target = await db.users.find_one(
+        {"pin": clean_pin, "active": True, "pin_enabled": {"$ne": False}},
+        {"_id": 0, "id": 1, "name": 1, "username": 1, "role": 1, "email": 1}
+    )
+    if not target:
+        raise HTTPException(401, "PIN 6 digit tidak cocok atau akun tidak diizinkan menggunakan PIN")
+        
+    is_super = await _is_super(target)
+    role = target.get("role") or ""
+    base, allowed = await _access(role)
+    
+    # Izin diberikan bila Super Admin, Admin, atau role yang memiliki modul 'pengaturan'
+    if is_super or role in ("superadmin", "admin") or "pengaturan" in allowed:
+        return {
+            "ok": True,
+            "authorized": True,
+            "user": {
+                "id": target["id"],
+                "name": target["name"],
+                "username": target.get("username", ""),
+                "role": role,
+                "is_superadmin": is_super
+            }
+        }
+        
+    raise HTTPException(403, f"Akun @{target.get('username')} ({role}) tidak memiliki hak akses untuk membuka Pengaturan Perangkat")
+
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return await _user_view(user)
 
 @api.get("/users")
 async def list_users(user: dict = Depends(require_admin)):
-    """Daftar akun. Hanya Super Admin yang menerima kolom `password` (password terlihat,
-    direkam saat akun dibuat / password direset — lihat create_user & reset_user_password).
-    Akun lama (dibuat sebelum fitur ini) tidak punya rekaman → `password` kosong."""
+    """Daftar akun. Admin & Super Admin menerima kolom `pin` dan `pin_enabled`. Hanya Super Admin yang menerima password terlihat."""
     is_super = await _is_super(user)
     q = {} if is_super else {"role": {"$ne": "superadmin"}}
     rows = await db.users.find(q, {"_id": 0, "password_hash": 0}).sort("created_at", 1).to_list(500)
@@ -1775,6 +1888,8 @@ async def list_users(user: dict = Depends(require_admin)):
         u.pop("_id", None)
         if is_super:
             u["password"] = plain or ""
+        u["pin"] = u.get("pin") or ""
+        u["pin_enabled"] = u.get("pin_enabled", True)
         out.append(u)
     return out
 
@@ -1797,16 +1912,47 @@ async def create_user(body: UserCreate, user: dict = Depends(require_admin)):
     if not (body.name or "").strip():
         raise HTTPException(400, "Nama wajib diisi")
     forced = True if body.must_change_password is None else bool(body.must_change_password)
+    pin_val = str(body.pin or "123456").strip()
+    if not pin_val or len(pin_val) != 6 or not pin_val.isdigit():
+        pin_val = "123456"
+    pin_en = True if body.pin_enabled is None else bool(body.pin_enabled)
     doc = {"id": new_id(), "name": body.name.strip(), "username": uname, "email": "",
            "password_hash": hash_password(body.password),
            # password terlihat (hanya dikirim ke Super Admin lewat GET /users)
            "password_plain": body.password,
+           "pin": pin_val,
+           "pin_enabled": pin_en,
            "must_change_password": forced,
            "role": role,
            "active": True, "created_at": now_utc().isoformat(), "created_by": user.get("username") or user.get("name")}
     await db.users.insert_one(doc)
     return {"id": doc["id"], "name": doc["name"], "username": doc["username"], "role": doc["role"],
-            "must_change_password": forced}
+            "pin": doc["pin"], "pin_enabled": doc["pin_enabled"], "must_change_password": forced}
+
+@api.patch("/users/{uid}/pin")
+async def set_user_pin(uid: str, body: UserPinIn, user: dict = Depends(require_admin)):
+    """Ubah PIN 6 digit pengguna."""
+    clean_pin = str(body.pin or "").strip()
+    if not clean_pin or len(clean_pin) != 6 or not clean_pin.isdigit():
+        raise HTTPException(400, "PIN harus tepat 6 digit angka (mis. 123456)")
+    target = await db.users.find_one({"id": uid})
+    if not target:
+        raise HTTPException(404, "User tidak ditemukan")
+    if await _is_super(target) and not await _is_super(user):
+        raise HTTPException(403, "PIN Akun Super Admin hanya bisa diubah oleh Super Admin")
+    await db.users.update_one({"id": uid}, {"$set": {"pin": clean_pin}})
+    return {"ok": True, "pin": clean_pin}
+
+@api.patch("/users/{uid}/pin-enabled")
+async def set_user_pin_enabled(uid: str, body: UserPinEnabledIn, user: dict = Depends(require_admin)):
+    """Nyalakan atau matikan izin login menggunakan PIN untuk akun tertentu."""
+    target = await db.users.find_one({"id": uid})
+    if not target:
+        raise HTTPException(404, "User tidak ditemukan")
+    if await _is_super(target) and not await _is_super(user):
+        raise HTTPException(403, "Status PIN Akun Super Admin hanya bisa diubah oleh Super Admin")
+    await db.users.update_one({"id": uid}, {"$set": {"pin_enabled": bool(body.enabled)}})
+    return {"ok": True, "pin_enabled": bool(body.enabled)}
 
 @api.patch("/users/{uid}/role")
 async def set_user_role(uid: str, body: RoleAssignIn, user: dict = Depends(require_admin)):
@@ -6115,7 +6261,63 @@ async def assistant_chat(body: AIAssistantChatIn, admin: dict = Depends(admin_or
     sess = await db.ai_assistant_sessions.find_one({"id": sid}) or {"id": sid, "messages": []}
     history = sess.get("messages", [])
     ctx = await _assistant_context()
-    role_line = "Pengguna berperan: admin (boleh menerapkan aksi)." if admin.get("role") == "admin" else "Pengguna berperan: kasir (HANYA bertanya — jangan sertakan blok aksi, perubahan data hanya admin)."
+
+    is_super = await _is_super(admin)
+    user_role = str(admin.get("role") or "kasir")
+    base, allowed = await _access(user_role)
+
+    ACTION_MODULE_MAP = {
+        "create_category": "produk",
+        "deactivate_category": "produk",
+        "delete_category": "produk",
+        "create_product": "produk",
+        "create_products_bulk": "produk",
+        "update_product": "produk",
+        "deactivate_product": "produk",
+        "delete_product": "produk",
+        "create_vendor": "vendor",
+        "create_payment_method": "pengaturan",
+    }
+
+    if is_super:
+        role_line = (
+            "====================================================\n"
+            "PROFIL & HAK AKSES PENGGUNA SAAT INI:\n"
+            "Pengguna adalah: SUPER ADMIN (PEMILIK RESTORAN / OWNER).\n"
+            "Tingkat Otoritas: PENUH TANPA BATAS untuk seluruh modul, master produk, kategori, vendor, "
+            "metode pembayaran, shift, kas, laporan, keuangan, reservasi, dan semua pengaturan sistem.\n"
+            "Anda DISETUJUI & DIIZINKAN membuat dan menyertakan blok <ACTION>{...}</ACTION> untuk semua aksi "
+            "pengelolaan data yang diminta oleh Super Admin.\n"
+            "===================================================="
+        )
+    else:
+        allowed_labels = [RBAC_MODULE_LABELS.get(m, m) for m in allowed]
+        allowed_action_names = []
+        if "produk" in allowed:
+            allowed_action_names.extend(["create_product", "create_products_bulk", "update_product", "deactivate_product", "delete_product", "create_category", "deactivate_category", "delete_category"])
+        if "vendor" in allowed:
+            allowed_action_names.append("create_vendor")
+        if "pengaturan" in allowed:
+            allowed_action_names.append("create_payment_method")
+
+        role_line = (
+            "====================================================\n"
+            "PROFIL & HAK AKSES PENGGUNA SAAT INI:\n"
+            f"Role Akun: '{user_role}' (BUKAN Super Admin).\n"
+            f"Izin Modul yang dimiliki akun ini: {', '.join(allowed_labels) if allowed_labels else 'Tidak ada modul operasional'}.\n"
+            f"Jenis Aksi yang boleh dijalankan oleh akun ini: {', '.join(allowed_action_names) if allowed_action_names else 'TIDAK ADA AKSI DATA (Hanya Tanya-Jawab / Konsultasi)'}.\n\n"
+            "ATURAN MUTLAK KEAMANAN ROLE (RBAC):\n"
+            "1. HANYA Super Admin yang memiliki hak akses menyeluruh tanpa batas.\n"
+            "2. Pengguna dengan role ini HANYA boleh meminta aksi/perubahan pada modul yang tercantum di atas.\n"
+            "3. Jika pengguna meminta tindakan, perubahan data, atau pengelolaan yang berada DI LUAR hak akses modulnya "
+            "(misalnya kasir/staf meminta ubah/buat produk tanpa izin 'Produk', buat vendor tanpa izin 'Vendor', "
+            "ubah metode bayar/pengaturan tanpa izin 'Pengaturan', atau mengelola akun/role/sistem):\n"
+            "   -> DILARANG KERAS menyertakan blok <ACTION>!\n"
+            f"   -> JELASKAN DENGAN SOPAN bahwa akun dengan role '{user_role}' tidak memiliki wewenang untuk tindakan tersebut. "
+            "Beritahukan bahwa tindakan tersebut hanya dapat dilakukan oleh Super Admin atau akun yang memiliki izin terkait.\n"
+            "4. Jika pengguna hanya bertanya informasi yang relevan dengan tugasnya, jawablah dengan ramah, jelas, dan akurat.\n"
+            "===================================================="
+        )
     
     custom_system = ASSISTANT_SYSTEM
     if body.role == 'operations':
@@ -6125,10 +6327,20 @@ async def assistant_chat(body: AIAssistantChatIn, admin: dict = Depends(admin_or
     elif body.role == 'specialist':
         custom_system = "Anda adalah Gemini Chatbot, spesialis menu makanan/minuman dan kepuasan pelanggan Grand Aceh Kuliner di Banda Aceh. Bantu mengoptimalkan deskripsi produk yang menarik, strategi harga psikologis, penanganan keluhan meja, dan pengelolaan reservasi dengan hangat, solutif, dan komunikatif dalam Bahasa Indonesia."
     
-    system = role_line + "\n" + custom_system + "\n\nKONTEKS DATA SAAT INI:\n" + json.dumps(ctx, ensure_ascii=False)
+    system = role_line + "\n\n" + custom_system + "\n\nKONTEKS DATA SAAT INI:\n" + json.dumps(ctx, ensure_ascii=False)
     msgs = history + [{"role": "user", "content": body.message}]
     reply = await _ai_chat(msgs, system=system, feature="assistant", temperature=0.3, max_tokens=1500, model=body.model)
     action, clean = _parse_action(reply)
+
+    # Verifikasi keamanan server-side: Batalkan action jika role tidak memiliki izin
+    if action and not is_super:
+        act_type = action.get("type")
+        req_mod = ACTION_MODULE_MAP.get(act_type)
+        if not req_mod or req_mod not in allowed:
+            action = None
+            mod_label = RBAC_MODULE_LABELS.get(req_mod, "Terkait")
+            clean = f"⚠️ **Aksi Ditolak (Batasan Role)**: Akun Anda memiliki role **'{user_role}'** yang tidak memiliki wewenang untuk modul **{mod_label}**.\n\nHanya **Super Admin** atau akun yang memiliki izin modul {mod_label} yang dapat menambah, mengubah, atau menghapus data ini."
+
     history = (history + [{"role": "user", "content": body.message},
                           {"role": "assistant", "content": reply}])[-20:]
     title = (body.message or "").strip()[:60] or "Percakapan"
@@ -6231,9 +6443,35 @@ async def _find_category(name, kind=None):
     return c
 
 @api.post("/ai/assistant/apply")
-async def assistant_apply(body: AIAssistantApplyIn, admin: dict = Depends(require_admin)):
+async def assistant_apply(body: AIAssistantApplyIn, admin: dict = Depends(get_current_user)):
+    is_super = await _is_super(admin)
+    user_role = str(admin.get("role") or "kasir")
+    base, allowed = await _access(user_role)
+
     a = body.action or {}
     t = a.get("type")
+
+    ACTION_MODULE_MAP = {
+        "create_category": "produk",
+        "deactivate_category": "produk",
+        "delete_category": "produk",
+        "create_product": "produk",
+        "create_products_bulk": "produk",
+        "update_product": "produk",
+        "deactivate_product": "produk",
+        "delete_product": "produk",
+        "create_vendor": "vendor",
+        "create_payment_method": "pengaturan",
+    }
+
+    if not is_super:
+        req_mod = ACTION_MODULE_MAP.get(t)
+        if not req_mod:
+            raise HTTPException(403, f"Aksi '{t}' hanya dapat dieksekusi oleh Super Admin.")
+        if req_mod not in allowed:
+            mod_label = RBAC_MODULE_LABELS.get(req_mod, req_mod)
+            raise HTTPException(403, f"Akses ditolak: Akun dengan role '{user_role}' tidak memiliki izin untuk modul '{mod_label}'. Hanya Super Admin atau akun yang memiliki izin '{mod_label}' yang dapat menerapkan aksi ini.")
+
     if t == "create_category":
         name = (a.get("name") or "").strip()
         kind = a.get("kind") if a.get("kind") in ("makanan", "minuman", "retail", "vendor") else "retail"
@@ -9066,9 +9304,15 @@ async def import_logs(admin: dict = Depends(require_admin)):
     return await db.import_logs.find({}, {"_id": 0}).sort("at", -1).to_list(100)
 
 @api.post("/ai/assistant/import-excel")
-async def assistant_import_excel(file: UploadFile = File(...), admin: dict = Depends(admin_or_input)):
+async def assistant_import_excel(file: UploadFile = File(...), admin: dict = Depends(get_current_user)):
     """Parse file Excel yang diupload di chat Asisten AI — return baris siap
     commit (commit-fix). Tidak menyimpan apa pun sampai admin klik Terapkan."""
+    is_super = await _is_super(admin)
+    user_role = str(admin.get("role") or "kasir")
+    base, allowed = await _access(user_role)
+    if not is_super and "produk" not in allowed:
+        raise HTTPException(403, f"Akses ditolak: Akun dengan role '{user_role}' tidak memiliki izin modul 'Produk'. Hanya Super Admin atau akun dengan izin 'Produk' yang dapat mengimpor produk Excel.")
+
     content = await file.read()
     if len(content) > 5_000_000:
         raise HTTPException(400, "File terlalu besar (maks 5MB)")
@@ -10275,8 +10519,24 @@ async def startup():
     # seed a cashier
     if not await db.users.find_one({"email": "kasir@grandaceh.com"}):
         await db.users.insert_one({"id": new_id(), "name": "Kasir Satu", "email": "kasir@grandaceh.com",
+                                   "username": "kasir",
                                    "password_hash": hash_password("kasir123"), "role": "kasir",
+                                   "pin": "111222", "pin_enabled": True,
                                    "active": True, "created_at": now_utc().isoformat()})
+
+    # ---- MIGRASI & SEED PIN 6 DIGIT PENGGUNA ----
+    try:
+        await db.users.update_many({"pin_enabled": {"$exists": False}}, {"$set": {"pin_enabled": True}})
+        # Pastikan akun bawaan memiliki PIN yang valid
+        await db.users.update_one({"$or": [{"username": "taqim2609"}, {"email": "taqim2609@gmail.com"}], "pin": {"$exists": False}}, {"$set": {"pin": "260900", "pin_enabled": True}})
+        await db.users.update_one({"username": "admin", "pin": {"$exists": False}}, {"$set": {"pin": "123456", "pin_enabled": True}})
+        await db.users.update_one({"$or": [{"username": "kasir"}, {"email": "kasir@grandaceh.com"}], "pin": {"$exists": False}}, {"$set": {"pin": "111222", "pin_enabled": True}})
+        # Berikan PIN default 123456 untuk akun lainnya yang belum memiliki PIN
+        await db.users.update_many({"pin": {"$exists": False}}, {"$set": {"pin": "123456", "pin_enabled": True}})
+        await db.users.update_many({"pin": ""}, {"$set": {"pin": "123456", "pin_enabled": True}})
+    except Exception as e:
+        logger.warning(f"migrasi pin pengguna gagal: {e}")
+
     # seed payment methods
     if await db.payment_methods.count_documents({}) == 0:
         for n, t in [("Cash", "cash"), ("QRIS", "qris"), ("Kartu Debit/Kredit", "card")]:

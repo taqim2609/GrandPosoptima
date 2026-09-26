@@ -1,0 +1,73 @@
+{
+  "name": "POS - Alert Stok Menipis ke Telegram / WA",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "name": "Cron Cek Setiap 4 Jam",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/ingredients",
+        "options": {}
+      },
+      "name": "Get Stok Bahan POS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.first().json || [];\nconst lowStock = items.filter(item => item.current_stock <= (item.min_stock || 5));\nreturn [{ json: { count: lowStock.length, lowStockItems: lowStock } }];"
+      },
+      "name": "Filter Stok < Min Stock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    }
+  ],
+  "connections": {
+    "Cron Cek Setiap 4 Jam": {
+      "main": [
+        [
+          {
+            "node": "Get Stok Bahan POS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Stok Bahan POS": {
+      "main": [
+        [
+          {
+            "node": "Filter Stok < Min Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "POS Grand Aceh"
+    }
+  ]
+}

@@ -29,6 +29,7 @@ import {
 import toast from "react-hot-toast";
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
 import ThreeServerMatrix from "@/components/ThreeServerMatrix";
+import GlobalErrorDiagnosticPanel from "@/components/GlobalErrorDiagnosticPanel";
 
 export default function SystemHealthPanel({ embedded = false }) {
   const [data, setData] = useState(null);
@@ -1014,7 +1015,12 @@ export default function SystemHealthPanel({ embedded = false }) {
       </div>
 
       {/* ========================================================
-          6. Live Event Log & Pemeriksaan Sistem
+          6. Global Error Boundary & Connection Diagnostic Panel
+         ======================================================== */}
+      <GlobalErrorDiagnosticPanel embedded={true} />
+
+      {/* ========================================================
+          7. Live Event Log & Pemeriksaan Sistem
          ======================================================== */}
       <div
         id="section-system-logs"

@@ -18,6 +18,7 @@ const GROUPS = [
       { p: "ai.description", label: "Deskripsi Produk", desc: "Menulis deskripsi produk otomatis." },
       { p: "ai.image", label: "Gambar Produk", desc: "Generator gambar produk." },
       { p: "ai.assistant", label: "Asisten AI", desc: "Halaman AI: tanya data, cara pakai, usulan aksi." },
+      { p: "ai.pos_chat", label: "Kolom Chat Gemini & AI Studio di Layar POS", desc: "Tampilkan widget chat Gemini AI & panel tiket perintah AI Studio langsung di layar kasir POS khusus Superadmin." },
     ],
   },
   {

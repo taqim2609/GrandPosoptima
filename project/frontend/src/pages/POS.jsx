@@ -16,11 +16,13 @@ import {
 import VoidDialog from "@/components/VoidDialog";
 import LazyProductImage from "@/components/LazyProductImage";
 import ReceiptModal from "@/components/ReceiptModal";
+import PosAiChatWidget from "@/components/PosAiChatWidget";
 import {
   Utensils, ShoppingBag, Store, Plus, Minus, Trash2, Armchair,
   Search, Receipt, X, CheckCircle2, Layers, Database, ScanLine, Clock, Play, Printer, Wifi, WifiOff, RefreshCw, CloudOff,
   ShoppingCart, ChevronUp, ChevronDown, Lock, ArrowRight, Wallet, LayoutDashboard, Zap,
   ArrowRightLeft, RotateCcw, AlertTriangle, MessageCircle, Copy, Check, Send, Sparkles, Share2,
+  Coins, Banknote, ArrowDownRight,
 } from "lucide-react";
 
 const ORDER_TYPES = [
@@ -644,6 +646,18 @@ export default function POS() {
     }
     try {
       let data;
+      const payloadItems = cart.map((i) => ({
+        product_id: i.product_id || i.id,
+        name: i.name,
+        price: Number(i.price || 0),
+        cost: Number(i.cost || 0),
+        qty: Number(i.qty || 1),
+        type: i.type || "fnb",
+        weight: i.weight || null,
+        weight_unit: i.weight_unit || null,
+        notes: i.notes || null,
+      }));
+
       if (currentOrderId) {
         // open bill: perbarui item lalu bayar (2 request)
         await ensureOrder();
@@ -659,29 +673,51 @@ export default function POS() {
         // transaksi langsung (take-away/retail tanpa open bill): SATU request create+pay
         const r = await api.post("/orders", {
           order_type: orderType, table_id: null,
-          items: cart.map((i) => ({ product_id: i.product_id, qty: i.qty, weight: i.weight || null })),
+          items: payloadItems,
+          subtotal,
+          discount,
+          service_tax: service,
+          total,
+          cashier_name: user?.name || user?.username || "Kasir",
+          cashier_id: user?.id,
+          payment_method_name: pm.name,
+          payment_method_type: pm.type,
           discount_type: discType, discount_value: Number(discVal),
           member_id: opts.member_id || null, redeem_points: Number(opts.redeem_points || 0),
           discount_reason: opts.discount_reason || null, coupon_code: opts.coupon_code || null,
           pay_now: true, payment_method: pm.id,
           amount_paid: opts.splits ? null : amountPaid,
+          change: (amountPaid || total) - total,
           splits: opts.splits || null,
         });
         data = r.data;
       }
+
+      const fullReceipt = {
+        ...data,
+        items: (data?.items && data.items.length && data.items[0]?.name) ? data.items : cart,
+        cashier_name: data?.cashier_name || user?.name || user?.username || "Kasir",
+        payment_method_name: data?.payment_method_name || pm.name,
+        subtotal: data?.subtotal || subtotal,
+        discount: data?.discount !== undefined ? data.discount : discount,
+        total: data?.total || total,
+        amount_paid: data?.amount_paid || amountPaid || total,
+        change: data?.change !== undefined ? data.change : Math.max(0, (amountPaid || total) - total),
+      };
+
       setPayOpen(false);
-      setReceipt(data);
+      setReceipt(fullReceipt);
       // Synchronize to Firebase Firestore
-      if (data) {
+      if (fullReceipt) {
         try {
-          await syncOrderToFirestore(data);
+          await syncOrderToFirestore(fullReceipt);
         } catch (fireErr) {
           console.error("[Firestore] Gagal sinkronisasi transaksi ke Firebase:", fireErr);
         }
       }
       // Auto-print struk (buka laci juga) bila diaktifkan
       if (getDeviceConfig().autoPrint) {
-        try { printReceipt(data); } catch (e) {}
+        try { printReceipt(fullReceipt); } catch (e) {}
       }
       resetSale();
       load();
@@ -1266,6 +1302,8 @@ export default function POS() {
         onOpenChange={(o) => { if (!o) setVoidBill(null); }}
         onDone={() => { load(); setCart([]); setTable(null); }}
       />
+      {/* Kolom Chat Gemini AI & Kirim Tugas AI Studio (Khusus Superadmin, Dapat Diaktifkan/Dinonaktifkan di Fitur) */}
+      <PosAiChatWidget />
     </div>
   );
 }
@@ -1510,7 +1548,11 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
       setDiscReason("");
       setCouponCode("");
       // Auto-select Cash (Tunai) if available to save 1 tap
-      const cashPm = pms.find((pm) => pm.type === "cash" || pm.name?.toLowerCase().includes("tunai"));
+      const cashPm = pms.find((pm) => {
+        const t = String(pm?.type || "").toLowerCase();
+        const n = String(pm?.name || "").toLowerCase();
+        return t === "cash" || t === "tunai" || n.includes("tunai") || n.includes("cash") || n.includes("kas");
+      });
       if (cashPm) {
         setSelected([cashPm]);
       } else if (pms.length > 0) {
@@ -1520,10 +1562,16 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
       }
     }
   }, [open, pms]);
+  const isCashMethod = (pm) => {
+    if (!pm) return false;
+    const t = String(pm?.type || "").toLowerCase();
+    const n = String(pm?.name || "").toLowerCase();
+    return t === "cash" || t === "tunai" || n.includes("tunai") || n.includes("cash") || n.includes("kas");
+  };
   const method = selected[0] || null;
   const second = selected[1] || null;
   const isSplit = selected.length === 2;
-  const isCash1 = method?.type === "cash";
+  const isCash1 = isCashMethod(method);
   const amt1 = Number(paid1 || 0) || 0;
   const amt2 = Number(paid2 || 0) || 0;
   const splitTotal = amt1 + amt2;
@@ -1536,7 +1584,7 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
   const redeemVal = Math.min(Number(redeemPts || 0) || 0, member?.points || 0) * pointRate;
   const payable = Math.max(0, total - redeemVal);
 
-  // Dynamic touch-friendly quick cash keys
+  // Dynamic touch-friendly quick cash keys & denominations
   const quick = useMemo(() => {
     const list = [payable];
     const round5 = Math.ceil(payable / 5000) * 5000;
@@ -1545,11 +1593,16 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
     if (round10 > payable && !list.includes(round10)) list.push(round10);
     const round50 = Math.ceil(payable / 50000) * 50000;
     if (round50 > payable && !list.includes(round50)) list.push(round50);
-    [10000, 20000, 50000, 100000, 200000].forEach((val) => {
+    [10000, 20000, 50000, 100000, 200000, 500000].forEach((val) => {
       if (val > payable && !list.includes(val)) list.push(val);
     });
-    return list.sort((a, b) => a - b).slice(0, 5);
+    return list.sort((a, b) => a - b).slice(0, 6);
   }, [payable]);
+
+  const addCashAmount = (addVal) => {
+    const cur = Number(paid1 || 0);
+    setPaid1(String(cur + addVal));
+  };
 
   const needReason =
     (discountType === "percent" && discountValue > Number(biz?.discount_reason_percent ?? 15)) ||
@@ -1674,19 +1727,144 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
           </div>
         </div>
 
-        {/* Isian jumlah per metode */}
-        {selected.length === 1 && method?.type === "cash" && (
-          <div className="space-y-2">
-            <input data-testid="cash-amount" type="number" value={paid1} onChange={(e) => setPaid1(e.target.value)}
-              placeholder="Jumlah bayar" className="w-full h-12 rounded-xl border px-3 font-num text-lg" />
-            <div className="flex flex-wrap gap-2">
-              {quick.map((q) => (
-                <button key={q} onClick={() => setPaid1(String(q))} className="tap px-3 h-9 rounded-lg bg-[#F4F5F7] text-sm font-num font-bold">
-                  {rupiah(q)}
+        {/* Isian jumlah uang tunai yang dibayarkan & kembalian */}
+        {selected.length === 1 && isCash1 && (
+          <div className="rounded-2xl border-2 border-emerald-500/30 bg-emerald-50/40 p-4 space-y-3.5" data-testid="cash-payment-section">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                <Banknote size={16} className="text-emerald-600" />
+                Uang Tunai Diterima (Rp)
+              </label>
+              {amt1 > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPaid1("")}
+                  className="text-[11px] font-bold text-zinc-500 hover:text-rose-600 transition"
+                >
+                  Bersihkan (C)
                 </button>
-              ))}
+              )}
             </div>
-            {amt1 >= payable && <div className="flex justify-between font-bold"><span>Kembalian</span><span className="font-num text-[#047857]">{rupiah(amt1 - payable)}</span></div>}
+
+            {/* Main Cash Input Field */}
+            <div className="relative">
+              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 font-extrabold text-zinc-400 text-lg">
+                Rp
+              </div>
+              <input
+                data-testid="cash-amount"
+                type="number"
+                inputMode="numeric"
+                autoFocus
+                value={paid1}
+                onChange={(e) => setPaid1(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && canPay) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
+                placeholder={`Minimal ${rupiah(payable)}`}
+                className="w-full h-14 pl-12 pr-28 rounded-xl border-2 border-emerald-600/40 bg-white px-3 font-num text-2xl font-black text-zinc-900 outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 shadow-xs"
+              />
+              <button
+                type="button"
+                data-testid="cash-exact-btn"
+                onClick={() => setPaid1(String(payable))}
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-10 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs flex items-center gap-1 transition shadow-xs"
+              >
+                <Check size={14} /> Uang Pas
+              </button>
+            </div>
+
+            {/* Quick Denomination Preset Chips */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                Pilihan Cepat Nominal Uang:
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {quick.map((q) => {
+                  const isCurExact = amt1 === q;
+                  const isExactTag = q === payable;
+
+                  return (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setPaid1(String(q))}
+                      className={`tap px-3 py-2 rounded-xl text-xs font-num font-bold transition flex items-center gap-1 border ${
+                        isCurExact
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                          : "bg-white text-zinc-800 border-zinc-200 hover:border-emerald-400 hover:bg-emerald-50/50"
+                      }`}
+                    >
+                      {isExactTag && <span className="text-[10px] uppercase font-black opacity-80">[Pas]</span>}
+                      {rupiah(q)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Fast Addition Increments (+5k, +10k, +20k, +50k, +100k) */}
+              <div className="flex items-center gap-1.5 pt-1 overflow-x-auto text-[11px]">
+                <span className="text-zinc-400 font-bold uppercase shrink-0 text-[10px]">Tambah:</span>
+                {[5000, 10000, 20000, 50000, 100000].map((addVal) => (
+                  <button
+                    key={addVal}
+                    type="button"
+                    onClick={() => addCashAmount(addVal)}
+                    className="px-2 py-1 bg-white border border-emerald-200/80 hover:bg-emerald-100/50 text-emerald-800 rounded-lg font-bold font-num shrink-0 transition"
+                  >
+                    +{rupiah(addVal).replace("Rp", "")}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Real-Time Live Kembalian Card */}
+            <div className="pt-1">
+              {amt1 > payable ? (
+                <div className="rounded-xl bg-emerald-600 text-white p-4 shadow-sm space-y-1" data-testid="change-amount-banner">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-emerald-100 flex items-center gap-1.5">
+                      <Coins size={16} className="text-amber-300" />
+                      KEMBALIAN UANG TUNAI
+                    </span>
+                    <span className="text-[11px] font-bold bg-white/20 px-2 py-0.5 rounded-full text-white">
+                      Wajib Diserahkan
+                    </span>
+                  </div>
+                  <div className="text-3xl font-black font-num tracking-tight" data-testid="change-value">
+                    {rupiah(amt1 - payable)}
+                  </div>
+                  <div className="text-[11px] text-emerald-100 font-medium pt-0.5 border-t border-emerald-500/60">
+                    Diterima: <strong>{rupiah(amt1)}</strong> − Total Tagihan: <strong>{rupiah(payable)}</strong>
+                  </div>
+                </div>
+              ) : amt1 === payable && amt1 > 0 ? (
+                <div className="rounded-xl bg-emerald-100 border border-emerald-300 p-3 text-emerald-950 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-extrabold">
+                    <CheckCircle2 size={18} className="text-emerald-600" />
+                    <span>✓ Uang Pas Diterima</span>
+                  </div>
+                  <span className="text-xs font-black text-emerald-800 font-num">Kembalian: Rp 0</span>
+                </div>
+              ) : amt1 > 0 && amt1 < payable ? (
+                <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-rose-950 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-extrabold">
+                    <AlertTriangle size={18} className="text-rose-600" />
+                    <span>⚠️ Uang Masih Kurang</span>
+                  </div>
+                  <span className="text-xs font-black text-rose-600 font-num">
+                    Kurang {rupiah(payable - amt1)}
+                  </span>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-zinc-100/80 border border-zinc-200 p-3 text-zinc-500 text-xs text-center font-medium">
+                  Ketik nominal uang tunai yang diserahkan pembeli atau klik tombol <b>Uang Pas</b>.
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1699,7 +1877,7 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
                 <input data-testid={`split-amount-${idx + 1}`} type="number" value={idx === 0 ? paid1 : paid2}
                   onChange={(e) => (idx === 0 ? setPaid1(e.target.value) : setPaid2(e.target.value))}
                   placeholder="Jumlah" className="flex-1 h-11 rounded-xl border px-3 font-num" />
-                {pm.type === "cash" && (
+                {isCashMethod(pm) && (
                   <div className="flex gap-1 flex-wrap max-w-[180px]">
                     {[50000, 100000, 200000].map((q) => (
                       <button key={q} onClick={() => (idx === 0 ? setPaid1(String(q)) : setPaid2(String(q)))} className="tap px-2 h-8 rounded-lg bg-white border text-xs font-num font-bold">{rupiah(q)}</button>

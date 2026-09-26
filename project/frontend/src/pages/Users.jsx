@@ -6,11 +6,11 @@ import { copyText } from "@/lib/utils";
 import { ROLE_LABELS, BUILTIN_ROLE_ORDER, can, isSuperAdmin } from "@/lib/rbac";
 import {
   Users, Plus, Power, ShieldCheck, KeyRound, UserCog, Trash2, Eye, EyeOff, Copy,
-  AlertTriangle, Loader2, CheckCircle2, Tags,
+  AlertTriangle, Loader2, CheckCircle2, Tags, Key, Hash,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-const empty = { name: "", username: "", password: "", role: "kasir", must_change_password: true };
+const empty = { name: "", username: "", password: "", pin: "", pin_enabled: true, role: "kasir", must_change_password: true };
 const BUILTIN = BUILTIN_ROLE_ORDER;
 const baseColor = (base) =>
   base === "admin"
@@ -37,6 +37,13 @@ export default function UsersPage() {
   const [newPw, setNewPw] = useState("");
   const [resetMust, setResetMust] = useState(true);
   const [pwDone, setPwDone] = useState(null); // {name, username, password} hasil reset
+  
+  // PIN 6 Digit States
+  const [pinTarget, setPinTarget] = useState(null);
+  const [newPin, setNewPin] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
+  const [showPin, setShowPin] = useState({}); // {userId: bool}
+  
   const [roleTarget, setRoleTarget] = useState(null);
   const [roleVal, setRoleVal] = useState("kasir");
   const [savingRole, setSavingRole] = useState(false);
@@ -100,13 +107,22 @@ export default function UsersPage() {
   };
 
   const save = async () => {
-    if (!form.name || !form.username || !form.password) return toast.error("Lengkapi data");
+    if (!form.name || !form.username || !form.password) return toast.error("Lengkapi data pengguna");
     if (!/^[a-z0-9._-]{3,32}$/.test(form.username.trim().toLowerCase()))
       return toast.error("Username 3-32 karakter: huruf kecil/angka/titik/garis bawah/minus (tanpa spasi)");
-    try { await api.post("/users", form); toast.success("Pengguna dibuat"); setOpen(false); setForm(empty); load(); }
-    catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+    if (form.pin && !/^\d{6}$/.test(String(form.pin).trim()))
+      return toast.error("PIN harus tepat 6 digit angka");
+    try {
+      await api.post("/users", form);
+      toast.success("Pengguna dibuat");
+      setOpen(false);
+      setForm(empty);
+      load();
+    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
   };
+
   const toggle = async (u) => { try { await api.patch(`/users/${u.id}/toggle`); load(); } catch (e) { toast.error(apiError(e.response?.data?.detail)); } };
+  
   const resetPw = async () => {
     if (newPw.length < 6) return toast.error("Password minimal 6 karakter");
     try {
@@ -118,6 +134,42 @@ export default function UsersPage() {
       load();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
   };
+
+  const openPinModal = (u) => {
+    setPinTarget(u);
+    setNewPin(u.pin || "");
+  };
+
+  const togglePinEnabled = async (u) => {
+    const nextVal = !(u.pin_enabled ?? true);
+    try {
+      await api.patch(`/users/${u.id}/pin-enabled`, { enabled: nextVal });
+      toast.success(nextVal ? `Login PIN diaktifkan untuk @${u.username}` : `Login PIN dinonaktifkan untuk @${u.username}`);
+      load();
+    } catch (e) {
+      toast.error(apiError(e.response?.data?.detail) || "Gagal mengubah status PIN");
+    }
+  };
+
+  const saveUserPin = async () => {
+    const clean = String(newPin || "").trim();
+    if (!/^\d{6}$/.test(clean)) {
+      return toast.error("PIN harus tepat 6 digit angka (mis. 123456)");
+    }
+    setSavingPin(true);
+    try {
+      await api.patch(`/users/${pinTarget.id}/pin`, { pin: clean });
+      toast.success(`PIN 6 digit untuk @${pinTarget.username} berhasil disimpan: ${clean}`);
+      setPinTarget(null);
+      setNewPin("");
+      load();
+    } catch (e) {
+      toast.error(apiError(e.response?.data?.detail) || "Gagal menyimpan PIN");
+    } finally {
+      setSavingPin(false);
+    }
+  };
+
   const openRole = (u) => { setRoleTarget(u); setRoleVal(u.role); };
   const saveRole = async () => {
     setSavingRole(true);
@@ -136,6 +188,7 @@ export default function UsersPage() {
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
   };
   const copyPw = async (pw) => { (await copyText(pw)) ? toast.success("Password disalin") : toast.error("Gagal menyalin"); };
+  const copyPinVal = async (p) => { (await copyText(p)) ? toast.success("PIN disalin") : toast.error("Gagal menyalin"); };
 
   // Hapus akun: cek dulu jejak transaksinya (akun berjejak hanya dinonaktifkan).
   const openDelete = async (u) => {
@@ -167,20 +220,22 @@ export default function UsersPage() {
   return (
     <div className="h-full overflow-y-auto p-8">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="text-3xl font-extrabold flex items-center gap-2"><Users /> Pengguna</h1>
+        <h1 className="text-3xl font-extrabold flex items-center gap-2"><Users /> Pengguna &amp; Akses Kasir</h1>
         <div className="flex gap-2">
-          <button data-testid="add-user-btn" onClick={() => { setForm(empty); setOpen(true); }} className="tap h-12 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center gap-2"><Plus size={18} /> Tambah</button>
+          <button data-testid="add-user-btn" onClick={() => { setForm(empty); setOpen(true); }} className="tap h-12 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center gap-2"><Plus size={18} /> Tambah Pengguna</button>
         </div>
       </div>
       <p className="text-xs text-[#a1a1aa] -mt-3 mb-5">
-        Login memakai <b>username</b> (tanpa email). {isSuper
-          ? <>Anda <b>Super Admin</b> — daftar di bawah menampilkan <b>password</b> setiap akun (direkam saat akun dibuat/direset) dan Anda bisa <b>menghapus akun</b>.</>
-          : <>Role akun yang boleh Anda buat ditentukan <b>Super Admin</b> (lihat daftarnya di Pengaturan → Roles &amp; Izin).</>}
+        Login kasir dapat menggunakan <b>Username/Password</b> atau <b>PIN 6 Digit Cepat</b>. {isSuper
+          ? <>Anda <b>Super Admin</b> — dapat melihat dan mengatur password &amp; PIN 6 digit setiap akun.</>
+          : <>Role akun yang boleh Anda buat ditentukan <b>Super Admin</b>.</>}
       </p>
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
         {items.map((u) => {
           const base = u.role === "superadmin" ? "admin" : (BUILTIN.includes(u.role) ? u.role : (rolesMeta?.roles?.[u.role]?.base) || "kasir");
           const bc = baseColor(base);
+          const userPin = u.pin || (u.role === "superadmin" ? "260900" : "-");
+          
           return (
             <div key={u.id} data-testid={`user-${u.id}`} className={`bg-white rounded-xl border p-4 ${!u.active && "opacity-60"}`}>
               <div className="flex items-center gap-3">
@@ -199,35 +254,80 @@ export default function UsersPage() {
                 </div>
               </div>
 
+              {/* Baris PIN 6 Digit Kasir & Toggle */}
+              <div className="mt-3 pt-3 border-t border-[#F1F1F4] space-y-2 text-[11px]">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="uppercase tracking-wider font-bold text-[#52525B] flex items-center gap-1">
+                      <Hash size={12} className="text-[#E63946]" /> PIN 6 Digit:
+                    </span>
+                    <span data-testid={`pin-val-${u.id}`} className="font-mono font-bold bg-[#EFF6FF] text-[#1D4ED8] rounded px-2 py-0.5 border border-[#BFDBFE]">
+                      {showPin[u.id] ? userPin : "••••••"}
+                    </span>
+                    <button data-testid={`pin-eye-${u.id}`} onClick={() => setShowPin((s) => ({ ...s, [u.id]: !s[u.id] }))} title="Tampilkan / sembunyikan PIN" className="tap h-6 w-6 rounded bg-[#F4F5F7] grid place-items-center">
+                      {showPin[u.id] ? <EyeOff size={11} /> : <Eye size={11} />}
+                    </button>
+                    <button data-testid={`pin-copy-${u.id}`} onClick={() => copyPinVal(userPin)} title="Salin PIN" className="tap h-6 w-6 rounded bg-[#F4F5F7] grid place-items-center">
+                      <Copy size={11} />
+                    </button>
+                  </div>
+                  <button
+                    data-testid={`edit-pin-btn-${u.id}`}
+                    onClick={() => openPinModal(u)}
+                    className="tap text-[11px] font-bold text-[#E63946] hover:underline flex items-center gap-1"
+                  >
+                    <Key size={11} /> Ubah PIN
+                  </button>
+                </div>
+                
+                {/* Toggle Login PIN Aktif / Nonaktif */}
+                <div className="flex items-center justify-between pt-1 border-t border-dashed border-[#E4E4E7]">
+                  <span className="text-[11px] font-semibold text-[#52525B]">Izinkan Login dengan PIN:</span>
+                  <button
+                    type="button"
+                    data-testid={`toggle-pin-${u.id}`}
+                    onClick={() => togglePinEnabled(u)}
+                    className={`tap px-2.5 py-0.5 rounded-full text-[11px] font-extrabold flex items-center gap-1.5 transition-all border ${
+                      (u.pin_enabled ?? true)
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                        : "bg-zinc-100 text-zinc-500 border-zinc-300 hover:bg-zinc-200"
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${(u.pin_enabled ?? true) ? "bg-emerald-500" : "bg-zinc-400"}`} />
+                    {(u.pin_enabled ?? true) ? "PIN Aktif" : "PIN Nonaktif"}
+                  </button>
+                </div>
+              </div>
+
               {isSuper && (
-                <div className="mt-3 pt-3 border-t border-[#F1F1F4] flex items-center gap-2 flex-wrap text-[11px]">
+                <div className="mt-2 pt-2 border-t border-[#F1F1F4] flex items-center gap-2 flex-wrap text-[11px]">
                   <span className="uppercase tracking-wider font-bold text-[#52525B]">Password</span>
                   {u.password ? (
                     <>
-                      <span data-testid={`pw-${u.id}`} className="font-mono font-bold bg-[#F4F5F7] rounded px-2 py-1">
+                      <span data-testid={`pw-${u.id}`} className="font-mono font-bold bg-[#F4F5F7] rounded px-2 py-0.5">
                         {showPw[u.id] ? u.password : "••••••••"}
                       </span>
-                      <button data-testid={`pw-eye-${u.id}`} onClick={() => setShowPw((s) => ({ ...s, [u.id]: !s[u.id] }))} title="Tampilkan / sembunyikan" className="tap h-7 w-7 rounded-lg bg-[#F4F5F7] grid place-items-center">
-                        {showPw[u.id] ? <EyeOff size={13} /> : <Eye size={13} />}
+                      <button data-testid={`pw-eye-${u.id}`} onClick={() => setShowPw((s) => ({ ...s, [u.id]: !s[u.id] }))} title="Tampilkan / sembunyikan" className="tap h-6 w-6 rounded bg-[#F4F5F7] grid place-items-center">
+                        {showPw[u.id] ? <EyeOff size={11} /> : <Eye size={11} />}
                       </button>
-                      <button data-testid={`pw-copy-${u.id}`} onClick={() => copyPw(u.password)} title="Salin password" className="tap h-7 w-7 rounded-lg bg-[#F4F5F7] grid place-items-center"><Copy size={13} /></button>
+                      <button data-testid={`pw-copy-${u.id}`} onClick={() => copyPw(u.password)} title="Salin password" className="tap h-6 w-6 rounded bg-[#F4F5F7] grid place-items-center"><Copy size={11} /></button>
                     </>
                   ) : (
-                    <span className="text-[#a1a1aa] italic">belum terekam (akun lama) — tekan Reset untuk melihat passwordnya</span>
+                    <span className="text-[#a1a1aa] italic">belum terekam (akun lama) — tekan Reset</span>
                   )}
                 </div>
               )}
 
               {cats.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-[#F1F1F4]">
+                <div className="mt-2 pt-2 border-t border-[#F1F1F4]">
                   <div className="flex items-center gap-2 flex-wrap">
                     <button data-testid={`user-cats-${u.id}`} onClick={() => openCats(u)} title="Atur kategori bahan yang boleh diisi akun ini"
-                      className="tap h-8 px-2.5 rounded-lg bg-[#EEF2FF] text-[#4338CA] text-[11px] font-bold flex items-center gap-1">
-                      <Tags size={13} /> Kategori Bahan{catNamesOf(u).length ? `: ${catNamesOf(u).length}` : ""}
+                      className="tap h-7 px-2 rounded-lg bg-[#EEF2FF] text-[#4338CA] text-[11px] font-bold flex items-center gap-1">
+                      <Tags size={12} /> Kategori Bahan{catNamesOf(u).length ? `: ${catNamesOf(u).length}` : ""}
                     </button>
                     {catNamesOf(u).length
-                      ? catNamesOf(u).map((n) => <span key={n} className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#F4F5F7] text-[#52525B]">{n}</span>)
-                      : <span className="text-[11px] text-[#B45309] font-bold">belum diatur — tidak bisa isi stok opname bahan</span>}
+                      ? catNamesOf(u).map((n) => <span key={n} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#F4F5F7] text-[#52525B]">{n}</span>)
+                      : <span className="text-[10px] text-[#B45309] font-bold">belum diatur</span>}
                   </div>
                 </div>
               )}
@@ -261,13 +361,45 @@ export default function UsersPage() {
         })}
       </div>
 
+      {/* MODAL TAMBAH PENGGUNA */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Tambah Pengguna</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Field label="Nama"><input data-testid="user-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full h-11 rounded-xl border px-3" /></Field>
+            <Field label="Nama"><input data-testid="user-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nama lengkap kasir / admin" className="w-full h-11 rounded-xl border px-3" /></Field>
             <Field label="Username (untuk login)"><input data-testid="user-username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, "") })} placeholder="mis. kasir1" className="w-full h-11 rounded-xl border px-3 font-mono" /></Field>
             <Field label="Password"><input data-testid="user-password" type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="min. 6 karakter" className="w-full h-11 rounded-xl border px-3 font-mono" /></Field>
+            
+            <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-[#0F172A] block">Izinkan Login Menggunakan PIN</span>
+                  <span className="text-[11px] text-[#64748B]">Kasir dapat masuk cepat dengan keypad 6 digit</span>
+                </div>
+                <input
+                  data-testid="user-pin-enabled"
+                  type="checkbox"
+                  checked={!!form.pin_enabled}
+                  onChange={(e) => setForm({ ...form, pin_enabled: e.target.checked })}
+                  className="w-4 h-4 accent-[#E63946]"
+                />
+              </div>
+              {form.pin_enabled && (
+                <Field label="PIN 6 Digit (Login Cepat POS)">
+                  <input
+                    data-testid="user-pin"
+                    type="text"
+                    maxLength={6}
+                    value={form.pin}
+                    onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, "") })}
+                    placeholder="mis. 123456"
+                    className="w-full h-11 rounded-xl border px-3 font-mono text-center tracking-widest text-lg font-bold bg-white"
+                  />
+                  <span className="text-[11px] text-[#71717A] mt-1 block">PIN angka 6 digit untuk login kasir di layar sentuh POS.</span>
+                </Field>
+              )}
+            </div>
+
             <Field label="Role">
               <select data-testid="user-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="w-full h-11 rounded-xl border px-3 bg-white">
                 {roleOptions().map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -278,11 +410,54 @@ export default function UsersPage() {
                 onChange={(e) => setForm({ ...form, must_change_password: e.target.checked })} />
               Wajib ganti password saat login pertama
             </label>
-            <p className="text-xs text-[#52525B]">
-              Password yang Anda isi tersimpan terlihat di daftar akun (khusus Super Admin) sampai pengguna menggantinya.
-            </p>
           </div>
-          <DialogFooter><button data-testid="save-user-btn" onClick={save} className="tap w-full h-12 rounded-xl bg-[#E63946] text-white font-bold">Simpan</button></DialogFooter>
+          <DialogFooter><button data-testid="save-user-btn" onClick={save} className="tap w-full h-12 rounded-xl bg-[#E63946] text-white font-bold">Simpan Pengguna</button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL UBAH PIN 6 DIGIT */}
+      <Dialog open={!!pinTarget} onOpenChange={(o) => { if (!o) setPinTarget(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Hash size={18} className="text-[#E63946]" /> Atur PIN 6 Digit — {pinTarget?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-[#52525B]">
+              Tetapkan PIN 6 digit angka untuk akun <b>@{pinTarget?.username || pinTarget?.email}</b> agar kasir dapat login dengan cepat di terminal POS.
+            </p>
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wider font-bold text-[#52525B]">PIN Baru (6 Digit Angka)</label>
+              <input
+                data-testid="user-edit-pin-input"
+                type="text"
+                maxLength={6}
+                value={newPin}
+                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
+                placeholder="mis. 111222"
+                className="w-full h-12 rounded-xl border px-4 font-mono text-center tracking-widest text-2xl font-extrabold focus:border-[#E63946] focus:ring-2 focus:ring-[#E63946]/20 outline-none"
+              />
+            </div>
+            <div className="flex gap-2 justify-center pt-1">
+              {["111222", "123456", "654321", "888888"].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setNewPin(preset)}
+                  className="tap px-2 py-1 rounded bg-[#F4F5F7] hover:bg-[#E4E4E7] text-xs font-mono font-bold text-[#52525B]"
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <button
+              data-testid="save-user-pin-btn"
+              onClick={saveUserPin}
+              disabled={savingPin || newPin.length !== 6}
+              className="tap w-full h-12 rounded-xl bg-[#E63946] text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {savingPin && <Loader2 size={16} className="animate-spin" />} Simpan PIN 6 Digit
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

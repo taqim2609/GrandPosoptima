@@ -1,0 +1,151 @@
+# Grand Aceh Kuliner POS — VPS Standalone Stack (Bila n8n Sudah Terinstall di VPS)
+# Menjalankan:
+# 1. MongoDB 7.0 (Database POS Utama)
+# 2. POS Backend (FastAPI API Engine)
+# 3. POS Frontend (React SPA Served by Nginx)
+# 4. Evolution API v2.1.2 (WhatsApp Gateway - Opsional)
+# 5. Caddy v2 (Auto SSL Reverse Proxy untuk POS & Meneruskan ke n8n Port 5678)
+
+services:
+  # ==========================================
+  # 1. DATABASE UTAMA POS (MongoDB)
+  # ==========================================
+  mongo:
+    container_name: pos_mongo
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: grandpos
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - pos_standalone_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # 2. BACKEND POS (FastAPI)
+  # ==========================================
+  backend:
+    container_name: pos_backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.vps
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - DB_NAME=grandpos
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+      - EVOLUTION_API_URL=http://evolution-api:8080
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - pos_standalone_network
+
+  # ==========================================
+  # 3. FRONTEND POS (React + Nginx)
+  # ==========================================
+  frontend:
+    container_name: pos_frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: ""
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - pos_standalone_network
+
+  # ==========================================
+  # 4. WHATSAPP GATEWAY (Evolution API - Opsional)
+  # ==========================================
+  evolution-api:
+    container_name: pos_evolution_api
+    image: atendai/evolution-api:v2.1.2
+    restart: unless-stopped
+    environment:
+      - SERVER_URL=https://${DOMAIN_WA:-wa.local}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-grandpos_evolution_secret_2026}
+      - DATABASE_PROVIDER=local
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - STORE_MESSAGES=true
+      - STORE_MESSAGE_UP=true
+      - STORE_CONTACTS=true
+      - STORE_CHATS=true
+      - CLEAN_STORE_CLEANING_INTERVAL=7200
+      - LOG_LEVEL=WARN
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    networks:
+      - pos_standalone_network
+
+  # ==========================================
+  # 5. AUTOMATED SSL & REVERSE PROXY (Caddy)
+  # ==========================================
+  caddy:
+    container_name: pos_caddy_proxy
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN_POS=${DOMAIN_POS:-localhost}
+      - DOMAIN_N8N=${DOMAIN_N8N:-n8n.localhost}
+      - DOMAIN_WA=${DOMAIN_WA:-wa.localhost}
+      - SSL_EMAIL=${SSL_EMAIL:-admin@yourdomain.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+      - evolution-api
+    networks:
+      - pos_standalone_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ==========================================
+  # 6. DOCKER MANAGEMENT PANEL (Portainer CE)
+  # ==========================================
+  portainer:
+    container_name: pos_portainer
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - pos_standalone_network
+
+networks:
+  pos_standalone_network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  uploads_data:
+  evolution_instances:
+  evolution_store:
+  caddy_data:
+  caddy_config:
+  portainer_data:

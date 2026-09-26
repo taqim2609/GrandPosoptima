@@ -1,0 +1,210 @@
+# Grand Aceh Kuliner POS — VPS Production Stack dengan n8n v1.110.1 & Auto SSL Caddy
+# Menjalankan:
+# 1. MongoDB 7.0 (POS Primary DB)
+# 2. POS Backend (FastAPI API Engine)
+# 3. POS Frontend (React SPA Served by Nginx)
+# 4. Evolution API v2.1.2 (WhatsApp Gateway)
+# 5. PostgreSQL 16 (n8n Database Engine)
+# 6. n8n v1.110.1 (Workflow Automation Engine)
+# 7. Caddy v2 (Auto SSL Let's Encrypt Reverse Proxy)
+
+services:
+  # ==========================================
+  # 1. DATABASE UTAMA POS (MongoDB)
+  # ==========================================
+  mongo:
+    container_name: pos_mongo
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: grandpos
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - pos_vps_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # 2. BACKEND POS (FastAPI)
+  # ==========================================
+  backend:
+    container_name: pos_backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.vps
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - DB_NAME=grandpos
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+      - EVOLUTION_API_URL=http://evolution-api:8080
+      - N8N_INTERNAL_WEBHOOK_URL=http://n8n:5678/webhook
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - pos_vps_network
+
+  # ==========================================
+  # 3. FRONTEND POS (React + Nginx)
+  # ==========================================
+  frontend:
+    container_name: pos_frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: ""
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - pos_vps_network
+
+  # ==========================================
+  # 4. WHATSAPP GATEWAY (Evolution API)
+  # ==========================================
+  evolution-api:
+    container_name: pos_evolution_api
+    image: atendai/evolution-api:v2.1.2
+    restart: unless-stopped
+    environment:
+      - SERVER_URL=https://${DOMAIN_WA:-wa.local}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-grandpos_evolution_secret_2026}
+      - DATABASE_PROVIDER=local
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - STORE_MESSAGES=true
+      - STORE_MESSAGE_UP=true
+      - STORE_CONTACTS=true
+      - STORE_CHATS=true
+      - CLEAN_STORE_CLEANING_INTERVAL=7200
+      - LOG_LEVEL=WARN
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    networks:
+      - pos_vps_network
+
+  # ==========================================
+  # 5. DATABASE N8N (PostgreSQL 16)
+  # ==========================================
+  n8n-db:
+    container_name: pos_n8n_db
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${N8N_DB_USER:-n8n}
+      - POSTGRES_PASSWORD=${N8N_DB_PASSWORD:-n8n_secret_db_pass_2026}
+      - POSTGRES_DB=${N8N_DB_NAME:-n8n_db}
+    volumes:
+      - n8n_postgres_data:/var/lib/postgresql/data
+    networks:
+      - pos_vps_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${N8N_DB_USER:-n8n}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # 6. N8N AUTOMATION ENGINE (v1.110.1)
+  # ==========================================
+  n8n:
+    container_name: pos_n8n
+    image: docker.n8n.io/n8nio/n8n:1.110.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - N8N_HOST=${DOMAIN_N8N:-n8n.local}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://${DOMAIN_N8N:-n8n.local}/
+      - GENERIC_TIMEZONE=Asia/Jakarta
+      - TZ=Asia/Jakarta
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:-n8n_db}
+      - DB_POSTGRESDB_USER=${N8N_DB_USER:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD:-n8n_secret_db_pass_2026}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-n8n_master_encryption_key_2026}
+      - N8N_SECURE_COOKIE=true
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    depends_on:
+      n8n-db:
+        condition: service_healthy
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - pos_vps_network
+
+  # ==========================================
+  # 7. AUTOMATED SSL & REVERSE PROXY (Caddy)
+  # ==========================================
+  caddy:
+    container_name: pos_caddy_proxy
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN_POS=${DOMAIN_POS:-localhost}
+      - DOMAIN_N8N=${DOMAIN_N8N:-n8n.localhost}
+      - DOMAIN_WA=${DOMAIN_WA:-wa.localhost}
+      - SSL_EMAIL=${SSL_EMAIL:-admin@yourdomain.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+      - n8n
+      - evolution-api
+    networks:
+      - pos_vps_network
+
+  # ==========================================
+  # 8. DOCKER MANAGEMENT PANEL (Portainer CE)
+  # ==========================================
+  portainer:
+    container_name: pos_portainer
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - pos_vps_network
+
+networks:
+  pos_vps_network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  uploads_data:
+  evolution_instances:
+  evolution_store:
+  n8n_postgres_data:
+  n8n_data:
+  caddy_data:
+  caddy_config:
+  portainer_data:

@@ -111,6 +111,22 @@ if (fs.existsSync(srcDir)) {
   console.log('[Build] Using pre-built static assets in dist/');
 }
 
+// 2a. Bersihkan file sourcemap (.map) agar ukuran build sangat ramping dan cepat dideploy
+function removeMaps(dir) {
+  if (!fs.existsSync(dir)) return;
+  const entries = fs.readdirSync(dir);
+  for (const e of entries) {
+    const p = path.join(dir, e);
+    const s = fs.statSync(p);
+    if (s.isDirectory()) removeMaps(p);
+    else if (e.endsWith('.map')) {
+      try { fs.unlinkSync(p); } catch (_) {}
+    }
+  }
+}
+removeMaps(destDir);
+removeMaps(srcDir);
+
 // 2b. Ensure dist/index.html has CSS and JS bundle scripts properly injected
 const publicIndex = path.join(__dirname, 'project', 'frontend', 'public', 'index.html');
 const destIndex = path.join(destDir, 'index.html');

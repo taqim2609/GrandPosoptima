@@ -8,32 +8,196 @@ import { logRuntimeErrorToFirestore, testFirestoreConnection } from "./firebase"
 // Error Monitoring & Telemetry untuk Remote Debugging.
 // ============================================================
 
-const MAX = 50;
+const MAX = 60;
 export const errorLog = [];
+
+// Event listeners for real-time diagnostic panel updates
+const errorListeners = new Set();
+
+export function subscribeErrorLog(listener) {
+  if (typeof listener === "function") {
+    errorListeners.add(listener);
+    // Immediately call with current state
+    try {
+      listener([...errorLog]);
+    } catch (_) {}
+  }
+  return () => errorListeners.delete(listener);
+}
+
+export function getRecentErrors() {
+  return [...errorLog];
+}
+
+export function clearErrorLog() {
+  errorLog.length = 0;
+  notifyListeners();
+}
+
+function notifyListeners() {
+  const snapshot = [...errorLog];
+  errorListeners.forEach((fn) => {
+    try {
+      fn(snapshot);
+    } catch (_) {}
+  });
+}
+
+/**
+ * Categorize error type accurately for staff diagnostics
+ */
+export function categorizeError(entry = {}) {
+  const msg = String(entry.msg || entry.message || "").toLowerCase();
+  const stack = String(entry.stack || "").toLowerCase();
+  const type = String(entry.type || "").toLowerCase();
+  const url = String(entry.url || "").toLowerCase();
+  const status = Number(entry.status || 0);
+
+  // 1. Publishing / Build / Chunk Asset Failures
+  if (
+    msg.includes("chunkloaderror") ||
+    msg.includes("loading chunk") ||
+    msg.includes("dynamically imported module") ||
+    msg.includes("failed to fetch dynamically imported module") ||
+    stack.includes("chunkloaderror") ||
+    (url.includes("/assets/") && (status === 404 || status === 410)) ||
+    type === "publishing_failure" ||
+    type === "chunk_load_error"
+  ) {
+    return "publishing_failure";
+  }
+
+  // 2. Connection / Network Failures
+  if (
+    status === 0 ||
+    status >= 500 ||
+    msg.includes("network error") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("err_connection_refused") ||
+    msg.includes("networkrequestfailed") ||
+    msg.includes("timeout") ||
+    type === "api_network_error" ||
+    type === "connection_failure"
+  ) {
+    return "connection_failure";
+  }
+
+  // 3. React Render Crashes (Error Boundary)
+  if (type === "react_render_error" || entry.componentStack) {
+    return "react_render_error";
+  }
+
+  // 4. Unhandled Promise Rejection
+  if (type === "unhandled_rejection") {
+    return "unhandled_rejection";
+  }
+
+  return "runtime_error";
+}
+
+/**
+ * Detect persistent failure patterns to alert staff
+ */
+export function analyzePersistentFailures(logs = errorLog) {
+  const now = Date.now();
+  const fifteenMinsAgo = now - 15 * 60 * 1000;
+  const recent = logs.filter((l) => {
+    const t = l.t ? new Date(l.t).getTime() : 0;
+    return t >= fifteenMinsAgo;
+  });
+
+  const connectionErrors = recent.filter((l) => categorizeError(l) === "connection_failure");
+  const publishingErrors = recent.filter((l) => categorizeError(l) === "publishing_failure");
+  const renderErrors = recent.filter((l) => categorizeError(l) === "react_render_error");
+
+  const results = {
+    hasPersistentFailure: false,
+    alerts: [],
+    stats: {
+      totalRecent: recent.length,
+      connectionFailures: connectionErrors.length,
+      publishingFailures: publishingErrors.length,
+      renderFailures: renderErrors.length,
+    },
+  };
+
+  if (connectionErrors.length >= 3) {
+    results.hasPersistentFailure = true;
+    results.alerts.push({
+      id: "persistent_connection",
+      level: "critical",
+      title: "Kegagalan Koneksi Terus Menerus",
+      description: `Terdeteksi ${connectionErrors.length} kali kegagalan jaringan/API dalam 15 menit terakhir. Endpoint server atau gateway mungkin terputus.`,
+      recommendation: "Periksa sambungan WiFi, pastikan server lokal / cloud aktif, atau gunakan Fallback Server di Pengaturan.",
+    });
+  }
+
+  if (publishingErrors.length >= 1) {
+    results.hasPersistentFailure = true;
+    results.alerts.push({
+      id: "persistent_publishing",
+      level: "critical",
+      title: "Ketidakcocokan Versi / Gagal Memuat Bundle (Publishing)",
+      description: `Terdeteksi ${publishingErrors.length} kegagalan memuat chunk JavaScript baru (ChunkLoadError). Versi bundle di browser belum tersinkron dengan hasil publish terbaru.`,
+      recommendation: "Klik 'Muat Ulang Paksa (Hard Reload)' untuk membersihkan cache browser dan memuat aset bundle produksi terbaru.",
+    });
+  }
+
+  if (renderErrors.length >= 3) {
+    results.hasPersistentFailure = true;
+    results.alerts.push({
+      id: "persistent_render",
+      level: "warning",
+      title: "Error Rendering Komponen Berulang",
+      description: `Global Error Boundary telah menangkap ${renderErrors.length} crash komponen UI dalam 15 menit terakhir.`,
+      recommendation: "Periksa detail Stack Trace komponen di bawah untuk melihat komponen mana yang memicu unhandled render exception.",
+    });
+  }
+
+  return results;
+}
 
 // Throttler to prevent flooding Firestore on infinite loop errors
 const recentErrorHashes = new Set();
 
 function push(entry) {
-  errorLog.push(entry);
+  const msgLower = String(entry.msg || entry.message || "").toLowerCase();
+  // Filter out normal expected Firestore offline transitions / retry notices
+  if (
+    msgLower.includes("@firebase/firestore") &&
+    (msgLower.includes("could not reach cloud firestore backend") || msgLower.includes("code=unavailable"))
+  ) {
+    return;
+  }
+
+  const category = categorizeError(entry);
+  const enriched = {
+    id: `err_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    category,
+    ...entry,
+  };
+
+  errorLog.push(enriched);
   if (errorLog.length > MAX) errorLog.shift();
+  notifyListeners();
 
   // Send to Firestore remote debugging collection asynchronously
-  const hash = `${entry.type}_${entry.msg}_${entry.file || ""}_${entry.line || ""}`;
+  const hash = `${enriched.category}_${enriched.msg}_${enriched.file || ""}_${enriched.line || ""}`;
   if (!recentErrorHashes.has(hash)) {
     recentErrorHashes.add(hash);
     setTimeout(() => recentErrorHashes.delete(hash), 15000); // 15s throttle per unique error
 
     logRuntimeErrorToFirestore({
-      type: entry.type,
-      message: entry.msg,
-      stack: entry.stack || "",
-      file: entry.file || "",
-      line: entry.line || 0,
-      col: entry.col || 0,
-      url: entry.url || (typeof window !== "undefined" ? window.location.href : ""),
-      status: entry.status,
-      method: entry.method,
+      type: enriched.category || enriched.type,
+      message: enriched.msg,
+      stack: enriched.stack || "",
+      componentStack: enriched.componentStack || "",
+      file: enriched.file || "",
+      line: enriched.line || 0,
+      col: enriched.col || 0,
+      url: enriched.url || (typeof window !== "undefined" ? window.location.href : ""),
+      status: enriched.status,
+      method: enriched.method,
     }).catch(() => {});
   }
 }
