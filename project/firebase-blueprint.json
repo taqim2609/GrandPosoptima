@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Product item in the Grand Aceh POS catalog.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "sku": { "type": "string", "maxLength": 100 },
+        "category_id": { "type": "string" },
+        "type": { "type": "string", "enum": ["makanan", "minuman", "retail"] },
+        "price": { "type": "number" },
+        "cost_price": { "type": "number" },
+        "stock": { "type": "number" },
+        "min_stock": { "type": "number" },
+        "active": { "type": "boolean" },
+        "sold_out": { "type": "boolean" },
+        "synced_at": { "type": "string" },
+        "source_node": { "type": "string" }
+      },
+      "required": ["id", "name", "price"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Menu category in the Grand Aceh POS system.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "type": { "type": "string", "enum": ["makanan", "minuman", "retail"] },
+        "sort_order": { "type": "number" },
+        "active": { "type": "boolean" },
+        "synced_at": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Completed transaction order in POS.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "order_number": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string" },
+        "total": { "type": "number" },
+        "payment_method": { "type": "string" },
+        "created_at": { "type": "string" },
+        "synced_at": { "type": "string" }
+      },
+      "required": ["id", "total"]
+    },
+    "ErrorLog": {
+      "title": "ErrorLog",
+      "description": "Client runtime error log.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string", "maxLength": 1000 },
+        "stack": { "type": "string", "maxLength": 3000 },
+        "url": { "type": "string" },
+        "user_name": { "type": "string" },
+        "user_role": { "type": "string" },
+        "platform": { "type": "string" },
+        "online": { "type": "boolean" },
+        "resolved": { "type": "boolean" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "message"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Products synced from POS master node."
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Menu categories synced from POS master node."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Orders synced for cloud reporting and telemetry."
+    },
+    "/error_logs/{logId}": {
+      "schema": "ErrorLog",
+      "description": "Runtime error logs for remote debugging."
+    },
+    "/test/{testId}": {
+      "schema": "object",
+      "description": "Connectivity test endpoint."
+    }
+  }
+}

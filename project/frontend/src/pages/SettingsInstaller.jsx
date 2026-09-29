@@ -200,18 +200,39 @@ export default function SettingsInstaller() {
             </div>
           </div>
 
+          {/* 1. SERVER CLOUD VPS 1-CLICK CURL */}
+          <div className="rounded-xl border-2 border-[#4F46E5] bg-[#EEF2FF] p-4 space-y-2">
+            <div className="flex items-center gap-2 font-extrabold text-[#3730A3]">
+              <Cloud size={18} className="text-[#4F46E5]" /> 1. Server Cloud VPS (Ubuntu / Debian) — 1 Perintah via SSH
+            </div>
+            <p className="text-xs text-[#52525B]">
+              Otomatis memasang <b>Docker</b>, menjalankan <b>Evolution API v2 (Port 8080)</b>, engine otomasi <b>n8n (Port 5678)</b>, dan <b>Watchtower</b> untuk pembaruan container otomatis setiap hari.
+            </p>
+            <Code>{`bash <(curl -fsSL ${AISTUDIO_URL}/bootstrap-vps.sh)`}</Code>
+            <div className="text-[11px] text-[#4338CA] font-semibold">
+              ✅ Langsung aktif &amp; siap dihubungkan ke WhatsApp Gateway POS!
+            </div>
+          </div>
+
+          {/* 2. RASPBERRY PI 1-CLICK CURL */}
           <div className="rounded-xl border-2 border-[#E63946] bg-[#FEF2F2] p-4 space-y-2">
-            <div className="flex items-center gap-2 font-extrabold"><Cpu size={18} className="text-[#E63946]" /> Raspberry Pi (headless) — 1 perintah via SSH</div>
-            <p className="text-xs text-[#52525B]">Memasang <b>Docker</b>, meng-<b>unduh kode</b> dari Google AI Studio ke <code>{APP_DIR}</code>, lalu menjalankan installer (editor konfigurasi terbuka otomatis).</p>
+            <div className="flex items-center gap-2 font-extrabold text-[#991B1B]">
+              <Cpu size={18} className="text-[#E63946]" /> 2. Raspberry Pi 4 Toko (Node Kasir Fisik) — 1 Perintah via SSH
+            </div>
+            <p className="text-xs text-[#52525B]">
+              Memasang <b>Docker &amp; Node.js</b>, mengunduh kode dari Google Cloud ke <code>{APP_DIR}</code>, mengaktifkan offline-first, dan menyetel auto-update otomatis jam 03:30 dini hari.
+            </p>
             <Code>{`bash <(curl -fsSL ${AISTUDIO_URL}/bootstrap-pi.sh)`}</Code>
             <button data-testid="download-bootstrap-pi" onClick={() => { downloadText("bootstrap-pi.sh", BOOTSTRAP_PI_SH); toast.success("bootstrap-pi.sh diunduh"); }}
               className="tap mt-1 h-9 px-3 rounded-lg bg-white border border-[#E63946] text-[#E63946] font-bold text-xs inline-flex items-center gap-1.5">
               <Download size={13} /> Unduh bootstrap-pi.sh (cadangan)
             </button>
           </div>
+
+          {/* 3. KOMPUTER WINDOWS */}
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 space-y-2 text-sm text-[#3f3f46]">
-            <div className="font-bold flex items-center gap-1.5"><Monitor size={14} /> Komputer Windows (Instalasi Standalone)</div>
-            <p className="text-xs text-[#52525B]">Pastikan <b>Docker Desktop</b> terpasang. Cara termudah: unduh skrip bootstrap lalu <b>dobel-klik</b> — otomatis unduh dari Google AI Studio + install.</p>
+            <div className="font-bold flex items-center gap-1.5"><Monitor size={14} /> 3. Komputer Windows (Instalasi Standalone)</div>
+            <p className="text-xs text-[#52525B]">Pastikan <b>Docker Desktop</b> terpasang. Cara termudah: unduh skrip bootstrap lalu <b>dobel-klik</b> — otomatis unduh dari Google Cloud + install.</p>
             <button data-testid="download-bootstrap-windows" onClick={() => { downloadText("bootstrap-windows.bat", BOOTSTRAP_WINDOWS_BAT); toast.success("bootstrap-windows.bat diunduh"); }}
               className="tap h-9 px-3 rounded-lg bg-white border border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs inline-flex items-center gap-1.5">
               <Download size={13} /> Unduh bootstrap-windows.bat

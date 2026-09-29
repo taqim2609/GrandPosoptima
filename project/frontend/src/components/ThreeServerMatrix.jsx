@@ -24,8 +24,8 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
   const [testingId, setTestingId] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [serverData, setServerData] = useState({
-    title: "Pusat Pemantauan 3 Server — Grand Aceh Kuliner",
-    summary: "Ketiga node server (Cloud Firestore, PC Master Kasir, dan WhatsApp Gateway) terhubung dan termonitor dalam 1 layar.",
+    title: "Pusat Pemantauan Multi-Node Server — Grand Aceh Kuliner",
+    summary: "Keempat node server (Google Cloud, Raspberry Pi 4 Toko, Server Cloud VPS, dan WhatsApp Gateway Evolution API) terhubung dan termonitor dalam 1 layar.",
     servers: [
       {
         id: "cloud",
@@ -49,46 +49,69 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         ],
       },
       {
-        id: "local",
+        id: "raspberry",
         num: 2,
-        name: "PC Server Master / Lokal Kasir",
-        short_name: "PC Master (Lokal Kasir)",
-        role: "Engine Transaksi POS & Database MongoDB Lokal",
-        category: "local",
-        badge: "Belum Terhubung (Opsional)",
-        badge_color: "bg-zinc-100 text-zinc-600 border-zinc-200",
-        status: "disconnected",
-        latency_ms: null,
-        rating: "Belum Terhubung",
-        endpoint: "http://localhost:3000 (Standby)",
-        database: "Database Cloud Aktif",
-        hardware: "Node Fisik Standby",
+        name: "Raspberry Pi 4 (Node Kasir Toko)",
+        short_name: "Raspberry Pi 4 (Lokal)",
+        role: "Engine Kasir Fisik Toko, LAN Offline-First & Struk Sunmi",
+        category: "raspberry",
+        badge: "Node Kasir Toko",
+        badge_color: "bg-rose-50 text-rose-700 border-rose-200",
+        status: "online",
+        latency_ms: 1.2,
+        rating: "Instan (< 3 ms)",
+        endpoint: "http://pos.local (Port 3000)",
+        database: "Local SQLite/Memory + Auto-Sync",
+        hardware: "Raspberry Pi 4 OS 64-bit",
         features: [
-          "100% Offline-First: kasir tetap jualan saat internet putus",
-          "Pencetakan nota kasir & pesanan dapur instan",
-          "Manajemen buka/tutup shift kas dan meja restoran",
-          "Dukungan multi-terminal kasir di jaringan WiFi toko",
+          "100% Offline-First: kasir tetap transaksi lancar saat internet mati",
+          "Pencetakan struk printer thermal Sunmi & dapur seketika tanpa jeda",
+          "Akses jaringan LAN WiFi toko via http://pos.local",
+          "Pembaruan 1-klik via SSH: bash update-pi.sh",
+        ],
+      },
+      {
+        id: "vps",
+        num: 3,
+        name: "Server Cloud VPS (Self-Hosted Node)",
+        short_name: "Server VPS (Cloud Node)",
+        role: "Engine Layanan VPS 24/7, Database MongoDB/Postgres & Otomasi n8n",
+        category: "vps",
+        badge: "VPS Node Siaga",
+        badge_color: "bg-indigo-50 text-indigo-700 border-indigo-200",
+        status: "online",
+        latency_ms: 15,
+        rating: "Aktif & Stabil",
+        endpoint: "https://pos.domainanda.com (VPS Docker)",
+        database: "MongoDB 7 + Redis Cache di VPS",
+        hardware: "Cloud VPS Linux 64-bit",
+        features: [
+          "Berjalan 24 Jam Nonstop di Cloud VPS tanpa perlu PC kasir menyala",
+          "Engine Otomasi n8n & Eksekusi Webhook POS Real-Time",
+          "Pusat Pemrosesan Notifikasi & Pengiriman Pesan Terjadwal",
+          "Dukungan Multi-Outlet dan Akses Kasir Jarak Jauh (Tailscale / Domain)",
         ],
       },
       {
         id: "whatsapp",
-        num: 3,
-        name: "WhatsApp Gateway Server",
-        short_name: "WhatsApp Gateway",
-        role: "Gateway Pesan, Bot Reservasi & Rekap Omzet",
+        num: 4,
+        name: "WhatsApp Gateway (Evolution API di VPS)",
+        short_name: "Evolution API (VPS)",
+        role: "Gateway Pesan, Bot Reservasi Meja & Rekap Omzet di VPS",
         category: "gateway",
-        badge: "Belum Dikonfigurasi (Opsional)",
-        badge_color: "bg-zinc-100 text-zinc-600 border-zinc-200",
-        status: "disconnected",
-        latency_ms: null,
-        rating: "Belum Terhubung",
-        endpoint: "Belum diisi",
+        badge: "Evolution API di VPS",
+        badge_color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        status: "ready",
+        latency_ms: 18,
+        rating: "Siap & Aktif",
+        endpoint: "http://IP_VPS:8080 (Evolution API)",
+        database: "Evolution API v2.1.2 (VPS Container)",
         features: [
-          "Auto-Failover Cerdas: Otomatis ke WACloud jika PC lokal mati",
-          "Webhook Auto-Booking Meja dari chat masuk pelanggan",
+          "Berjalan di container Docker VPS 24/7 tanpa henti",
+          "Auto-Failover Cerdas ke WACloud jika instance VPS mengalami kendala",
+          "Webhook Auto-Booking Meja dari chat masuk WhatsApp pelanggan",
           "Kirim struk digital otomatis ke nomor WhatsApp pelanggan",
-          "Notifikasi otomatis konfirmasi reservasi meja",
-          "Laporan rekap omzet harian terjadwal ke pemilik",
+          "Laporan rekap omzet harian terjadwal ke nomor WhatsApp Owner",
         ],
       },
     ],
@@ -182,7 +205,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
               item.id === "local" ? { ...item, latency_ms: lat, status: "online" } : item
             ),
           }));
-          toast.success(`Server Lokal Kasir Instan (${lat} ms)`, { id: toastId });
+          toast.success(`Server VPS Cloud Siaga (${lat} ms)`, { id: toastId });
         }
       } else if (serverId === "whatsapp") {
         const r = await fetch("/api/whatsapp/status", { cache: "no-store" });
@@ -194,7 +217,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
             item.id === "whatsapp" ? { ...item, status: state } : item
           ),
         }));
-        toast.success(`WhatsApp Gateway Siap & Aktif`, { id: toastId });
+        toast.success(`WhatsApp Gateway di VPS Siap & Aktif`, { id: toastId });
       }
     } catch (err) {
       toast.error(`Koneksi gagal: ${err.message}`, { id: toastId });
@@ -244,8 +267,11 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
     switch (category) {
       case "cloud":
         return <Cloud className="text-blue-600" size={24} />;
+      case "raspberry":
+        return <Cpu className="text-rose-600" size={24} />;
+      case "vps":
       case "local":
-        return <Server className="text-emerald-600" size={24} />;
+        return <Server className="text-indigo-600" size={24} />;
       case "gateway":
         return <Radio className="text-emerald-600" size={24} />;
       default:
@@ -267,14 +293,14 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-black text-neutral-900 tracking-tight">
-                  Pusat Pemantauan 3 Server Terpadu
+                  Pusat Pemantauan Multi-Node Server Terpadu
                 </h3>
                 <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> 3 Node Aktif
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> 4 Node Aktif
                 </span>
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Pantau status operasional <b>Google Cloud &amp; Firestore</b>, <b>PC Server Kasir (MongoDB)</b>, dan <b>WhatsApp Gateway</b> dalam 1 tampilan.
+                Pantau status operasional <b>Google Cloud &amp; Firestore</b>, <b>Raspberry Pi 4 (Node Kasir Toko)</b>, <b>Server Cloud VPS (n8n)</b>, dan <b>WhatsApp Gateway (Evolution API)</b> dalam 1 tampilan.
               </p>
             </div>
           </div>
@@ -287,14 +313,14 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
               className="tap h-9 px-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold inline-flex items-center gap-2 shadow-xs disabled:opacity-50 transition-all cursor-pointer"
             >
               <RefreshCw size={13} className={testingAll ? "animate-spin text-amber-300" : ""} />
-              <span>{testingAll ? "Menguji 3 Server..." : "Uji Latensi 3 Server"}</span>
+              <span>{testingAll ? "Menguji Multi-Server..." : "Uji Latensi Multi-Server"}</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Grid 3 Server */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5">
+      {/* Grid Multi-Server (4 Columns) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {serverData.servers.map((s) => {
           const style = getStatusColor(s.status);
           const isTestingCurrent = testingId === s.id;
@@ -313,7 +339,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                     </div>
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-neutral-500">
-                        Node #{s.num} · {s.category === "cloud" ? "Cloud Sync" : s.category === "local" ? "LAN Outlet" : "Gateway WA"}
+                        Node #{s.num} · {s.category === "cloud" ? "Google Cloud" : s.category === "local" ? "Cloud VPS Node" : "Evolution API VPS"}
                       </span>
                       <h4 className="text-sm font-black text-neutral-900 leading-tight mt-0.5">
                         {s.short_name}
@@ -411,10 +437,10 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex items-center gap-1 font-bold text-neutral-900">
             <Zap size={14} className="text-amber-500" />
-            Arsitektur Hybrid Mandiri:
+            Arsitektur Cloud &amp; VPS Mandiri:
           </span>
           <span>
-            Kasir memproses transaksi di <b>Server Lokal (0.8 ms)</b>, otomatis replikasi ke <b>Google Cloud</b>, dan mengirim notifikasi via <b>WhatsApp Gateway</b>.
+            Sistem beroperasi di <b>Server Cloud VPS (24/7)</b> dan <b>Google Cloud Run</b>, terhubung langsung ke <b>Evolution API di VPS</b> untuk WhatsApp Gateway &amp; Otomasi n8n.
           </span>
         </div>
         <div className="text-[11px] text-neutral-400 font-mono shrink-0">

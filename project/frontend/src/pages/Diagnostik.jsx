@@ -88,12 +88,12 @@ export default function Diagnostik() {
     },
     {
       id: "server",
-      name: "Koneksi API Server (Raspberry Pi)",
+      name: "Koneksi API Server (Cloud VPS / Cloud Run)",
       status: "idle",
       details: "Menunggu pemeriksaan...",
       suggestion: "",
       canFix: true,
-      fixName: "Fallback ke IP Browser",
+      fixName: "Uji Koneksi Endpoint API",
       icon: Activity,
     },
     {

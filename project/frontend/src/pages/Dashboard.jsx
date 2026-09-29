@@ -17,6 +17,7 @@ import { useUI, orderWidgets } from "@/lib/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 // Lazy-loaded heavy components for optimal Time to Interactive (TTI)
+const LazyVpsAnalyticsCard = lazy(() => import("@/components/VpsConnectionAnalyticsCard"));
 const VisualSyncStatusCard = lazy(() => import("@/components/VisualSyncStatus"));
 const LazyWidgetTrend = lazy(() =>
   import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.WidgetTrend }))
@@ -82,6 +83,7 @@ const CustomWidgetSkeleton = () => (
 const DASH_LOCAL_KEY = "gak_dash_widgets_";
 
 export const DASH_WIDGETS = [
+  { id: "vps_analytics", label: "Status Kesehatan Koneksi VPS & Latensi Gateway (Real-Time)", roles: ["superadmin", "admin", "kasir", "input"] },
   { id: "firestore", label: "Status Koneksi & Persistensi Cloud Firestore", roles: ["superadmin", "admin", "kasir", "input"] },
   { id: "kpi", label: "Ringkasan KPI (Total, Order, Rata-rata, Laba)", roles: ["superadmin", "admin", "kasir"] },
   { id: "jenis", label: "Penjualan per Jenis Order", roles: ["superadmin", "admin", "kasir"] },
@@ -95,10 +97,10 @@ export const DASH_WIDGETS = [
 ];
 
 export const DASH_ROLE_DEFAULT = {
-  superadmin: ["firestore", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
-  admin: ["firestore", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
-  kasir: ["firestore", "kpi", "jenis", "finansial", "trend", "terlaris", "metode"],
-  input: ["firestore", "lowstock"],
+  superadmin: ["vps_analytics", "firestore", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
+  admin: ["vps_analytics", "firestore", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
+  kasir: ["vps_analytics", "firestore", "kpi", "jenis", "finansial", "trend", "terlaris", "metode"],
+  input: ["vps_analytics", "firestore", "lowstock"],
 };
 
 const WStat = memo(({ icon: Icon, label, value, accent }) => (
@@ -584,6 +586,12 @@ export default function Dashboard() {
 
   const renderWidget = (id) => {
     switch (id) {
+      case "vps_analytics":
+        return (
+          <Suspense fallback={<SyncStatusSkeleton />}>
+            <LazyVpsAnalyticsCard />
+          </Suspense>
+        );
       case "firestore":
         return (
           <Suspense fallback={<SyncStatusSkeleton />}>

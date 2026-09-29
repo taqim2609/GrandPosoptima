@@ -42,14 +42,14 @@ export default function SystemHealthPanel({ embedded = false }) {
   const [speedData, setSpeedData] = useState({
     tested_at: new Date().toISOString(),
     pi_server: {
-      name: "Raspberry Pi 4 (Lokal Kasir)",
-      endpoint: "http://localhost:3000",
-      latency_ms: 1.2,
-      jitter_ms: 0.3,
+      name: "Server Cloud VPS (Self-Hosted Node & n8n)",
+      endpoint: "https://pos.domainanda.com (VPS Docker)",
+      latency_ms: 15.4,
+      jitter_ms: 1.1,
       status: "online",
-      rating: "Instan (< 3 ms)",
-      description: "Respons lokal seketika tanpa internet — pencetakan struk dan transaksi kasir tanpa jeda.",
-      color: "#10B981",
+      rating: "Sangat Cepat & Stabil",
+      description: "Respons server VPS di cloud stabil melayani otomasi WhatsApp, webhook, dan database 24 jam nonstop.",
+      color: "#4F46E5",
     },
     google_server: {
       name: "Google AI Studio / Cloud Run",
@@ -62,10 +62,10 @@ export default function SystemHealthPanel({ embedded = false }) {
       color: "#2563EB",
     },
     comparison: {
-      faster: "Raspberry Pi (Lokal)",
-      delta_ms: 23.3,
-      speedup_ratio: "20x lebih cepat",
-      summary: "Server lokal Raspberry Pi merespons 20x lebih cepat (1.2 ms) untuk memastikan operasional kasir tetap secepat kilat bahkan saat beban puncak, sementara Google Cloud (24.5 ms) aktif menyinkronkan data secara real-time.",
+      faster: "Cloud VPS & Google Cloud",
+      delta_ms: 9.1,
+      speedup_ratio: "Sinkron 24/7",
+      summary: "Seluruh operasional berjalan di Cloud VPS & Google Cloud Run 24 jam nonstop tanpa bergantung pada PC lokal fisik.",
     },
   });
   const [realtimeConnected, setRealtimeConnected] = useState(true);
@@ -372,7 +372,7 @@ export default function SystemHealthPanel({ embedded = false }) {
                 </span>
               </div>
               <p className="text-xs text-[#52525B] mt-0.5">
-                Pemantauan real-time perangkat lokal Raspberry Pi, penyimpanan disk, keterhubungan server Google Cloud, &amp; sinkronisasi database.
+                Pemantauan real-time Server Cloud VPS (Docker/n8n), penyimpanan disk, keterhubungan server Google Cloud, &amp; sinkronisasi database.
               </p>
             </div>
           </div>
@@ -672,11 +672,11 @@ export default function SystemHealthPanel({ embedded = false }) {
                   Uji Kecepatan Respon Server (Benchmark Latensi)
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#DBEAFE] text-[#1D4ED8]">
-                  RASPBERRY PI vs GOOGLE CLOUD
+                  SERVER CLOUD VPS vs GOOGLE CLOUD
                 </span>
               </div>
               <p className="text-xs text-[#64748B]">
-                Perbandingan latensi respons server lokal kasir (Raspberry Pi) vs server cloud Google AI Studio secara presisi.
+                Perbandingan latensi respons Server Cloud VPS (Evolution API/n8n) vs server cloud Google AI Studio secara presisi.
               </p>
             </div>
           </div>
@@ -693,42 +693,42 @@ export default function SystemHealthPanel({ embedded = false }) {
           </button>
         </div>
 
-        {/* 2 Kolom Komparasi Server: Pi Lokal vs Google Cloud */}
+        {/* 2 Kolom Komparasi Server: VPS vs Google Cloud */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Server 1: Raspberry Pi Lokal */}
-          <div className="rounded-xl border border-[#10B981]/30 bg-white p-4 shadow-xs flex flex-col justify-between relative overflow-hidden">
-            <div className="absolute top-0 right-0 bg-[#10B981] text-white text-[10px] font-black px-2.5 py-0.5 rounded-bl-lg uppercase tracking-wider">
-              {speedData?.pi_server?.is_faster !== false ? "TERCEPAT (LOKAL)" : "LOKAL"}
+          {/* Server 1: Server Cloud VPS */}
+          <div className="rounded-xl border border-[#4F46E5]/30 bg-white p-4 shadow-xs flex flex-col justify-between relative overflow-hidden">
+            <div className="absolute top-0 right-0 bg-[#4F46E5] text-white text-[10px] font-black px-2.5 py-0.5 rounded-bl-lg uppercase tracking-wider">
+              CLOUD VPS NODE
             </div>
             <div>
-              <div className="flex items-center gap-2 text-xs font-extrabold text-[#059669] mb-1">
+              <div className="flex items-center gap-2 text-xs font-extrabold text-[#4F46E5] mb-1">
                 <Server size={15} />
-                <span>{speedData?.pi_server?.name || "Raspberry Pi 4 (Lokal Kasir)"}</span>
+                <span>{speedData?.pi_server?.name || "Server Cloud VPS (Self-Hosted Node)"}</span>
               </div>
               <div className="flex items-baseline gap-2 mt-2">
                 <span className="text-3xl font-black text-[#0A0A0A] font-num">
-                  {speedData?.pi_server?.latency_ms ?? 1.2}
+                  {speedData?.pi_server?.latency_ms ?? 15.4}
                 </span>
                 <span className="text-sm font-bold text-[#64748B]">ms (Milidetik)</span>
-                <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black bg-[#DCFCE7] text-[#15803D]">
-                  <Zap size={11} className="fill-current" /> {speedData?.pi_server?.rating || "Instan (< 3 ms)"}
+                <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black bg-[#EEF2FF] text-[#4F46E5]">
+                  <Zap size={11} className="fill-current" /> {speedData?.pi_server?.rating || "Sangat Cepat & Stabil"}
                 </span>
               </div>
 
               <div className="mt-3 space-y-1 text-xs text-[#52525B]">
                 <div className="flex items-center justify-between">
                   <span className="text-[#71717A]">Jitter Variasi:</span>
-                  <span className="font-bold text-[#0A0A0A] font-num">±{speedData?.pi_server?.jitter_ms ?? 0.3} ms</span>
+                  <span className="font-bold text-[#0A0A0A] font-num">±{speedData?.pi_server?.jitter_ms ?? 1.1} ms</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[#71717A]">Tipe Jaringan:</span>
-                  <span className="font-bold text-[#0A0A0A]">Loopback / LAN Lokal (Zero Delay)</span>
+                  <span className="font-bold text-[#0A0A0A]">Cloud VPS Docker (24/7 Dedicated)</span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-[#F1F5F9] text-[11px] text-[#059669] font-medium bg-[#F0FDF4] p-2.5 rounded-lg">
-              {speedData?.pi_server?.description || "Respons lokal seketika tanpa internet — pencetakan struk dan transaksi kasir tanpa jeda."}
+            <div className="mt-4 pt-3 border-t border-[#F1F5F9] text-[11px] text-[#4F46E5] font-medium bg-[#EEF2FF]/60 p-2.5 rounded-lg">
+              {speedData?.pi_server?.description || "Respons server VPS di cloud stabil melayani otomasi WhatsApp, webhook, dan database 24 jam nonstop."}
             </div>
           </div>
 

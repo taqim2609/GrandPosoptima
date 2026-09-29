@@ -192,10 +192,20 @@ export default function WhatsApp() {
           : "Pengaturan WACloud.id berhasil disimpan"
       );
       await load();
+      return true;
     } catch (e) {
-      toast.error(apiError(e.response?.data?.detail));
+      const errDetail = e.response?.data?.detail || e.response?.data?.message || e.response?.data?.error || e.message;
+      toast.error(apiError(errDetail));
+      return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveAndGenerateQr = async () => {
+    const ok = await saveConfig();
+    if (ok) {
+      await fetchQrCode();
     }
   };
 
@@ -295,7 +305,7 @@ services:
               }`}
             >
               <Server size={14} />
-              Evolution API (PC Server Lokal)
+              Evolution API (Server VPS)
             </button>
             <button
               onClick={() => setProvider("wacloud")}
@@ -311,8 +321,8 @@ services:
           </div>
           <p className="text-[11px] text-slate-500 italic leading-relaxed">
             {provider === "evolution"
-              ? "Sangat direkomendasikan untuk menekan biaya operasional. Menggunakan nomor WhatsApp pribadi Anda lewat server lokal yang terpasang di toko."
-              : "Solusi enterprise berbasis Cloud. Menggunakan layanan wacloud.id tanpa perlu menyalakan komputer server lokal secara terus menerus."}
+              ? "Sangat direkomendasikan untuk menekan biaya operasional. Menggunakan nomor WhatsApp pribadi Anda via Evolution API yang berjalan di Cloud VPS 24/7."
+              : "Solusi enterprise berbasis Cloud. Menggunakan layanan wacloud.id tanpa perlu mengelola server VPS secara mandiri."}
           </p>
         </div>
 
@@ -334,7 +344,7 @@ services:
                 <div className="font-extrabold text-sm flex items-center gap-2 text-slate-900">
                   {isConnected ? "WhatsApp Gateway Aktif & Siap Digunakan" : "Gateway Menunggu Konfigurasi"}
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-white border border-slate-200 text-slate-700 shadow-xs">
-                    {provider === "evolution" ? "Evolution API (Lokal)" : "WACloud (Cloud)"}
+                    {provider === "evolution" ? "Evolution API (VPS)" : "WACloud (Cloud)"}
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -375,7 +385,7 @@ services:
             ) : (
               <span className="text-[#B45309]">
                 {provider === "evolution"
-                  ? "Pastikan container Docker Evolution API di PC Server lokal Anda sudah dijalankan dan scan QR Code di bawah."
+                  ? "Pastikan container Docker Evolution API di VPS Anda sudah aktif dan scan QR Code di bawah."
                   : "Masukkan API Key WACloud Anda dan pilih device aktif untuk menghubungkan gateway."}
               </span>
             )}
@@ -392,7 +402,7 @@ services:
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-sm font-black text-slate-900">
-                    Auto-Failover ke WACloud (Jika Server PC Kasir Mati)
+                    Auto-Failover ke WACloud (Jika Evolution API di VPS Gangguan)
                   </h3>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${
                     autoFailover && waCloudKey && waCloudDeviceId
@@ -409,7 +419,7 @@ services:
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Jika PC Master kasir di restoran mati, listrik padam, atau port 8080 Evolution API terputus, sistem <b>secara otomatis</b> mengalihkan pengiriman konfirmasi <b>Reservasi Meja &amp; Struk Digital</b> ke WACloud.id. Tidak ada pesan ke pelanggan yang gagal terkirim.
+                  Jika container Evolution API di VPS mengalami gangguan atau sesi terputus, sistem <b>secara otomatis</b> mengalihkan pengiriman konfirmasi <b>Reservasi Meja &amp; Struk Digital</b> ke WACloud.id. Tidak ada pesan ke pelanggan yang gagal terkirim.
                 </p>
               </div>
             </div>
@@ -543,12 +553,12 @@ services:
         {/* EVOLUTION CONFIGURATION PANELS */}
         {provider === "evolution" && (
           <>
-            {/* STEP 1: DOCKER COMPOSE LOCAL PC GUIDE */}
+            {/* STEP 1: DOCKER COMPOSE VPS SERVER GUIDE */}
             <div className="bg-white rounded-2xl border p-6 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="font-extrabold flex items-center gap-2">
                   <span className="h-6 w-6 rounded-full bg-[#1D4ED8] text-white grid place-items-center text-xs font-black">1</span>
-                  Langkah 1: Jalankan Evolution API di PC Server Lokal (Docker Compose)
+                  Langkah 1: Jalankan Evolution API di Server VPS (Docker Compose)
                 </div>
                 <button
                   onClick={copyCommand}
@@ -559,7 +569,7 @@ services:
                 </button>
               </div>
               <p className="text-xs text-[#52525B]">
-                Salin konfigurasi di bawah ini ke berkas <b>docker-compose.yml</b> di PC Server Anda, lalu jalankan perintah <code>docker compose up -d</code>:
+                Salin konfigurasi di bawah ini ke berkas <b>docker-compose.vps.yml</b> di Server VPS Anda, lalu jalankan perintah <code>docker compose -f docker-compose.vps.yml up -d</code>:
               </p>
               <div className="bg-[#0F172A] text-[#F8FAFC] p-3.5 rounded-xl font-mono text-[11px] overflow-x-auto border border-zinc-800 relative">
                 <pre className="whitespace-pre">{deploySnippet}</pre>
@@ -573,20 +583,20 @@ services:
                 Langkah 2: Hubungkan URL &amp; API Key ke POS
               </div>
               <p className="text-xs text-[#52525B]">
-                Masukkan Service URL yang berjalan di PC Server / Raspberry Pi lokal beserta API Key rahasianya:
+                Masukkan Service URL Evolution API di VPS Anda (mis. <code>https://wa.domainanda.com</code> atau <code>http://IP_VPS:8080</code>) beserta API Key:
               </p>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="text-xs font-bold text-[#52525B] uppercase tracking-wider block mb-1">
-                    Evolution API Service URL (PC Server / Local IP)
+                    Evolution API Service URL (VPS Server / Cloud Domain)
                   </label>
                   <input
                     data-testid="evolution-url-input"
                     type="text"
                     value={evolutionUrl}
                     onChange={(e) => setEvolutionUrl(e.target.value)}
-                    placeholder="http://localhost:8080"
+                    placeholder="http://IP_VPS:8080 atau https://wa.domainanda.com"
                     className="w-full h-11 rounded-xl border px-3 font-mono text-xs outline-none focus:border-[#E63946]"
                   />
                 </div>
@@ -620,15 +630,24 @@ services:
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
                 <button
                   data-testid="save-evolution-btn"
-                  onClick={saveConfig}
+                  onClick={() => saveConfig()}
                   disabled={saving}
-                  className="tap h-11 px-5 rounded-xl bg-[#0A0A0A] text-white font-bold text-sm inline-flex items-center gap-2 disabled:opacity-50"
+                  className="tap h-11 px-4 rounded-xl border border-zinc-300 bg-white text-zinc-800 font-bold text-xs inline-flex items-center gap-2 hover:bg-zinc-50 disabled:opacity-50"
                 >
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                   Simpan Konfigurasi
+                </button>
+                <button
+                  data-testid="save-and-qr-btn"
+                  onClick={handleSaveAndGenerateQr}
+                  disabled={saving || qrLoading}
+                  className="tap h-11 px-5 rounded-xl bg-[#E63946] text-white font-extrabold text-xs inline-flex items-center gap-2 shadow-sm hover:bg-[#D62828] disabled:opacity-50"
+                >
+                  {(saving || qrLoading) ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
+                  Simpan &amp; Tampilkan QR Code
                 </button>
               </div>
             </div>

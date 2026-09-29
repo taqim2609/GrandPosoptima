@@ -3,11 +3,13 @@ import { getAuth } from "firebase/auth";
 import {
   getFirestore,
   initializeFirestore,
+  setLogLevel,
   collection,
   doc,
   setDoc,
   getDocs,
   getDoc,
+  getDocFromServer,
   query,
   orderBy,
   limit,
@@ -17,11 +19,16 @@ import {
 } from "firebase/firestore";
 import firebaseConfig from "../firebase-applet-config.json";
 
+// Suppress verbose SDK connection notices in sandboxed / offline environments
+try {
+  setLogLevel("silent");
+} catch (_) {}
+
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 
-// Use initializeFirestore with auto-detect long polling to ensure reliable connectivity across sandboxes, iframes, and mobile networks
+// Use initializeFirestore with auto-detect long polling and ignoreUndefinedProperties
 let firestoreDb;
 try {
   firestoreDb = initializeFirestore(
@@ -30,11 +37,11 @@ try {
       experimentalAutoDetectLongPolling: true,
       ignoreUndefinedProperties: true,
     },
-    firebaseConfig.firestoreDatabaseId
+    firebaseConfig.firestoreDatabaseId || "(default)"
   );
 } catch (e) {
   try {
-    firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId || "(default)");
   } catch (e2) {
     firestoreDb = getFirestore(app);
   }
@@ -110,8 +117,12 @@ export async function testFirestoreConnection() {
   setFirestoreSyncing(true, 1000);
   try {
     const testDoc = doc(db, "test", "connection");
-    // Attempt reading test document
-    await getDoc(testDoc);
+    // Attempt reading test document directly from server
+    try {
+      await getDocFromServer(testDoc);
+    } catch (_) {
+      await getDoc(testDoc);
+    }
     const latencyMs = Math.round(performance.now() - startTime);
     setFirestoreSyncing(false);
     updateLastSyncInfo({ ok: true, latencyMs });
@@ -120,7 +131,7 @@ export async function testFirestoreConnection() {
     setFirestoreSyncing(false);
     const latencyMs = Math.round(performance.now() - startTime);
     const errMsg = error?.message || String(error);
-    const isOffline = errMsg.includes("unavailable") || errMsg.includes("offline") || errMsg.includes("could not reach");
+    const isOffline = errMsg.includes("unavailable") || errMsg.includes("offline") || errMsg.includes("could not reach") || errMsg.includes("the client is offline");
     updateLastSyncInfo({ ok: !isOffline, latencyMs, error: isOffline ? "Offline mode active" : errMsg });
     return {
       ok: false,
