@@ -56,23 +56,44 @@ else
   cd "$TARGET_DIR"
 fi
 
-# 5. Buat file .env.vps jika belum ada
+# 5. Buat file .env.vps dengan Secret Acak Unik jika belum ada
 if [ ! -f .env.vps ]; then
-  echo -e "${YELLOW}📝 Menyiapkan berkas konfigurasi .env.vps...${NC}"
-  if [ -f .env.vps.example ]; then
-    cp .env.vps.example .env.vps
-  else
-    cat << 'EOF' > .env.vps
+  echo -e "${YELLOW}📝 Menyiapkan berkas konfigurasi .env.vps dengan kunci enkripsi acak...${NC}"
+  
+  # Generate random cryptographic secrets
+  RAND_JWT=$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+  RAND_ADMIN_PW=$(openssl rand -base64 12 2>/dev/null || head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 14)
+  RAND_EVO_KEY=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+  RAND_N8N_DB=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+  RAND_N8N_ENC=$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+
+  cat << EOF > .env.vps
+# ==========================================================
+# GRAND ACEH KULINER POS — VPS AUTO-GENERATED CONFIG
+# Dibuat otomatis dengan kunci keamanan unik pada $(date '+%Y-%m-%d %H:%M:%S')
+# ==========================================================
+
 DOMAIN_POS=localhost
 DOMAIN_N8N=localhost:5678
 DOMAIN_WA=localhost:8080
 SSL_EMAIL=admin@grandpos.local
-JWT_SECRET=grandpos_vps_super_secret_jwt_key_2026_auto
+
+JWT_SECRET=${RAND_JWT}
+ADMIN_EMAIL=owner@grandacehkuliner.com
+ADMIN_PASSWORD=${RAND_ADMIN_PW}
+
+EVOLUTION_API_KEY=${RAND_EVO_KEY}
+
+N8N_DB_USER=n8n_user
+N8N_DB_PASSWORD=${RAND_N8N_DB}
+N8N_DB_NAME=n8n_vps_db
+N8N_ENCRYPTION_KEY=${RAND_N8N_ENC}
+
 UVICORN_WORKERS=4
-EVOLUTION_API_KEY=grandpos_evolution_secret_2026
 EOF
-  fi
-  echo -e "${GREEN}✓ File .env.vps berhasil dibuat!${NC}"
+
+  echo -e "${GREEN}✓ File .env.vps berhasil dibuat dengan kunci rahasia acak unik!${NC}"
+  echo -e "${CYAN}🔑 Password Admin Awal : ${RAND_ADMIN_PW}${NC}"
 fi
 
 # 6. Konfigurasi Firewall UFW

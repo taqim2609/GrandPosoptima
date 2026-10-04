@@ -12,33 +12,86 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'taqim2609@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
     // Test connectivity document
     match /test/{testId} {
-      allow read, write: if isValidId(testId);
+      allow read: if isValidId(testId);
+      allow write: if isSignedIn() && isValidId(testId);
+    }
+
+    // Users & profiles
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow create, update, delete: if isAdmin() && isValidId(userId);
+    }
+
+    // Admins registry
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidId(adminId);
     }
 
     // Products collection (POS catalog sync)
     match /products/{productId} {
-      allow read: if true;
-      allow write: if isValidId(productId);
+      allow read: if isSignedIn() && isValidId(productId);
+      allow write: if isAdmin() && isValidId(productId);
     }
 
     // Categories collection
     match /categories/{categoryId} {
-      allow read: if true;
-      allow write: if isValidId(categoryId);
+      allow read: if isSignedIn() && isValidId(categoryId);
+      allow write: if isAdmin() && isValidId(categoryId);
+    }
+
+    // Tables collection
+    match /tables/{tableId} {
+      allow read: if isSignedIn() && isValidId(tableId);
+      allow write: if isSignedIn() && isValidId(tableId);
     }
 
     // Orders collection
     match /orders/{orderId} {
-      allow read: if true;
-      allow write: if isValidId(orderId);
+      allow read: if isSignedIn() && isValidId(orderId);
+      allow create, update: if isSignedIn() && isValidId(orderId);
+      allow delete: if isAdmin() && isValidId(orderId);
     }
 
-    // Error logs collection for client diagnostics
+    // Shifts collection
+    match /shifts/{shiftId} {
+      allow read: if isSignedIn() && isValidId(shiftId);
+      allow create, update: if isSignedIn() && isValidId(shiftId);
+      allow delete: if isAdmin() && isValidId(shiftId);
+    }
+
+    // Cash Transactions
+    match /cashTransactions/{txId} {
+      allow read: if isSignedIn() && isValidId(txId);
+      allow create: if isSignedIn() && isValidId(txId);
+      allow update, delete: if isAdmin() && isValidId(txId);
+    }
+
+    // Error logs collection for client diagnostics & runtime monitoring
     match /error_logs/{logId} {
-      allow read: if true;
-      allow write: if isValidId(logId);
+      allow create: if isValidId(logId) && incoming().size() <= 10;
+      allow read, update, delete: if isAdmin() && isValidId(logId);
     }
   }
 }

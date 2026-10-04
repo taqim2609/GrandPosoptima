@@ -5,6 +5,75 @@ const fs = require('fs');
 const os = require('os');
 const multer = require('multer');
 const AdmZip = require('adm-zip');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+
+// Secret Key for JWT Signing & Verification
+const JWT_SECRET = process.env.JWT_SECRET || 'grandpos_prod_secure_jwt_secret_key_2026_gak_fnb_auth';
+const JWT_EXPIRES_IN = '24h';
+
+// Helper: Generate signed JWT token
+function generateToken(user) {
+  if (!user) return null;
+  const isSuper = Boolean(user.is_superadmin || (user.role && user.role.toLowerCase() === 'superadmin') || (user.username && user.username.toLowerCase().includes('taqim')));
+  const role = user.role || 'kasir';
+  const role_base = isSuper ? 'superadmin' : (user.role_base || role);
+  return jwt.sign(
+    {
+      id: user.id,
+      username: user.username,
+      role,
+      role_base,
+      is_superadmin: isSuper,
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+}
+
+// Helper: Verify JWT token strictly
+function verifyToken(tokenStr) {
+  if (!tokenStr || typeof tokenStr !== 'string') return null;
+  let raw = tokenStr.trim();
+  if (raw.startsWith('Bearer ')) raw = raw.slice(7).trim();
+  if (raw.startsWith('gak_jwt_')) raw = raw.slice(8).trim();
+  try {
+    return jwt.verify(raw, JWT_SECRET);
+  } catch (err) {
+    return null;
+  }
+}
+
+// RBAC Middleware Helpers
+function requireAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
+  }
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
+  }
+  const isSuper = Boolean(req.user.is_superadmin || (req.user.role && req.user.role.toLowerCase() === 'superadmin') || (req.user.username && req.user.username.toLowerCase().includes('taqim')));
+  const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
+  if (!isAdmin) {
+    return res.status(403).json({ detail: 'Akses Ditolak: Memerlukan hak akses Administrator atau Super Admin' });
+  }
+  next();
+}
+
+function requireSuperAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
+  }
+  const isSuper = Boolean(req.user.is_superadmin || (req.user.role && req.user.role.toLowerCase() === 'superadmin') || (req.user.username && req.user.username.toLowerCase().includes('taqim')));
+  if (!isSuper) {
+    return res.status(403).json({ detail: 'Akses Ditolak: Memerlukan hak akses Super Admin' });
+  }
+  next();
+}
 
 const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -257,7 +326,7 @@ app.use((req, res, next) => {
 // ==========================================
 // Middleware: API Authentication Gate
 // Intercepts all incoming API requests (excluding login/public routes),
-// validates the JWT / base64 token, and denies access if invalid or missing.
+// validates the cryptographically signed JWT token, and denies access if invalid or missing.
 // ==========================================
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
@@ -268,41 +337,37 @@ app.use((req, res, next) => {
       '/api/auth/pin-users',
       '/api/auth/verify-pin',
       '/api/health',
+      '/api/healthz',
       '/api/system/health',
       '/api/system-health',
-      '/api/system/sync/stream',
       '/api/ota/version',
       '/api/ota/bundle.zip',
       '/api/update/check',
-      '/api/whatsapp/status',
-      '/api/settings/whatsapp',
-      '/api/whatsapp/config',
-      '/api/whatsapp/instance/create',
-      '/api/whatsapp/devices',
-      '/api/whatsapp/test',
       '/api/webhook/whatsapp',
-      '/api/whatsapp/simulate-reservation',
-      '/api/whatsapp/reservation-settings',
-      '/api/whatsapp/groups',
       '/api/system/servers/status',
     ];
 
-    if (publicPaths.includes(cleanPath)) {
-      // If token provided on public path, still resolve req.user for optional permission checks
-      const authHeader = req.headers.authorization || req.headers['x-gak-token'];
-      if (authHeader) {
-        let token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
-        if (token && token.startsWith('gak_jwt_')) {
-          try {
-            const base64Str = token.replace('gak_jwt_', '');
-            const payload = JSON.parse(Buffer.from(base64Str, 'base64').toString('utf-8'));
-            const found = db.users.find((u) => u.id === payload.id || (u.username && u.username.toLowerCase() === (payload.username || '').toLowerCase()));
-            if (found && found.active !== false) {
-              req.user = formatUser(found);
-            }
-          } catch (e) {}
+    const authHeader = req.headers.authorization || req.headers['x-gak-token'];
+    let tokenStr = '';
+    if (authHeader) {
+      tokenStr = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+    }
+
+    if (tokenStr) {
+      const payload = verifyToken(tokenStr);
+      if (payload && (payload.id || payload.username)) {
+        const found = db.users.find(
+          (u) =>
+            u.id === payload.id ||
+            (u.username && u.username.toLowerCase() === (payload.username || '').toLowerCase())
+        );
+        if (found && found.active !== false) {
+          req.user = formatUser(found);
         }
       }
+    }
+
+    if (publicPaths.includes(cleanPath)) {
       return next();
     }
 
@@ -311,34 +376,8 @@ app.use((req, res, next) => {
       return next();
     }
 
-    const authHeader = req.headers.authorization || req.headers['x-gak-token'];
-    let token = '';
-    
-    if (authHeader) {
-      if (authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
-      } else {
-        token = authHeader;
-      }
-    }
-
-    if (!token || !token.startsWith('gak_jwt_')) {
-      return res.status(401).json({ detail: 'Not authenticated' });
-    }
-
-    try {
-      const base64Str = token.replace('gak_jwt_', '');
-      const payload = JSON.parse(Buffer.from(base64Str, 'base64').toString('utf-8'));
-      
-      const found = db.users.find((u) => u.id === payload.id || (u.username && u.username.toLowerCase() === (payload.username || '').toLowerCase()));
-      if (!found || found.active === false) {
-        return res.status(401).json({ detail: 'User not found or inactive' });
-      }
-      
-      // Store user details on request context
-      req.user = formatUser(found);
-    } catch (e) {
-      return res.status(401).json({ detail: 'Invalid or expired token' });
+    if (!req.user) {
+      return res.status(401).json({ detail: 'Autentikasi diperlukan. Token tidak valid atau telah kedaluwarsa.' });
     }
   }
   next();
@@ -1473,8 +1512,8 @@ function formatUser(u) {
   const hasCustomPerms = !isSuper && Boolean(u.perms_full && Array.isArray(u.perms));
   const userPin = u.pin ? String(u.pin).trim() : '';
 
+  // Return strictly sanitized user object (NEVER leak password, password_plain, or pin in API responses)
   return {
-    ...u,
     id: cleanId,
     username: username || 'user',
     name: u.name || (isSuper ? 'Owner (Taqim)' : username),
@@ -1483,14 +1522,12 @@ function formatUser(u) {
     role_base,
     role_name,
     is_superadmin: isSuper,
-    bootstrap_owner: false,
+    bootstrap_owner: Boolean(u.bootstrap_owner),
     perms,
     perms_full: isSuper || role_base === 'admin' || Boolean(u.perms_full),
     has_custom_perms: hasCustomPerms,
     active: u.active !== false,
-    must_change_password: !!u.must_change_password,
-    password: u.password || u.password_plain || '',
-    pin: userPin || (isSuper ? '260900' : ''),
+    must_change_password: Boolean(u.must_change_password),
     pin_enabled: u.pin_enabled !== false && Boolean(userPin || isSuper),
     has_pin: Boolean(userPin || isSuper),
   };
@@ -1543,7 +1580,7 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const formattedUser = formatUser(matched);
-  const token = 'gak_jwt_' + Buffer.from(JSON.stringify({ id: formattedUser.id, username: formattedUser.username, role: formattedUser.role })).toString('base64');
+  const token = generateToken(formattedUser);
   res.json({
     token,
     user: formattedUser,
@@ -1593,7 +1630,7 @@ app.post('/api/auth/login-pin', (req, res) => {
   }
 
   const formattedUser = formatUser(matched);
-  const token = 'gak_jwt_' + Buffer.from(JSON.stringify({ id: formattedUser.id, username: formattedUser.username, role: formattedUser.role })).toString('base64');
+  const token = generateToken(formattedUser);
   res.json({
     token,
     user: formattedUser,
@@ -1663,19 +1700,42 @@ app.get('/api/auth/me', (req, res) => {
   if (req.user) {
     return res.json(req.user);
   }
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer gak_jwt_')) {
-    try {
-      const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer gak_jwt_', ''), 'base64').toString('utf-8'));
-      const found = db.users.find((u) => u.id === decoded.id || (u.username && u.username.toLowerCase() === (decoded.username || '').toLowerCase()));
-      if (found) return res.json(formatUser(found));
-    } catch (e) {}
+  const authHeader = req.headers.authorization || req.headers['x-gak-token'];
+  if (authHeader) {
+    const payload = verifyToken(authHeader);
+    if (payload && (payload.id || payload.username)) {
+      const found = db.users.find((u) => u.id === payload.id || (u.username && u.username.toLowerCase() === (payload.username || '').toLowerCase()));
+      if (found && found.active !== false) {
+        return res.json(formatUser(found));
+      }
+    }
   }
   return res.status(401).json({ detail: 'Not authenticated' });
 });
 
 app.post('/api/auth/change-password', (req, res) => {
-  res.json({ status: 'ok', message: 'Password berhasil diperbarui' });
+  if (!req.user) {
+    return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
+  }
+  const { current_password, new_password, password } = req.body || {};
+  const nextPw = String(new_password || password || '').trim();
+  if (!nextPw || nextPw.length < 4) {
+    return res.status(400).json({ detail: 'Password baru minimal 4 karakter' });
+  }
+  const user = db.users.find((u) => u.id === req.user.id || u.username === req.user.username);
+  if (!user) {
+    return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+  }
+  if (current_password) {
+    const validPw = String(user.password || user.password_plain || 'admin123').trim();
+    if (String(current_password).trim() !== validPw) {
+      return res.status(400).json({ detail: 'Password lama tidak sesuai' });
+    }
+  }
+  user.password = nextPw;
+  user.password_plain = nextPw;
+  user.must_change_password = false;
+  res.json({ status: 'ok', message: 'Password berhasil diperbarui', user: formatUser(user) });
 });
 
 // ==========================================
@@ -1900,13 +1960,32 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
   if (!db.currentShift || db.currentShift.status !== 'open') {
     return res.status(400).json({ detail: 'POS Kasir terkunci: Shift belum dibuka. Buka shift terlebih dahulu sebelum melayani transaksi.' });
   }
-  const idx = db.orders.findIndex((o) => o.id === req.params.id);
+  const idx = db.orders.findIndex((o) => o.id === req.params.id || o.order_number === req.params.id);
   if (idx === -1) return res.status(404).json({ detail: 'Order tidak ditemukan' });
   const order = db.orders[idx];
+
+  // Idempotency: Jika order sudah dibayar / completed sebelumnya, kembalikan data order tanpa menambah shift berulang
+  if (order.status === 'completed' || order.status === 'paid') {
+    return res.json(order);
+  }
+
+  const paymentMethod = req.body.payment_method || order.payment_method || 'cash';
+  const totalAmount = Number(order.total) || 0;
+  const amountPaid = Number(req.body.amount_paid !== undefined && req.body.amount_paid !== null ? req.body.amount_paid : totalAmount);
+
+  // Validasi kecukupan pembayaran (kecuali metode kasbon / piutang)
+  if (paymentMethod !== 'kasbon' && paymentMethod !== 'credit' && amountPaid < totalAmount) {
+    return res.status(400).json({
+      detail: `Pembayaran kurang: Jumlah bayar (Rp ${amountPaid.toLocaleString('id-ID')}) kurang dari total tagihan (Rp ${totalAmount.toLocaleString('id-ID')})`
+    });
+  }
+
+  const change = Math.max(0, amountPaid - totalAmount);
+
   order.status = 'completed';
-  order.payment_method = req.body.payment_method || 'cash';
-  order.amount_paid = req.body.amount_paid || order.total;
-  order.change = Math.max(0, (Number(order.amount_paid) || 0) - (Number(order.total) || 0));
+  order.payment_method = paymentMethod;
+  order.amount_paid = amountPaid;
+  order.change = change;
   order.discount_type = req.body.discount_type || order.discount_type || 'none';
   order.discount_value = req.body.discount_value || order.discount_value || 0;
   order.paid_at = new Date().toISOString();
@@ -1917,15 +1996,14 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
     if (tbl) tbl.status = 'empty';
   }
 
-  // Update current shift sales
+  // Update current shift sales tepat 1 kali
   if (db.currentShift) {
-    const total = Number(order.total) || 0;
-    if (order.payment_method === 'cash') {
-      db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + total;
+    if (order.payment_method === 'cash' || order.payment_method_type === 'cash') {
+      db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + totalAmount;
     } else {
-      db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + total;
+      db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + totalAmount;
     }
-    db.currentShift.total_sales = (db.currentShift.total_sales || 0) + total;
+    db.currentShift.total_sales = (db.currentShift.total_sales || 0) + totalAmount;
     db.currentShift.orders_count = (db.currentShift.orders_count || 0) + 1;
   }
 
@@ -2814,26 +2892,29 @@ async function sendWhatsAppMessage(to, text) {
   }
 }
 
-app.get(['/api/whatsapp/config', '/whatsapp/config'], (req, res) => {
+app.get(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) => {
   const cfg = db.settings.wa || {};
   const key = cfg.api_key || '';
+  const evoKey = cfg.evolution_api_key || '';
   const provider = cfg.provider || 'evolution';
   const configured = provider === 'evolution'
-    ? Boolean(cfg.evolution_url && cfg.evolution_api_key)
-    : Boolean(cfg.api_key && cfg.device_id);
+    ? Boolean(cfg.evolution_url && evoKey)
+    : Boolean(key && cfg.device_id);
 
   res.json({
     configured,
     provider,
     auto_failover: cfg.auto_failover !== false,
-    wacloud_configured: Boolean(cfg.api_key && cfg.device_id),
+    wacloud_configured: Boolean(key && cfg.device_id),
     api_key_set: Boolean(key),
-    api_key_masked: key.length > 12 ? (key.slice(0, 6) + '…' + key.slice(-4)) : ('•'.repeat(key.length)),
+    api_key_masked: key.length > 12 ? (key.slice(0, 6) + '…' + key.slice(-4)) : (key ? '••••••••' : ''),
+    evolution_api_key_set: Boolean(evoKey),
+    evolution_api_key_masked: evoKey.length > 8 ? (evoKey.slice(0, 4) + '…' + evoKey.slice(-4)) : (evoKey ? '••••••••' : ''),
     base_url: cfg.base_url || 'https://app.wacloud.id/api/v1',
     device_id: cfg.device_id || '',
     device_name: cfg.device_name || '',
     evolution_url: cfg.evolution_url || '',
-    evolution_api_key: cfg.evolution_api_key || '',
+    evolution_api_key: evoKey,
     evolution_instance: cfg.evolution_instance || 'grand-aceh-pos',
     phone: cfg.phone || '',
     status: cfg.status || 'disconnected',
@@ -2847,15 +2928,15 @@ app.get(['/api/whatsapp/config', '/whatsapp/config'], (req, res) => {
   });
 });
 
-app.put(['/api/whatsapp/config', '/whatsapp/config'], (req, res) => {
+app.put(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) => {
   db.settings.wa = { ...(db.settings.wa || {}), ...(req.body || {}) };
-  console.info('[WA Config] Updated:', db.settings.wa);
+  console.info('[WA Config] Updated by admin:', req.user?.username);
   res.json({ ok: true, wa: db.settings.wa, message: 'Pengaturan WhatsApp berhasil disimpan' });
 });
 
-app.post(['/api/whatsapp/config', '/whatsapp/config'], (req, res) => {
+app.post(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) => {
   db.settings.wa = { ...(db.settings.wa || {}), ...(req.body || {}) };
-  console.info('[WA Config] Saved via POST:', db.settings.wa);
+  console.info('[WA Config] Saved via POST by admin:', req.user?.username);
   res.json({ ok: true, wa: db.settings.wa, message: 'Pengaturan WhatsApp berhasil disimpan' });
 });
 
@@ -2872,28 +2953,13 @@ app.get(['/api/whatsapp/reservation-settings', '/whatsapp/reservation-settings']
   });
 });
 
-app.post(['/api/whatsapp/reservation-settings', '/whatsapp/reservation-settings'], (req, res) => {
-  const u = req.user;
-  if (!u) {
-    return res.status(401).json({ detail: 'Harap login terlebih dahulu untuk mengubah pengaturan' });
-  }
-  const isSuper = u.is_superadmin || (u.role && u.role.toLowerCase() === 'superadmin') || (u.username && u.username.toLowerCase().includes('taqim'));
-  const isAdmin = isSuper || u.role === 'admin' || u.role_base === 'admin';
-  const perms = Array.isArray(u.perms) ? u.perms : [];
-  const hasPerm = isAdmin || perms.includes('whatsapp') || perms.includes('pengaturan') || perms.includes('*');
-
-  if (!hasPerm) {
-    return res.status(403).json({
-      detail: 'Akses Ditolak: Hanya pengguna dengan izin WhatsApp atau Admin yang dapat mengubah aturan ini'
-    });
-  }
-
+app.post(['/api/whatsapp/reservation-settings', '/whatsapp/reservation-settings'], requireAdmin, (req, res) => {
   db.settings.wa = { ...(db.settings.wa || {}), ...req.body };
   res.json({ ok: true, settings: db.settings.wa });
 });
 
 // List Available WhatsApp Groups
-app.get(['/api/whatsapp/groups', '/whatsapp/groups'], async (req, res) => {
+app.get(['/api/whatsapp/groups', '/whatsapp/groups'], requireAdmin, async (req, res) => {
   const cfg = db.settings.wa || {};
   const groups = [];
 
@@ -2979,7 +3045,6 @@ app.get(['/api/whatsapp/status', '/api/settings/whatsapp', '/whatsapp/status'], 
       provider: 'evolution',
       api_url: url,
       instance_name: instance,
-      api_key: key,
       has_key: Boolean(key),
       details,
     });
@@ -3745,55 +3810,88 @@ app.get('/api/voids', (req, res) => {
 // ==========================================
 // 11. Users & RBAC
 // ==========================================
-app.get('/api/users', (req, res) => {
+app.get('/api/users', requireAdmin, (req, res) => {
   res.json(db.users.map(formatUser));
 });
 
-app.post('/api/users', (req, res) => {
-  const role = req.body?.role || 'kasir';
+app.post('/api/users', requireAdmin, (req, res) => {
+  const isSuper = Boolean(req.user?.is_superadmin || req.user?.role === 'superadmin');
+  let role = req.body?.role || 'kasir';
+
+  // Only superadmin can create superadmin or admin accounts
+  if ((role === 'superadmin' || role === 'admin') && !isSuper) {
+    return res.status(403).json({ detail: 'Hanya Super Admin yang dapat membuat akun Administrator atau Super Admin' });
+  }
+
   const rawPin = req.body?.pin ? String(req.body.pin).trim() : '';
+  const username = (req.body?.username || '').trim().toLowerCase();
+  if (!username) {
+    return res.status(400).json({ detail: 'Username wajib diisi' });
+  }
+
+  // Check unique username
+  const exists = db.users.some((u) => (u.username || '').toLowerCase() === username);
+  if (exists) {
+    return res.status(400).json({ detail: 'Username sudah digunakan' });
+  }
+
   const u = {
     id: 'usr-' + Date.now(),
-    name: req.body?.name || 'User',
-    username: (req.body?.username || '').trim().toLowerCase(),
-    email: req.body?.email || `${(req.body?.username || '').trim().toLowerCase()}@grandacehkuliner.com`,
-    password: req.body?.password || '',
+    name: req.body?.name || username,
+    username,
+    email: req.body?.email || `${username}@grandacehkuliner.com`,
+    password: req.body?.password || '123456',
+    password_plain: req.body?.password || '123456',
     pin: rawPin || (role === 'superadmin' ? '260900' : role === 'admin' ? '123456' : role === 'kasir' ? '111222' : '333444'),
     role,
+    role_base: role,
+    role_name: role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Administrator' : role === 'kasir' ? 'Kasir' : role,
     active: true,
     must_change_password: !!req.body?.must_change_password,
   };
-  const formatted = formatUser(u);
-  db.users.push(formatted);
-  res.json(formatted);
+  db.users.push(u);
+  res.json(formatUser(u));
 });
 
 app.all(['/api/users/:id/pin', '/users/:id/pin', '/api/users/:id/reset-pin', '/users/:id/reset-pin'], (req, res) => {
+  if (!req.user) return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+
+  // Caller must be admin OR the user themselves
+  const isSelf = req.user.id === user.id || req.user.username === user.username;
+  const isSuper = Boolean(req.user.is_superadmin || req.user.role === 'superadmin');
+  const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
+  if (!isSelf && !isAdmin) {
+    return res.status(403).json({ detail: 'Akses Ditolak: Tidak memiliki wewenang untuk mengubah PIN akun ini' });
+  }
+
   const rawPin = String(req.body?.pin || req.body?.new_pin || '').trim();
   if (!rawPin || !/^\d{4,8}$/.test(rawPin)) {
     return res.status(400).json({ detail: 'PIN harus terdiri dari 6 digit angka' });
   }
   user.pin = rawPin;
-  const formatted = formatUser(user);
-  Object.assign(user, formatted);
-  res.json({ ok: true, pin: rawPin, user: formatted });
+  res.json({ ok: true, pin_set: true, user: formatUser(user) });
 });
 
-app.patch(['/api/users/:id/pin-enabled', '/users/:id/pin-enabled'], (req, res) => {
+app.patch(['/api/users/:id/pin-enabled', '/users/:id/pin-enabled'], requireAdmin, (req, res) => {
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   user.pin_enabled = req.body?.enabled !== false;
-  const formatted = formatUser(user);
-  Object.assign(user, formatted);
-  res.json({ ok: true, pin_enabled: user.pin_enabled, user: formatted });
+  res.json({ ok: true, pin_enabled: user.pin_enabled, user: formatUser(user) });
 });
 
-app.patch(['/api/users/:id/role', '/users/:id/role'], (req, res) => {
+app.patch(['/api/users/:id/role', '/users/:id/role'], requireAdmin, (req, res) => {
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   const newRole = req.body?.role || 'kasir';
+
+  const isSuper = Boolean(req.user?.is_superadmin || req.user?.role === 'superadmin');
+
+  // Only superadmin can promote/demote superadmin or admin accounts
+  if ((newRole === 'superadmin' || newRole === 'admin' || user.role === 'superadmin' || user.role === 'admin') && !isSuper) {
+    return res.status(403).json({ detail: 'Hanya Super Admin yang dapat mengubah hak akses Administrator atau Super Admin' });
+  }
 
   // Prevent demoting last superadmin
   if (isUserSuperAdmin(user) && newRole !== 'superadmin') {
@@ -3814,31 +3912,48 @@ app.patch(['/api/users/:id/role', '/users/:id/role'], (req, res) => {
     delete user.perms;
     delete user.perms_full;
   }
-  const formatted = formatUser(user);
-  Object.assign(user, formatted);
-  res.json(formatted);
+  res.json(formatUser(user));
 });
 
-app.patch(['/api/users/:id/toggle', '/users/:id/toggle'], (req, res) => {
+app.patch(['/api/users/:id/toggle', '/users/:id/toggle'], requireAdmin, (req, res) => {
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+
+  // Prevent deactivating last superadmin
+  if (user.active && isUserSuperAdmin(user)) {
+    const otherSupers = db.users.filter((u) => u.id !== user.id && u.username !== user.username && u.active !== false && isUserSuperAdmin(u));
+    if (otherSupers.length === 0) {
+      return res.status(400).json({ detail: 'Tidak dapat menonaktifkan Super Admin terakhir yang sedang aktif' });
+    }
+  }
+
   user.active = !user.active;
   res.json(formatUser(user));
 });
 
 app.all(['/api/users/:id/reset-password', '/users/:id/reset-password'], (req, res) => {
+  if (!req.user) return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
+
+  const isSelf = req.user.id === user.id || req.user.username === user.username;
+  const isSuper = Boolean(req.user.is_superadmin || req.user.role === 'superadmin');
+  const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
+
+  if (!isSelf && !isAdmin) {
+    return res.status(403).json({ detail: 'Akses Ditolak: Tidak memiliki wewenang untuk mereset password akun ini' });
+  }
+
   const newPw = req.body?.new_password || req.body?.password || '123456';
   user.password = newPw;
   user.password_plain = newPw;
   if (req.body?.must_change_password !== undefined) {
     user.must_change_password = !!req.body.must_change_password;
   }
-  res.json({ ok: true, password: newPw, user: formatUser(user) });
+  res.json({ ok: true, message: 'Password berhasil direset', user: formatUser(user) });
 });
 
-app.all(['/api/users/:id/toggle-must-change', '/api/users/:id/must-change-password'], (req, res) => {
+app.all(['/api/users/:id/toggle-must-change', '/api/users/:id/must-change-password'], requireAdmin, (req, res) => {
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   if (req.body?.value !== undefined) {
@@ -3849,14 +3964,14 @@ app.all(['/api/users/:id/toggle-must-change', '/api/users/:id/must-change-passwo
   res.json(formatUser(user));
 });
 
-app.patch(['/api/users/:id/ingredient-categories', '/users/:id/ingredient-categories'], (req, res) => {
+app.patch(['/api/users/:id/ingredient-categories', '/users/:id/ingredient-categories'], requireAdmin, (req, res) => {
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   user.ingredient_categories = Array.isArray(req.body?.categories) ? req.body.categories : [];
   res.json({ ok: true, categories: user.ingredient_categories });
 });
 
-app.patch(['/api/users/:id/permissions', '/users/:id/permissions'], (req, res) => {
+app.patch(['/api/users/:id/permissions', '/users/:id/permissions'], requireSuperAdmin, (req, res) => {
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
 
@@ -3870,23 +3985,19 @@ app.patch(['/api/users/:id/permissions', '/users/:id/permissions'], (req, res) =
   if (req.body?.role) {
     user.role = req.body.role;
   }
-  const formatted = formatUser(user);
-  Object.assign(user, formatted);
-  res.json({ ok: true, user: formatted });
+  res.json({ ok: true, user: formatUser(user) });
 });
 
-app.post(['/api/users/:id/reset-permissions', '/users/:id/reset-permissions'], (req, res) => {
+app.post(['/api/users/:id/reset-permissions', '/users/:id/reset-permissions'], requireSuperAdmin, (req, res) => {
   const user = db.users.find((u) => u.id === req.params.id || (u._id && u._id.$oid === req.params.id) || u.username === req.params.id);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
 
   delete user.perms;
   delete user.perms_full;
-  const formatted = formatUser(user);
-  Object.assign(user, formatted);
-  res.json({ ok: true, user: formatted });
+  res.json({ ok: true, user: formatUser(user) });
 });
 
-app.get(['/api/users/:id/delete-check', '/users/:id/delete-check'], (req, res) => {
+app.get(['/api/users/:id/delete-check', '/users/:id/delete-check'], requireAdmin, (req, res) => {
   const targetId = req.params.id;
   const user = db.users.find((u) => u.id === targetId || (u._id && u._id.$oid === targetId) || u.username === targetId);
   if (!user) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
@@ -3895,21 +4006,7 @@ app.get(['/api/users/:id/delete-check', '/users/:id/delete-check'], (req, res) =
   const activeSupers = db.users.filter((u) => u.active !== false && isUserSuperAdmin(u));
   const otherSupers = activeSupers.filter((u) => u.id !== user.id && u.username !== user.username);
   const isLastSuper = isSuper && otherSupers.length === 0;
-
-  // Check self
-  let isSelf = false;
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer gak_jwt_')) {
-    try {
-      const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer gak_jwt_', ''), 'base64').toString('utf-8'));
-      if (decoded.id === user.id || (decoded.username && decoded.username.toLowerCase() === (user.username || '').toLowerCase())) {
-        isSelf = true;
-      }
-    } catch (e) {}
-  }
-  if (!isSelf && req.user) {
-    isSelf = (req.user.id === user.id || req.user.username === user.username);
-  }
+  const isSelf = req.user ? (req.user.id === user.id || req.user.username === user.username) : false;
 
   const hasHistory = Boolean(db.transactions && db.transactions.some((t) => t.cashier_id === user.id || t.cashier_name === user.name || t.cashier === user.username));
 
@@ -3931,33 +4028,23 @@ app.get(['/api/users/:id/delete-check', '/users/:id/delete-check'], (req, res) =
   });
 });
 
-app.delete(['/api/users/:id', '/users/:id'], (req, res) => {
+app.delete(['/api/users/:id', '/users/:id'], requireAdmin, (req, res) => {
   const targetId = req.params.id;
   const idx = db.users.findIndex((u) => u.id === targetId || (u._id && u._id.$oid === targetId) || u.username === targetId);
   if (idx === -1) return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   const target = db.users[idx];
 
-  // Self deletion check
-  let isSelf = false;
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer gak_jwt_')) {
-    try {
-      const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer gak_jwt_', ''), 'base64').toString('utf-8'));
-      if (decoded.id === target.id || (decoded.username && decoded.username.toLowerCase() === (target.username || '').toLowerCase())) {
-        isSelf = true;
-      }
-    } catch (e) {}
-  }
-  if (!isSelf && req.user) {
-    isSelf = (req.user.id === target.id || req.user.username === target.username);
-  }
-
+  const isSelf = req.user ? (req.user.id === target.id || req.user.username === target.username) : false;
   if (isSelf) {
     return res.status(400).json({ detail: 'Tidak bisa menghapus akun Anda sendiri yang sedang aktif' });
   }
 
   const isSuper = isUserSuperAdmin(target);
   if (isSuper) {
+    const isCallerSuper = Boolean(req.user?.is_superadmin || req.user?.role === 'superadmin');
+    if (!isCallerSuper) {
+      return res.status(403).json({ detail: 'Hanya Super Admin yang dapat menghapus akun Super Admin' });
+    }
     const activeOtherSupers = db.users.filter((u) => u.id !== target.id && u.username !== target.username && u.active !== false && isUserSuperAdmin(u));
     if (activeOtherSupers.length === 0) {
       return res.status(400).json({ detail: 'Akun Super Admin terakhir tidak bisa dihapus. Harus tersisa minimal 1 akun Super Admin aktif.' });
@@ -3975,38 +4062,24 @@ app.delete(['/api/users/:id', '/users/:id'], (req, res) => {
   res.json({ ok: true, action: 'deleted', username: removed.username || removed.name });
 });
 
-app.post('/api/settings/rbac/claim-superadmin', (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer gak_jwt_')) {
-    try {
-      const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer gak_jwt_', ''), 'base64').toString('utf-8'));
-      const found = db.users.find((u) => u.id === decoded.id || (u.username && u.username.toLowerCase() === (decoded.username || '').toLowerCase()));
-      if (found) {
-        found.role = 'superadmin';
-        found.role_base = 'superadmin';
-        found.role_name = 'Super Admin (Owner)';
-        found.is_superadmin = true;
-        found.bootstrap_owner = false;
-        found.perms = ['*'];
-        found.perms_full = true;
-        return res.json({ ok: true, user: formatUser(found) });
-      }
-    } catch (e) {}
+app.post('/api/settings/rbac/claim-superadmin', requireSuperAdmin, (req, res) => {
+  const found = db.users.find((u) => u.id === req.user.id || u.username === req.user.username);
+  if (found) {
+    found.role = 'superadmin';
+    found.role_base = 'superadmin';
+    found.role_name = 'Super Admin (Owner)';
+    found.is_superadmin = true;
+    found.perms = ['*'];
+    found.perms_full = true;
+    return res.json({ ok: true, user: formatUser(found) });
   }
   res.json({ ok: true });
 });
 
 app.get('/api/rbac/my', (req, res) => {
-  let currentUser = null;
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer gak_jwt_')) {
-    try {
-      const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer gak_jwt_', ''), 'base64').toString('utf-8'));
-      currentUser = db.users.find((u) => u.id === decoded.id || (u.username && u.username.toLowerCase() === (decoded.username || '').toLowerCase()));
-    } catch (e) {}
-  }
+  let currentUser = req.user ? db.users.find((u) => u.id === req.user.id || u.username === req.user.username) : null;
   if (!currentUser) {
-    currentUser = db.users.find((u) => u.username === 'taqim2609' || u.role === 'superadmin') || db.users[0];
+    return res.status(401).json({ detail: 'Not authenticated' });
   }
   const uv = formatUser(currentUser);
   res.json({

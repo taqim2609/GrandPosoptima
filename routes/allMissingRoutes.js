@@ -1478,10 +1478,23 @@ Terima kasih atas kerja keras hari ini!
 
   // GET & PUT /api/whatsapp/config
   app.get(['/api/whatsapp/config', '/whatsapp/config'], (req, res) => {
-    res.json(db.whatsappConfig);
+    if (!req.user) return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
+    const isSuper = req.user.is_superadmin || req.user.role === 'superadmin';
+    const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
+    if (!isAdmin) return res.status(403).json({ detail: 'Akses Ditolak: Memerlukan izin Admin' });
+    const cfg = db.whatsappConfig || {};
+    const key = cfg.api_key || cfg.evolution_api_key || '';
+    res.json({
+      ...cfg,
+      api_key_masked: key ? '••••••••' : '',
+    });
   });
 
   app.put(['/api/whatsapp/config', '/whatsapp/config'], (req, res) => {
+    if (!req.user) return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
+    const isSuper = req.user.is_superadmin || req.user.role === 'superadmin';
+    const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
+    if (!isAdmin) return res.status(403).json({ detail: 'Akses Ditolak: Memerlukan izin Admin' });
     Object.assign(db.whatsappConfig, req.body);
     res.json(db.whatsappConfig);
   });
