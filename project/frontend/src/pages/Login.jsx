@@ -11,6 +11,16 @@ import LoginServerSelector from "@/components/LoginServerSelector";
 
 const TAILSCALE_FUNNEL_URL = "https://grandpos.tailf3a839.ts.net";
 
+function isKnownHealthResponse(response, text) {
+  if (!response.ok) return false;
+  try {
+    const body = JSON.parse(text);
+    return body.app === "gak-pos" || body.healthy === true || body.service === "grand-aceh-kuliner-pos";
+  } catch {
+    return text.includes("gak-pos") || text.includes("grand-aceh-kuliner-pos");
+  }
+}
+
 export default function Login() {
   const { login, loginPin, user } = useAuth();
   const { platform } = usePlatform();
@@ -198,7 +208,7 @@ export default function Login() {
     try {
       const res = await fetch(`${base}/api/health`);
       const txt = await res.text();
-      if (res.ok && txt.includes("gak-pos")) toast.success("Server terhubung! ✅ Silakan login.", { id: t, duration: 6000 });
+      if (isKnownHealthResponse(res, txt)) toast.success("Server terhubung! ✅ Silakan login.", { id: t, duration: 6000 });
       else toast.error(`Server menjawab tapi tidak dikenal (HTTP ${res.status}). Cek alamat server.`, { id: t, duration: 8000 });
     } catch (e) {
       toast.error(`Gagal menghubungi server: ${e.message}. Cek IP & koneksi, pastikan diawali http://`, { id: t, duration: 9000 });
@@ -231,7 +241,7 @@ export default function Login() {
     try {
       const res = await fetch(`${base}/api/health`);
       const txt = await res.text();
-      if (res.ok && txt.includes("gak-pos")) toast.success("Server Tailscale terhubung! ✅ Silakan login.", { id: t, duration: 6000 });
+      if (isKnownHealthResponse(res, txt)) toast.success("Server Tailscale terhubung! ✅ Silakan login.", { id: t, duration: 6000 });
       else toast.error(`Server menjawab tapi tidak dikenal (HTTP ${res.status}).`, { id: t, duration: 8000 });
     } catch (e) {
       toast.error(`Gagal menghubungi ${base}: ${e.message}. Pastikan Funnel aktif di Pi & URL benar.`, { id: t, duration: 9000 });

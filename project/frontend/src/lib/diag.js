@@ -341,12 +341,14 @@ export async function buildDiagReport() {
     out.push(`Server /api/health: GAGAL -> ${(e && e.message) || e}`);
   }
 
-  // Versi server / update center
+  // Versi server / update center (pakai Server URL agar tidak menembak same-origin).
   try {
-    const r = await axios.get("/api/update/check", { timeout: 12000 });
+    const base = getServerUrl();
+    const url = base ? `${base}/api/update/check` : "/api/update/check";
+    const r = await axios.get(url, { timeout: 12000 });
     const d = r.data || {};
     out.push(`Server mode: ${d.enabled ? "Google AI Studio" : "Lokal / Git"}`);
-    out.push(`Versi server: ${d.current || "-"} | terbaru: ${d.latest || "-"}${d.updateAvailable ? " (UPDATE TERSEDIA)" : ""} | update center: ${d.updateCenterReachable ? "dijangkau" : "tidak dijangkau"}`);
+    out.push(`Versi server: ${d.current || d.current_version || "-"} | terbaru: ${d.latest || d.latest_version || "-"}${d.updateAvailable || d.update_available ? " (UPDATE TERSEDIA)" : ""} | update center: ${d.updateCenterReachable === undefined ? "n/a" : d.updateCenterReachable ? "dijangkau" : "tidak dijangkau"}`);
   } catch (e) {
     const status = e.response && e.response.status;
     out.push(`Cek versi server: ${status === 401 ? "sesi login tidak aktif (401) — login ulang untuk melihat versi" : `gagal (${status || e.message})`}`);
