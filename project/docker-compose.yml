@@ -5,9 +5,10 @@
 
 services:
   mongo:
-    # PC Server (x86_64) -> mongo:7 (default berkecepatan tinggi)
-    # Raspberry Pi 3/4 (ARMv8.0) -> MONGO_IMAGE=mongo:4.4.18 di .env
-    image: ${MONGO_IMAGE:-mongo:7}
+    # Satu sumber kebenaran: MongoDB 4.4.18 (baseline produksi Raspberry Pi).
+    # Bisa ditimpa lewat MONGO_IMAGE, tetapi nilai bawaan harus sama dengan Pi
+    # agar backup/dump dari satu node pasti bisa di-restore di node lain.
+    image: ${MONGO_IMAGE:-mongo:4.4.18}
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
