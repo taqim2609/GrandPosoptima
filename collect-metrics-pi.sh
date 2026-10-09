@@ -12,7 +12,7 @@
 #                                              #   → jalankan di LUAR jam ramai!
 #
 # Hasilnya disimpan sebagai metrics-report-<tanggal>.txt di folder yang sama.
-# Buka file itu lalu kirim isinya ke chat VibeCoder (atau screenshot dari HP).
+# Buka file itu lalu kirim isinya ke tim internal (atau screenshot dari HP).
 #
 # Sandi admin TIDAK disimpan & TIDAK ikut ditulis ke file laporan: hanya
 # ditanyakan sekali (ketikan tidak tampil) untuk mengambil satu token sementara.
@@ -45,7 +45,7 @@ run() { "$@" 2>&1 | tee -a "$OUT"; }
 say "=== LAPORAN METRIK SERVER Grand Aceh Kuliner POS ==="
 say "Waktu pengambilan : $(date '+%Y-%m-%d %H:%M:%S %Z')"
 say "Folder proyek     : $DIR"
-if [ -f .vibecoder-version ]; then say "Versi terpasang    : $(cat .vibecoder-version)"; fi
+if [ -f .aistudio-version ]; then say "Versi terpasang    : $(cat .aistudio-version)"; fi
 say "(skrip baca-saja — tidak ada data yang diubah)"
 
 # ---------------------------------------------------------------- 0. temuan cepat
@@ -305,5 +305,5 @@ fi
 # ---------------------------------------------------------------- selesai
 sec "SELESAI"
 say "Laporan tersimpan di: $OUT"
-say "Buka file itu, lalu kirim isinya ke chat VibeCoder."
+say "Buka file itu, lalu kirim isinya ke tim internal."
 say "(Tidak ada sandi/token di dalam file — aman dikirim.)"

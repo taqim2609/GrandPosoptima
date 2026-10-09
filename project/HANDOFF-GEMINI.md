@@ -5,7 +5,7 @@
 > Gemini akan memahami konteks proyek tanpa perlu membaca kode dari awal.
 >
 > Terakhir diperbarui: 2026-09-08 · commit `b9303ca` · OTA `20260908114143`
-> Pusat update: `https://taqim258.vibecoder.co.id/pos-grand-update` (versi `b9303ca`)
+> Pusat update: `https://taqim258.Google AI Studio/pos-grand-update` (versi `b9303ca`)
 
 ---
 
@@ -15,7 +15,7 @@
 punya **dua toko dalam satu aplikasi**: **F&B** (makan di tempat & bawa pulang) dan **Retail**
 (toko kelontong), plus produk **titipan vendor** dengan sistem bagi hasil. Berjalan **hybrid**:
 server lokal di dalam toko (Raspberry Pi/PC, Docker) + tetap bisa dipakai **offline** (opsional,
-bisa dimatikan) + update lewat internet (pusat update vibecoder.co.id) + aplikasi Android (APK
+bisa dimatikan) + update lewat internet (pusat update Google AI Studio) + aplikasi Android (APK
 dengan update OTA). Bahasa aplikasi & komentar: **Indonesia**.
 
 ### Fitur utama saat ini (ringkas)
@@ -55,7 +55,7 @@ Browser/APK Android (React 19)  ──HTTP/JSON──►  Nginx  ──►  Fast
 | Frontend | **React 19 + react-scripts (CRA)** via **CRACO**, Tailwind, shadcn/Radix, axios, recharts, react-router 7, lucide-react | `frontend/src/` |
 | Android | **Capacitor 6** + **Capgo Updater** (OTA) | `frontend/android/` (APK v2.x) |
 | Server lokal | **Docker Compose** (mongo, backend, frontend/nginx) di Raspberry Pi/PC | `docker-compose.yml` |
-| Update | arsip `pos-grand.tar.gz` dari pusat update vibecoder.co.id | skrip `update-vibecoder-pi.sh` |
+| Update | arsip `pos-grand.tar.gz` dari pusat update Google AI Studio | skrip `update-pi.sh` |
 | WhatsApp | **wacloud.id** (HTTP API) — BUKAN whatsapp-web.js (nonaktif) | backend `_send_whatsapp()` |
 
 ### Pola backend penting
@@ -87,8 +87,8 @@ Browser/APK Android (React 19)  ──HTTP/JSON──►  Nginx  ──►  Fast
 - `frontend/build/` — hasil build **DI-TRACK** di git (untuk OTA & APK). Postbuild `scripts/make-ota.js`
   membuat `build/ota/bundle.zip`+`version.json` OTOMATIS setelah `yarn build`.
 - `scripts/make-ota.js`, `scripts/userinfo-shim.js` (build APK), `scripts/seed_data.py`.
-- `FEATURES.md`, `memory/PRD.md`, `docs/INTEGRASI-NETZME.md`, `PANDUAN-UPDATE-VIBECODER.md`.
-- **Update center (folder TERPISAH, di luar repo)**: `/home/vibecoderco/workspace/taqim258/pos-grand-update/`
+- `FEATURES.md`, `memory/PRD.md`, `docs/INTEGRASI-NETZME.md`, `PANDUAN-GITHUB.md`.
+- **Update center (folder TERPISAH, di luar repo)**: `/home/aistudioco/workspace/taqim258/pos-grand-update/`
   berisi `pos-grand.tar.gz` + `version.json` + receiver PHP (`rpt.php`, `bkp.php`, `feat.php`) +
   `index.php` (landing). Jangan pindahkan/hapus — kuota app terbatas & receiver harus tetap ada.
 
@@ -118,7 +118,7 @@ CI=false GENERATE_SOURCEMAP=false REACT_APP_BACKEND_URL="" corepack yarn build
 
 ### APK Android (jarang; hanya bila ubah native)
 Resep lengkap ada di AGENTS.md (JDK 17 di ~/jdk17, SDK ~/android-sdk, Gradle 8.2.1).
-Ringkas: `export HOME=/home/vibecoderco/workspace/taqim258` → cap sync (pakai userinfo-shim)
+Ringkas: `export HOME=/home/aistudioco/workspace/taqim258` → cap sync (pakai userinfo-shim)
 → `gradle assembleDebug` di `frontend/android` → salin APK ke folder update center `apk/`.
 
 ### Update Pi (cara resmi terbitkan versi baru)
@@ -126,9 +126,9 @@ Ringkas: `export HOME=/home/vibecoderco/workspace/taqim258` → cap sync (pakai 
 cd POS-grand && git add -A && git commit -m "..."
 git ls-files -z | tar --null -czf ../pos-grand-update/pos-grand.tar.gz -T -
 # tulis ../pos-grand-update/version.json: {"version":"<short-hash>","url":"pos-grand.tar.gz","updated":"<UTC>"}
-# publish ulang folder pos-grand-update (static/php) lewat VibeCoder
+# publish ulang folder pos-grand-update (static/php) lewat tim pengembang
 ```
-Di Pi: `bash update-vibecoder-pi.sh` (unduh, ekstrak tanpa menimpa `.env`/`backups/`, rebuild Docker).
+Di Pi: `bash update-pi.sh` (unduh, ekstrak tanpa menimpa `.env`/`backups/`, rebuild Docker).
 **WAJIB backend ikut ter-update** (arsip berisi server.py) — jangan hanya OTA frontend.
 APK menerima OTA frontend otomatis (fetch `/api/ota/version`).
 
@@ -246,27 +246,27 @@ APK menerima OTA frontend otomatis (fetch `/api/ota/version`).
 
 ## 10. Cara "Menyerahkan" Hasil Pengembangan Kembali
 
-Alur yang dipakai saat ini (bukan GitHub): hasil pengembangan Gemini → minta **VibeCoder**
+Alur yang dipakai saat ini (bukan GitHub): hasil pengembangan Gemini → minta **tim pengembang**
 (atau lakukan sendiri jika bisa akses workspace):
 1. Terapkan perubahan pada kode di repo (`POS-grand/`).
 2. Build ulang frontend bila menyentuh frontend (`yarn build` → regenerasi OTA).
 3. `git add -A && git commit -m "..."` → `git log --oneline -1` ambil short hash.
 4. `git ls-files -z | tar --null -czf ../pos-grand-update/pos-grand.tar.gz -T -`
 5. Perbarui `../pos-grand-update/version.json` dengan hash & timestamp.
-6. Publish ulang folder `pos-grand-update` (VibeCoder PublishApp).
-7. Di Pi: `bash update-vibecoder-pi.sh` → Docker rebuild → APK dapat OTA.
+6. Publish ulang folder `pos-grand-update` (tim pengembang PublishApp).
+7. Di Pi: `bash update-pi.sh` → Docker rebuild → APK dapat OTA.
 
 > Jika Gemini menghasilkan **kode yang berdiri sendiri** (mis. file baru), cukup salin isinya ke chat
-> VibeCoder beserta penjelasan di mana menaruhnya.
+> tim pengembang beserta penjelasan di mana menaruhnya.
 
 ---
 
 # LAMPIRAN — Perlengkapan Kerja Sama dengan AI Eksternal
 
-## A. Alur Bolak-Balik yang Aman (Gemini ⇄ VibeCoder ⇄ Pi)
+## A. Alur Bolak-Balik yang Aman (Gemini ⇄ tim pengembang ⇄ Pi)
 
 ```
-Gemini (PC Anda)  ──kirim file/diff──►  VibeCoder (di sini: review+build+commit)
+Gemini (PC Anda)  ──kirim file/diff──►  tim pengembang (di sini: review+build+commit)
       ▲                                      │
       │                                      ▼  terbitkan pos-grand-update (tar+version.json)
 Anda jalankan update di Pi  ◄─────────────────┘
@@ -275,14 +275,14 @@ Anda jalankan update di Pi  ◄────────────────�
 ```
 
 1. **Gemini selesai** → minta ringkasan: daftar file diubah + alasan.
-2. **Kirim ke VibeCoder**: file kecil → tempel file UTUH; file besar (backend/server.py) → diff
+2. **Kirim ke tim pengembang**: file kecil → tempel file UTUH; file besar (backend/server.py) → diff
    (`git diff`) atau potongan lama→baru; banyak file → zip hanya file yang berubah.
-3. **VibeCoder** (jangan Anda lakukan): review sintaks → `yarn build` (regen OTA) bila frontend →
+3. **tim pengembang** (jangan Anda lakukan): review sintaks → `yarn build` (regen OTA) bila frontend →
    commit → tar → version.json → publish `pos-grand-update` → verifikasi.
-4. **Anda di Pi**: `cd ~/grand-aceh-pos && bash update-vibecoder-pi.sh` (tidak menimpa .env/backups).
-5. **Rollback** bila bermasalah: minta VibeCoder terbitkan hash lama, update Pi sekali lagi.
+4. **Anda di Pi**: `cd ~/grand-aceh-pos && bash update-pi.sh` (tidak menimpa .env/backups).
+5. **Rollback** bila bermasalah: minta tim pengembang terbitkan hash lama, update Pi sekali lagi.
 
-Larangan untuk Gemini: sentuh `.env`/`backend/.env.docker`, `backups/`, `.git`, `.vibecoder-version`,
+Larangan untuk Gemini: sentuh `.env`/`backend/.env.docker`, `backups/`, `.git`, `.aistudio-version`,
 `frontend/build/` manual, folder update center (receiver PHP). Beri tahu jenis perubahan:
 frontend saja (cukup OTA) / backend ikut (Pi wajib update) / native Android (perlu rebuild APK).
 
@@ -296,8 +296,8 @@ SEBELUM mengerjakan apa pun:
 2. Baca juga FEATURES.md dan memory/PRD.md bila perlu riwayat, lalu pahami struktur folder.
 
 ATURAN MUTLAK:
-- JANGAN sentuh: backend/.env.docker, .env, backups/, .git/, .vibecoder-version, frontend/build/
-  (build via CRACO+make-ota di sisi VibeCoder), isi folder pos-grand-update/ (receiver PHP).
+- JANGAN sentuh: backend/.env.docker, .env, backups/, .git/, .aistudio-version, frontend/build/
+  (build via CRACO+make-ota di sisi tim pengembang), isi folder pos-grand-update/ (receiver PHP).
 - JANGAN tulis kredensial/password asli ke kode/dokumen.
 - Backend = satu file backend/server.py (FastAPI, prefix /api, Pydantic + RBAC via Depends).
 - Frontend hanya ubah frontend/src/. JANGAN tambah import() dinamis / code-splitting.
@@ -332,7 +332,7 @@ Pengembangan dan perbaikan kode aplikasi "Grand Aceh Kuliner POS" — POS restor
 Aktifkan saat pengguna meminta: menambah/mengubah fitur POS, memperbaiki bug, menganalisis
 laporan/keuangan/shift/vendor, mengubah aturan bisnis, atau menulis kode proyek ini. Sebelum
 mulai baca HANDOFF-GEMINI.md di folder proyek; ikuti aturan mutlak di dalamnya. Tutup tiap tugas
-dengan LAPORAN AKHIR berformat standar agar hasilnya bisa diterapkan kembali oleh VibeCoder.
+dengan LAPORAN AKHIR berformat standar agar hasilnya bisa diterapkan kembali oleh tim pengembang.
 ```
 
 **Instruksi:**
@@ -343,8 +343,8 @@ LANGKAH AWAL (wajib): baca HANDOFF-GEMINI.md; baca sekilas FEATURES.md & memory/
 perlu; eksplorasi file relevan sebelum menulis kode.
 
 ATURAN MUTLAK — JANGAN PERNAH: (1) menyentuh backend/.env.docker, .env, backups/, .git/,
-.vibecoder-version, pos-grand-update/ (receiver PHP); (2) mengubah frontend/build/ manual
-(build di sisi VibeCoder); (3) menambah import() dinamis / code-splitting; (4) mengaktifkan
+.aistudio-version, pos-grand-update/ (receiver PHP); (2) mengubah frontend/build/ manual
+(build di sisi tim pengembang); (3) menambah import() dinamis / code-splitting; (4) mengaktifkan
 sw.js / menghapus polyfills.js dari index.html; (5) me-refactor OfflineContext.jsx;
 (6) menulis kredensial asli ke kode/dokumen.
 

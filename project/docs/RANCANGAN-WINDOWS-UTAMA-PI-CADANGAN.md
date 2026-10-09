@@ -128,7 +128,7 @@ Ini bagian paling penting secara operasional, dan harus Anda putuskan:
 | Halaman/endpoint **status**: node mana yang primary, lag replikasi, node terakhir terlihat | fitur kecil (backend+UI) | Sangat membantu saat kejadian "kenapa lambat?" |
 | Penjaga scheduler: tugas berkala hanya bila mongod **lokal** primary | fitur kecil | Mencegah dua tugas berat bersamaan |
 | Penyesuaian skrip operasional (backup, cek integritas, update 1-klik) supaya dijalankan terhadap node yang jadi primary; padanan `.ps1`/WSL di Windows | skrip | Skrip bash saat ini tidak jalan native di Windows |
-| **Backup tetap wajib** (mongodump + kirim ke vibecoder) | tidak berubah | **Replica/secondary BUKAN backup**: penghapusan data ikut tereplikasi seketika. Ingat laporan terakhir: folder `backups/` Anda masih kosong padahal sudah ratusan transaksi. |
+| **Backup tetap wajib** (mongodump + kirim ke aistudio) | tidak berubah | **Replica/secondary BUKAN backup**: penghapusan data ikut tereplikasi seketika. Ingat laporan terakhir: folder `backups/` Anda masih kosong padahal sudah ratusan transaksi. |
 
 Yang **tidak** perlu diubah (karena satu database): nomor order & `counters`, indeks unik
 (`order_number`, `client_ref`, `payment_ref`), `$inc` stok, poin/kupon, klaim atomik

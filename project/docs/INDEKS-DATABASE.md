@@ -68,5 +68,5 @@ hanya di-sort tanpa filter (≤ ratusan dokumen).
 - **Kinerja menulis**: tiap insert/update kini memelihara indeks tambahan —
   trade-off standar; jumlah indeks per koleksi masih jauh di bawah batas 64 dan
   dipilih dari query yang benar-benar sering.
-- Setelah update Pi (`bash update-vibecoder-pi.sh`), indeks otomatis dibuat saat
+- Setelah update Pi (`bash update-pi.sh`), indeks otomatis dibuat saat
   container backend pertama start — tidak ada langkah manual.

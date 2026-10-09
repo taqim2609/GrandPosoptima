@@ -7,7 +7,6 @@ cd "$(dirname "$0")"
 
 BASE_URL="${AISTUDIO_URL:-https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}"
 VER_FILE=".aistudio-version"
-[ -f .vibecoder-version ] && [ ! -f "$VER_FILE" ] && cp .vibecoder-version "$VER_FILE" 2>/dev/null || true
 CURL_ERR="/tmp/gak-curl-err.txt"
 
 TS() { date "+%Y-%m-%d %H:%M:%S"; }

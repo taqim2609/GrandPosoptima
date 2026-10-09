@@ -18,11 +18,18 @@ echo "Membuat backup database -> $FILE"
 docker compose exec -T mongo sh -c 'mongodump --archive --gzip' > "$FILE"
 echo "[OK] Backup lokal tersimpan: $FILE ($(du -h "$FILE" | cut -f1))"
 
-# Token & konfigurasi (prioritas: env dari container, lalu backend/.env.docker)
-TOKEN="${GAK_BACKUP_TOKEN:-${VIBE_BACKUP_TOKEN:-$(grep -E '^(GAK|VIBE)_BACKUP_TOKEN=' backend/.env.docker 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r')}}"
-TOKEN="${TOKEN:-gak_bkp_2a8d51c4}"
-PASS="${GAK_BACKUP_PASS:-${VIBE_BACKUP_PASS:-$(grep -E '^(GAK|VIBE)_BACKUP_PASS=' backend/.env.docker 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r')}}"
-URL="${GAK_BACKUP_URL:-${VIBE_BACKUP_URL:-https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app/api/backup/send-to-cloud}}"
+# Token & konfigurasi (prioritas: env, lalu backend/.env.docker).
+# SECURITY: tidak ada fallback token ter-hardcode. Bila token/URL belum
+# dikonfigurasi, skrip berhenti dengan status bukan-nol (backup lokal tetap ada).
+TOKEN="${GAK_BACKUP_TOKEN:-$(grep -E '^GAK_BACKUP_TOKEN=' backend/.env.docker 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r')}"
+PASS="${GAK_BACKUP_PASS:-$(grep -E '^GAK_BACKUP_PASS=' backend/.env.docker 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r')}"
+URL="${GAK_BACKUP_URL:-}"
+
+if [ -z "$TOKEN" ] || [ -z "$URL" ]; then
+  echo "[GAGAL] GAK_BACKUP_TOKEN dan GAK_BACKUP_URL wajib diisi (env atau backend/.env.docker)." >&2
+  echo "        Backup LOKAL sudah aman di $FILE, tetapi salinan cloud tidak dikirim." >&2
+  exit 1
+fi
 
 UPFILE="$FILE"
 if [ -n "$PASS" ]; then

@@ -7,7 +7,6 @@ cd "$(dirname "$0")"
 
 BASE_URL="${AISTUDIO_URL:-https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}"
 VER_FILE=".aistudio-version"
-[ -f .vibecoder-version ] && [ ! -f "$VER_FILE" ] && cp .vibecoder-version "$VER_FILE" 2>/dev/null || true
 CURL_ERR="/tmp/gak-curl-err.txt"
 
 TS() { date "+%Y-%m-%d %H:%M:%S"; }
@@ -39,12 +38,7 @@ else
     echo "[$(TS)] GAGAL membaca versi dari $BASE_URL"
     echo "[$(TS)] Penyebab dari curl:"
     sed 's/^/[curl] /' "$CURL_ERR" 2>/dev/null | tail -5 || true
-    exit 0
-  fi
-    echo "   - CA:    sudo apt update && sudo apt install -y ca-certificates && sudo update-ca-certificates"
-    echo "   - Jam:   cek 'date' — kalau salah: sudo date -s '$(date +%F\ %T)'"
-    echo "   - Jaringan memblokir 443 ke server update (VPN/proxy/firewall?)"
-    echo "   - Diagnosa lengkap: bash update-pos-pi.sh --test"
+    echo "   - Cek internet atau jalankan: bash update-pos-pi.sh --test"
     exit 0
   fi
 

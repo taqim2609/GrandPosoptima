@@ -3,7 +3,7 @@
 Status: **SUDAH DIIMPLEMENTASIKAN** (11 Sep 2026, commit `247b12a`) — dokumen ini kini menjadi
 catatan rancangan + acuan perilaku. Keputusan pemilik (§2) diikuti apa adanya.
 
-Rilis: OTA **20260911123859**; backend berubah → Pi jalankan `bash update-vibecoder-pi.sh`.
+Rilis: OTA **20260911123859**; backend berubah → Pi jalankan `bash update-pi.sh`.
 Uji: `gak-repro/test_void_backend.py` (70 pemeriksaan backend) & `gak-repro/repro-void.js`
 (39 pemeriksaan UI; admin, kasir shift berjalan, kasir terkunci, POS).
 
@@ -280,7 +280,7 @@ refresh setelah void; 0 error JS di semua skenario (admin, kasir shift berjalan,
 4. Pengaturan: kartu Void & Refund + chip variabel WA.
 5. Uji UI Playwright + seluruh regresi; perbaiki yang tersisa.
 6. Rilis: commit → arsip `git ls-files` → `version.json` → PublishApp; catat di `AGENTS.md`;
-   Pi `bash update-vibecoder-pi.sh` (backend berubah). OTA baru untuk web/APK; tanpa APK baru
+   Pi `bash update-pi.sh` (backend berubah). OTA baru untuk web/APK; tanpa APK baru
    (bundle POS sudah memuat semuanya setelah update).
 
 **Perkiraan**: 1 ronde penuh (backend + frontend + uji) — mirip skala modul Settlement Vendor.

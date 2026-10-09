@@ -15,7 +15,7 @@ CRON_SCHEDULE="${1:-30 3 * * *}"
 
 CRON_CMD="$CRON_SCHEDULE cd $DIR && ./update-aistudio-pi.sh >> $DIR/logs/autoupdate.log 2>&1"
 
-( crontab -l 2>/dev/null | grep -v 'update-aistudio-pi.sh' | grep -v 'update-vibecoder-pi.sh' | grep -v 'update-pi.sh' ; echo "$CRON_CMD" ) | crontab -
+( crontab -l 2>/dev/null | grep -v 'update-aistudio-pi.sh' | grep -v 'update-pi.sh' ; echo "$CRON_CMD" ) | crontab -
 
 echo "============================================================"
 echo "  UPDATE OTOMATIS BERHASIL DIAKTIFKAN!"

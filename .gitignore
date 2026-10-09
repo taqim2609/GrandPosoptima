@@ -5,10 +5,10 @@ project/frontend/node_modules/
 *.sqlite-shm
 *.sqlite3-wal
 *.sqlite3-shm
-.vibecoder-media-token
 *.map
 **/*.map
 .last_bkp
+.aistudio-media-token
 .last_feat
 .last_rpt
 project/backend/tests/

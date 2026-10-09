@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Bangun artefak Update Center (vibecoder.co.id) dari isi git.
+# Bangun artefak Update Center dari isi git.
 #
 # Menghasilkan, di folder Update Center (bawaan ../pos-grand-update):
 #   project/         -> SALINAN FOLDER PROYEK apa adanya (TANPA kompresi / tanpa tar):
 #                       inilah yang ditampilkan & bisa diunduh satu per satu di
 #                       files.php / file.php.
 #   pos-grand.tar.gz -> arsip berkompresi, HANYA untuk update otomatis di server Pi
-#                       (satu berkas yang diunduh update-vibecoder-pi.sh).
+#                       (satu berkas yang diunduh update-pi.sh).
 #   version.json     -> versi (hash commit) + waktu + jumlah berkas
 #
 # Berkas .env, backend/.env.docker, backups/ dan .git TIDAK ikut karena semuanya
