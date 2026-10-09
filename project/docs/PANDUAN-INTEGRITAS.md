@@ -127,7 +127,7 @@ backup lokal sudah lebih dari 3 hari.
 2. Bila container mati: `docker compose up -d --build`.
 3. Bila backend tidak menjawab: `docker compose logs backend --tail 50`
    (kolom *versi terpasang* di halaman Integritas membantu memastikan server sudah
-   di versi terbaru: `bash update-vibecoder-pi.sh`).
+   di versi terbaru: `bash update-pi.sh`).
 4. Bila temuan berupa data: perbaiki dari halaman Integritas, lalu **Cek Sekarang** lagi.
-5. Bila butuh bantuan VibeCoder: Pengaturan → Fitur & Integrasi → Diagnostik →
-   *Salin Laporan* / *Kirim ke VibeCoder*, sebutkan di chat bahwa laporan sudah dikirim.
+5. Bila butuh bantuan tim pengembang: Pengaturan → Fitur & Integrasi → Diagnostik →
+   *Salin Laporan* / *Kirim ke tim pengembang*, sebutkan di chat bahwa laporan sudah dikirim.

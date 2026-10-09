@@ -5785,23 +5785,18 @@ async def update_status(admin: dict = Depends(require_admin)):
     return {"enabled": _update_enabled(), "running": running, "log": log,
             "host_project_dir": os.environ.get("HOST_PROJECT_DIR")}
 
-GAK_UPDATE_BASE_URL = os.environ.get("GAK_UPDATE_BASE_URL", os.environ.get("VIBE_UPDATE_BASE_URL", "https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app"))
-VIBE_UPDATE_BASE_URL = GAK_UPDATE_BASE_URL
+GAK_UPDATE_BASE_URL = os.environ.get("GAK_UPDATE_BASE_URL", "https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app")
 
-GAK_REPORT_URL = os.environ.get("GAK_REPORT_URL", os.environ.get("VIBE_REPORT_URL", f"{GAK_UPDATE_BASE_URL}/api/rpt"))
-VIBE_REPORT_URL = GAK_REPORT_URL
-GAK_REPORT_TOKEN = os.environ.get("GAK_REPORT_TOKEN", os.environ.get("VIBE_REPORT_TOKEN", "gak_rpt_7f3c9e1b"))
-VIBE_REPORT_TOKEN = GAK_REPORT_TOKEN
+GAK_REPORT_URL = os.environ.get("GAK_REPORT_URL", f"{GAK_UPDATE_BASE_URL}/api/rpt")
+GAK_REPORT_TOKEN = os.environ.get("GAK_REPORT_TOKEN", "gak_rpt_7f3c9e1b")
 
-GAK_BACKUP_URL = os.environ.get("GAK_BACKUP_URL", os.environ.get("VIBE_BACKUP_URL", f"{GAK_UPDATE_BASE_URL}/api/backup/send-to-cloud"))
-VIBE_BACKUP_URL = GAK_BACKUP_URL
-GAK_BACKUP_TOKEN = os.environ.get("GAK_BACKUP_TOKEN", os.environ.get("VIBE_BACKUP_TOKEN", "gak_bkp_2a8d51c4"))
-VIBE_BACKUP_TOKEN = GAK_BACKUP_TOKEN
+GAK_BACKUP_URL = os.environ.get("GAK_BACKUP_URL", f"{GAK_UPDATE_BASE_URL}/api/backup/send-to-cloud")
+# SECURITY: tidak ada fallback token ter-hardcode; token backup lama dianggap bocor
+# (pernah tertanam di repo) dan wajib diset lewat environment.
+GAK_BACKUP_TOKEN = os.environ.get("GAK_BACKUP_TOKEN", "")
 
-GAK_FEATURE_URL = os.environ.get("GAK_FEATURE_URL", os.environ.get("VIBE_FEATURE_URL", f"{GAK_UPDATE_BASE_URL}/api/rpt"))
-VIBE_FEATURE_URL = GAK_FEATURE_URL
-GAK_FEATURE_TOKEN = os.environ.get("GAK_FEATURE_TOKEN", os.environ.get("VIBE_FEATURE_TOKEN", "gak_feat_5b2d9e77"))
-VIBE_FEATURE_TOKEN = GAK_FEATURE_TOKEN
+GAK_FEATURE_URL = os.environ.get("GAK_FEATURE_URL", f"{GAK_UPDATE_BASE_URL}/api/rpt")
+GAK_FEATURE_TOKEN = os.environ.get("GAK_FEATURE_TOKEN", "gak_feat_5b2d9e77")
 
 class FeatureRequestIn(BaseModel):
     message: str
@@ -5860,7 +5855,7 @@ async def update_check(admin: dict = Depends(require_admin)):
     for base in ("/host-project", os.environ.get("HOST_PROJECT_DIR")):
         if not base:
             continue
-        for ver_file in (".aistudio-version", ".vibecoder-version"):
+        for ver_file in (".aistudio-version",):
             try:
                 with open(os.path.join(base, ver_file), "r") as f:
                     current = f.read().strip()
@@ -5945,11 +5940,8 @@ async def backup_send_to_cloud(admin: dict = Depends(require_admin)):
                 # database kosong itu, bukan database asli. Lihat catatan di /admin/update.
                 "COMPOSE_PROJECT_NAME": os.path.basename(host_dir.rstrip("/")),
                 "GAK_BACKUP_TOKEN": GAK_BACKUP_TOKEN,
-                "VIBE_BACKUP_TOKEN": GAK_BACKUP_TOKEN,
-                "GAK_BACKUP_PASS": os.environ.get("GAK_BACKUP_PASS", os.environ.get("VIBE_BACKUP_PASS", "")),
-                "VIBE_BACKUP_PASS": os.environ.get("GAK_BACKUP_PASS", os.environ.get("VIBE_BACKUP_PASS", "")),
+                "GAK_BACKUP_PASS": os.environ.get("GAK_BACKUP_PASS", ""),
                 "GAK_BACKUP_URL": GAK_BACKUP_URL,
-                "VIBE_BACKUP_URL": GAK_BACKUP_URL,
             },
         )
     except Exception as e:
@@ -6181,8 +6173,8 @@ APP_GUIDE = (
     "bayar cash/QRIS/debit), Shift (buka/tutup shift), Kas (setoran/pengambilan), Produk & Stok (kategori, "
     "stok, import/export Excel, opname), Vendor (bagi hasil), Laporan (harian/mingguan/bulanan, ekspor Excel/PDF, "
     "kirim WhatsApp), AI (tanya-jawab data dan usulan aksi), Pengaturan (pengguna/role, meja, perangkat printer, "
-    "AI provider, installer/update dari vibecoder.co.id, diagnosa/lapor bug, versi, backup/restore, reset data). "
-    "Update server: ./update-vibecoder-pi.sh atau tombol Update Sekarang (vibecoder.co.id). "
+    "AI provider, installer/update dari GitHub/Google AI Studio, diagnosa/lapor bug, versi, backup/restore, reset data). "
+    "Update server: ./update-pi.sh atau tombol Update Sekarang. "
     "APK: isi alamat server http://IP-server di Pengaturan Server saat login. Fitur lapor bug: Pengaturan > Diagnostik."
 )
 
@@ -9884,7 +9876,7 @@ async def _run_integrity_check():
         if not base:
             continue
         try:
-            with open(os.path.join(base, ".vibecoder-version")) as f:
+            with open(os.path.join(base, ".aistudio-version")) as f:
                 versi = f.read().strip()
             if versi:
                 break

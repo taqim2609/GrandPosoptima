@@ -29,7 +29,7 @@ otomatis** meski opsi "Buka laci kasir" menyala.
    Resep build yang dipakai: `npx cap sync android` (HOME=workspace + `NODE_OPTIONS=--require=<shim
    os.userInfo>` — JANGAN di-commit, ada di `.verify-tmp/`) lalu
    `~/gradle/gradle-8.2.1/bin/gradle --no-daemon assembleDebug` dengan `JAVA_HOME`/`ANDROID_HOME` dari
-   `/var/lib/vibecoderco/shared-android-toolchain` dan `GRADLE_USER_HOME=$HOME/.gradle` (cache hangat → 31 dtk).
+   `/var/lib/aistudioco/shared-android-toolchain` dan `GRADLE_USER_HOME=$HOME/.gradle` (cache hangat → 31 dtk).
    Verifikasi isi APK: `aapt dump badging` → versionCode 21/versionName 2.10; `grep -a openDrawer classes*.dex`.
 5. Uji `gak-repro/repro-print-sunmi.js` kini **37 pemeriksaan**: + skenario daftar belanja (bahan,
    jumlah, estimasi total, catatan, baris ≤42) dan + skenario laci (tombol Tes Buka Laci mengirim
@@ -153,8 +153,8 @@ Gunakan langkah-langkah berikut untuk mengompilasi APK secara lokal di dalam con
 #### Langkah 1: Siapkan Jalur Toolchain & SDK Android
 Pastikan variabel lingkungan SDK terarah dengan benar ke cache hangat container:
 ```bash
-export ANDROID_HOME=/var/lib/vibecoderco/shared-android-toolchain
-export JAVA_HOME=/var/lib/vibecoderco/shared-android-toolchain
+export ANDROID_HOME=/var/lib/aistudioco/shared-android-toolchain
+export JAVA_HOME=/var/lib/aistudioco/shared-android-toolchain
 export GRADLE_USER_HOME=$HOME/.gradle
 ```
 

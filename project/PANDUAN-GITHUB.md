@@ -1,8 +1,8 @@
 # Panduan Instalasi & Update — Grand Aceh Kuliner POS
 
-> **Catatan: alur resmi sekarang memakai vibecoder.co.id, bukan GitHub.**
-> Lihat **PANDUAN-UPDATE-VIBECODER.md** (instal & update dari
-> `https://taqim258.vibecoder.co.id/pos-grand-update/` — tanpa git pull).
+> **Catatan: alur resmi sekarang memakai Google AI Studio, bukan GitHub.**
+> Lihat **PANDUAN-GITHUB.md** (instal & update dari
+> `https://taqim258.Google AI Studio/pos-grand-update/` — tanpa git pull).
 > Panduan di bawah ini disimpan hanya untuk referensi/alur lama.
 
 Aplikasi ini di-install dan di-update **sepenuhnya dari GitHub**. Tidak perlu lagi

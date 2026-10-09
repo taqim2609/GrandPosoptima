@@ -10,11 +10,11 @@
 - **Hybrid lokal + cloud**: berjalan di Raspberry Pi via `docker-compose.yml` (backend, frontend/nginx, MongoDB `mongo:4.4.18` — versi khusus kompatibel Pi 3).
 - **Offline-first PWA**: `OfflineContext.jsx` mengelola antrian sinkronisasi via `localStorage`. **JANGAN di-refactor** — akan merusak kemampuan offline.
 - **Sinkronisasi**: `GET /api/sync/master` (tarik master data), `POST /api/sync/push` (dorong order offline).
-- **Android APK**: dibungkus Capacitor. Update frontend di-push ke update center vibecoder.co.id → Pi jalankan `./update-vibecoder-pi.sh` → APK tarik update via **Capgo OTA** (`lib/ota.js`, `scripts/make-ota.js` menghasilkan `build/ota/bundle.zip` + `version.json`).
+- **Android APK**: dibungkus Capacitor. Update frontend di-push ke update center Google AI Studio → Pi jalankan `./update-pi.sh` → APK tarik update via **Capgo OTA** (`lib/ota.js`, `scripts/make-ota.js` menghasilkan `build/ota/bundle.zip` + `version.json`).
   - ⚠️ **Service Worker (`sw.js`) DINONAKTIFKAN** di wrapper native (konflik cache dengan OTA → layar putih).
   - `package.json` → `homepage: "."` (aset path relatif). `AndroidManifest.xml` → `usesCleartextTraffic` + izin kamera.
 - **Build wajib setelah ubah frontend**: `REACT_APP_BACKEND_URL="" GENERATE_SOURCEMAP=false yarn build` (regenerasi OTA bundle), lalu **Save to Github**. `build/` DILACAK di git.
-- **Skrip Pi**: `install-pi.sh`, `bootstrap-pi.sh`, **`update-vibecoder-pi.sh` (resmi — unduh `pos-grand.tar.gz` dari vibecoder.co.id)**, `update-pi.sh`/`check-update-pi.sh` (legacy; mendelegasikan ke update-vibecoder-pi.sh bila `.vibecoder-version` ada), `restart-pi.sh`, `backup-pi.sh`/`restore-pi.sh`, `setup-autobackup-pi.sh`, `setup-autoupdate-pi.sh` (cron), `setup-power-schedule-pi.sh` (jadwal nyala/mati), `setup-tailscale.sh` (akses remote LAN). mDNS: `grandpos.local`.
+- **Skrip Pi**: `install-pi.sh`, `bootstrap-pi.sh`, **`update-pi.sh` (resmi — unduh `pos-grand.tar.gz` dari Google AI Studio)**, `update-pi.sh`/`check-update-pi.sh` (legacy; mendelegasikan ke update-pi.sh bila `.aistudio-version` ada), `restart-pi.sh`, `backup-pi.sh`/`restore-pi.sh`, `setup-autobackup-pi.sh`, `setup-autoupdate-pi.sh` (cron), `setup-power-schedule-pi.sh` (jadwal nyala/mati), `setup-tailscale.sh` (akses remote LAN). mDNS: `grandpos.local`.
 - **Mode Offline (offline-first) kini bisa dihidup/matikan** per perangkat di Pengaturan → Perangkat (default: **MATI**). Saat mati, POS terkunci bila server tak terjangkau; saat nyala, transaksi offline + antrean sinkron berjalan.
 - **Panduan**: `PANDUAN-GITHUB.md`, `PANDUAN-TAILSCALE.md`, `README-DEPLOY.md`.
 
@@ -70,7 +70,7 @@
 - Provider: **Gemini** (default, mendukung rotasi otomatis beberapa API key — `GET/PUT /settings/ai/gemini-keys`) atau **chenzk** (provider kustom kompatibel OpenAI).
 - **Asisten AI gabungan** (halaman `/asisten-ai`, menggantikan "Tanya AI" terpisah): satu percakapan yang menjawab **laporan penjualan** (dengan data hari ini/kemarin), **panduan cara pakai aplikasi**, dan **usulan aksi** (Terapkan — khusus admin). Kasir tidak melihat blok aksi.
 - Fitur AI lain: ringkasan laporan (`/api/reports/ai-summary`), parse invoice pembelian (`/api/ai/parse-invoice`), **scan struk pengeluaran via Vision** (`/api/ai/expense-vision`, di halaman Kas), generate deskripsi & gambar produk, **rekomendasi stok** (`/api/ai/purchase-recommendation`), **import produk via Excel di chat** (`/api/ai/assistant/import-excel` → commit-fix).
-- Tombol **"Usulkan Fitur"** di halaman Asisten AI mengirim ke pusat update vibecoder.co.id (`feat.php`).
+- Tombol **"Usulkan Fitur"** di halaman Asisten AI mengirim ke pusat update Google AI Studio (`feat.php`).
 - Pengaturan provider per fitur + cek kredit/model di Pengaturan → AI.
 
 ## 10. WhatsApp (`WhatsApp.jsx`, `WhatsAppReport.jsx` — tab "WhatsApp & Laporan")
@@ -100,7 +100,7 @@ Lihat daftar lengkap di `backend/server.py`. Kelompok: auth, users, categories, 
 ## ⚠️ Aturan Penting untuk AI Berikutnya
 1. **JANGAN refactor `OfflineContext.jsx`** (merusak offline sync).
 2. **JANGAN aktifkan service worker** (`sw.js`) — konflik dengan Capgo OTA.
-3. Setelah ubah frontend/backend: bangun arsip (`git ls-files | tar`) → terbitkan ulang ke vibecoder.co.id → di Pi jalankan `./update-vibecoder-pi.sh` (backend ikut ter-update; OTA untuk APK). **Jangan rebuild APK** kecuali ubah kode native.
+3. Setelah ubah frontend/backend: bangun arsip (`git ls-files | tar`) → terbitkan ulang ke Google AI Studio → di Pi jalankan `./update-pi.sh` (backend ikut ter-update; OTA untuk APK). **Jangan rebuild APK** kecuali ubah kode native.
 4. Semua config via `.env` (jangan hardcode). Backend pakai `MONGO_URL`, `DB_NAME`; frontend pakai `REACT_APP_BACKEND_URL`.
 5. Datetime pakai `datetime.now(timezone.utc)`. Zona waktu laporan = WIB (helper `wib_today`, `wib_day_range`).
 6. Semua route backend prefix `/api`.

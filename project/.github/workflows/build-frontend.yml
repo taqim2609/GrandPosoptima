@@ -2,7 +2,7 @@ name: Build Frontend untuk Raspberry Pi
 
 # ⛔ DIMATIKAN (2026-08-28): auto-rebuild frontend di GitHub dinonaktifkan
 # karena meng-commit folder frontend/build yang sering konflik dengan build
-# lokal (OTA). Build sekarang dilakukan oleh VibeCoder di workspace, dan
+# lokal (OTA). Build sekarang dilakukan manual di workspace pengembang, dan
 # frontend/build di-track manual (sudah up-to-date di repo).
 #
 # Masih bisa dijalankan MANUAL kapan pun lewat tab "Actions" -> "Run workflow".

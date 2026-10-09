@@ -1,6 +1,6 @@
 # Grand Aceh Kuliner POS — VPS Production Stack dengan n8n v1.110.1 & Auto SSL Caddy
 # Menjalankan:
-# 1. MongoDB 7.0 (POS Primary DB)
+# 1. MongoDB 4.4.18 (POS Primary DB — selaras baseline produksi Pi)
 # 2. POS Backend (FastAPI API Engine)
 # 3. POS Frontend (React SPA Served by Nginx)
 # 4. Evolution API v2.1.2 (WhatsApp Gateway)
@@ -14,7 +14,7 @@ services:
   # ==========================================
   mongo:
     container_name: pos_mongo
-    image: mongo:7.0
+    image: mongo:4.4.18
     restart: unless-stopped
     environment:
       MONGO_INITDB_DATABASE: grandpos
@@ -23,7 +23,7 @@ services:
     networks:
       - pos_vps_network
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5

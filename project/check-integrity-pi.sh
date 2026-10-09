@@ -222,7 +222,7 @@ else
   say "       pasang backup otomatis harian: ./setup-autobackup-pi.sh"
   [ "$RC_LOCAL" -lt 2 ] && RC_LOCAL=2
 fi
-[ -f .vibecoder-version ] && say "  ${C_DIM}versi terpasang: $(cat .vibecoder-version)${C_0}"
+[ -f .aistudio-version ] && say "  ${C_DIM}versi terpasang: $(cat .aistudio-version)${C_0}"
 
 # ---------------------------------------------------------------- kesimpulan
 say ""

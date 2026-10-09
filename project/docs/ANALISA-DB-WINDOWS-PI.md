@@ -136,7 +136,7 @@ antara dua layar tanpa error apa pun**. Untuk 1 outlet restoran, itu kerumitan y
   timer/UPS; laptop lebih tahan). Remote/Tailscale pindah ke Windows bila akses dari luar LAN masih
   dibutuhkan.
 - Yang perlu disiapkan bila pindah ke Windows: skrip operasional saat ini berbasis bash
-  (`update-vibecoder-pi.sh`, `check-integrity-pi.sh`, `backup-to-vibecoder.sh`, `setup-autobackup-pi.sh`)
+  (`update-pi.sh`, `check-integrity-pi.sh`, `backup-to-cloud.sh`, `setup-autobackup-pi.sh`)
   → perlu WSL/Git-Bash atau saya buatkan padanan `.ps1/.bat`. Tombol "Update Sekarang" (1-klik) juga
   perlu diuji di Docker Desktop (bind mount Windows + ekstraksi tar).
 
@@ -212,7 +212,7 @@ Jangan bikin database kedua. Bot adalah **klien**, bukan database:
 1. Pi: `./backup-pi.sh` → pastikan `backups/gak-backup-*.gz` tercipta dan berukuran wajar; salin ke
    flashdisk/PC (jangan lewat WiFi bila ukurannya besar).
 2. PC Windows: pasang Docker Desktop (WSL2), salin folder proyek **terbaru** (versi terpasang di Pi
-   harus sama — cek `.vibecoder-version`), buat `backend/.env.docker` (samakan `JWT_SECRET`,
+   harus sama — cek `.aistudio-version`), buat `backend/.env.docker` (samakan `JWT_SECRET`,
    `ADMIN_EMAIL`, `ADMIN_PASSWORD`; jangan biarkan nilai contoh).
 3. PC: `docker compose up -d --build` → `restore-windows.bat backups\gak-backup-XXXX.gz`
    (**ini menimpa data di PC** — hanya saat pertama).
