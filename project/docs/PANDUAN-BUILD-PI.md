@@ -70,7 +70,17 @@ docker exec project-frontend-1 sh -c \
 
 ## Swap di Pi
 
-Swap hanya diperlukan bila build tetap dijalankan di Pi. Swap tidak persisten
-kecuali ditambahkan ke `/etc/fstab`; setelah reboot, build di Pi akan OOM lagi.
-Karena image kini dikirim siap-pakai, jangan jadikan build di Pi sebagai jalur
-rutin.
+Swap 3 GB produksi saat ini berada di `/swapfile-pr4` dan sudah tercatat di
+`/etc/fstab`, sehingga tetap aktif setelah reboot. Verifikasi:
+
+```bash
+free -h
+swapon --show
+grep -n '^/swapfile-pr4 ' /etc/fstab
+```
+
+Swap hanya menjadi pagar pengaman; **jangan menjalankan build frontend rutin di
+Pi**. Build native aarch64 pada RAM 906 MB terbukti sangat lambat dan dapat
+mengganggu layanan produksi. Jalur resmi tetap: build image arm64 dari source
+commit yang tepat di mesin builder, kirim image, lalu `docker compose up -d
+--no-deps --force-recreate frontend`.
