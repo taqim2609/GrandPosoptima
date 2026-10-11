@@ -70,8 +70,8 @@ export default function ReceiptModal({
     if (!order) return;
     const lines = [
       "================================",
-      `       ${cfg?.outletName || outlet?.name || "GRANDPOS OPTIMA"}`,
-      ...(cfg?.outletAddress || outlet?.address ? [cfg?.outletAddress || outlet?.address] : []),
+      `       ${cfg?.outletName || propOutlet?.name || "GRANDPOS OPTIMA"}`,
+      ...(cfg?.outletAddress || propOutlet?.address ? [cfg?.outletAddress || propOutlet?.address] : []),
       "================================",
       `No. Order : ${order.order_number}`,
       `Tanggal   : ${new Date(order.paid_at || order.created_at || Date.now()).toLocaleString("id-ID")}`,

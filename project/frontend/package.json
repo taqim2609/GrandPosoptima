@@ -74,7 +74,7 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "check:undef": "eslint --config eslint.undef.config.cjs src",
+    "check:undef": "eslint --config eslint.undef.config.cjs --ext .js,.jsx src",
     "postbuild": "node scripts/make-ota.js",
     "test": "craco test"
   },
