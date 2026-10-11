@@ -1,5 +1,7 @@
 node_modules/
 android/
+build/
+dist/
 .env
 .env.*
 npm-debug.log

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo, u
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { setFirestoreSyncing, syncOrderToFirestore } from "@/lib/firebase";
+import { reconcilePendingOrders } from "@/lib/offlineQueue";
 
 const KEY = "gak_pending_orders";
 const LOG_KEY = "gak_sync_log";
@@ -35,48 +36,54 @@ export function OfflineProvider({ children }) {
 
   const _syncItems = useCallback(async (items) => {
     setFirestoreSyncing(true, 3000);
-    const map = new Map(JSON.parse(localStorage.getItem(KEY) || "[]").map((i) => [i.temp_id, i]));
     let ok = 0;
     const done = [];
-    for (const item of items) {
-      try {
-        const res = await api.post("/orders", item.payload); // idempotent via client_ref
-        map.delete(item.temp_id);
-        ok++;
-        done.push({ client_ref: item.temp_id, order_number: res.data?.order_number, total: item.meta?.total || 0, status: "ok" });
-        
-        // Auto-sync the completed order to Firebase Firestore when back online
-        if (res.data) {
-          try {
-            await syncOrderToFirestore(res.data);
-          } catch (fireErr) {
-            console.error("[Firestore] Gagal sinkronisasi transaksi offline ke Firebase:", fireErr);
+    const completedIds = new Set();
+    const errorsById = new Map();
+    try {
+      for (const item of items) {
+        try {
+          const res = await api.post("/orders", item.payload); // idempotent via client_ref
+          completedIds.add(item.temp_id);
+          ok++;
+          done.push({ client_ref: item.temp_id, order_number: res.data?.order_number, total: item.meta?.total || 0, status: "ok" });
+
+          // Auto-sync the completed order to Firebase Firestore when back online
+          if (res.data) {
+            try {
+              await syncOrderToFirestore(res.data);
+            } catch (fireErr) {
+              console.error("[Firestore] Gagal sinkronisasi transaksi offline ke Firebase:", fireErr);
+            }
           }
-        }
-      } catch (e) {
-        const cur = map.get(item.temp_id);
-        if (cur) {
+        } catch (e) {
           const d = e.response?.data?.detail;
-          cur.error = e.response ? (typeof d === "string" ? d : "Ditolak server") : "Tidak ada koneksi";
+          errorsById.set(
+            item.temp_id,
+            e.response ? (typeof d === "string" ? d : "Ditolak server") : "Tidak ada koneksi"
+          );
         }
       }
-    }
-    persist(Array.from(map.values()));
-    if (done.length) {
-      // record sync history + reconcile offline receipt numbers; dedupe by client_ref
-      const log = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
-      const seen = new Set(log.flatMap((e) => (e.items || []).map((i) => i.client_ref)));
-      const fresh = done.filter((d) => !seen.has(d.client_ref));
-      if (fresh.length) {
-        log.unshift({ at: new Date().toISOString(), ok: fresh.length, items: fresh });
-        const trimmed = log.slice(0, 50);
-        localStorage.setItem(LOG_KEY, JSON.stringify(trimmed));
-        setSyncLog(trimmed);
+
+      const currentOrders = JSON.parse(localStorage.getItem(KEY) || "[]");
+      persist(reconcilePendingOrders(currentOrders, completedIds, errorsById));
+      if (done.length) {
+        // record sync history + reconcile offline receipt numbers; dedupe by client_ref
+        const log = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
+        const seen = new Set(log.flatMap((e) => (e.items || []).map((i) => i.client_ref)));
+        const fresh = done.filter((d) => !seen.has(d.client_ref));
+        if (fresh.length) {
+          log.unshift({ at: new Date().toISOString(), ok: fresh.length, items: fresh });
+          const trimmed = log.slice(0, 50);
+          localStorage.setItem(LOG_KEY, JSON.stringify(trimmed));
+          setSyncLog(trimmed);
+        }
+        window.dispatchEvent(new Event("gak-synced")); // refresh cached master data after upload
       }
-      window.dispatchEvent(new Event("gak-synced")); // refresh cached master data after upload
+      return ok;
+    } finally {
+      setFirestoreSyncing(false);
     }
-    setFirestoreSyncing(false);
-    return ok;
   }, []);
 
   const syncNow = useCallback(async () => {
