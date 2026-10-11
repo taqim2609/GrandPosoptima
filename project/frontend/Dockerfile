@@ -19,9 +19,17 @@ RUN npm install --legacy-peer-deps
 COPY . .
 ARG REACT_APP_BACKEND_URL=""
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
+# Source map dimatikan EKSPLISIT di sini, bukan lewat .env: .dockerignore
+# mengecualikan .env, jadi GENERATE_SOURCEMAP=false di .env tidak pernah
+# terbaca saat build di container -> 54 file .map ikut ter-publish ke :80
+# dan source asli bisa dibaca siapa pun (static/js/*.js.map -> HTTP 200).
+ENV GENERATE_SOURCEMAP=false
+ENV DISABLE_ESLINT_PLUGIN=true
 ARG NODE_HEAP_MB=1024
 ENV NODE_OPTIONS="--max-old-space-size=${NODE_HEAP_MB}"
 RUN npm run build
+# Sabuk pengaman: pastikan tidak ada source map yang lolos ke image.
+RUN find build -name "*.map" -type f -delete && ! find build -name "*.map" -type f | grep -q .
 
 FROM nginx:alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
