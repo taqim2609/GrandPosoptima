@@ -1,0 +1,7 @@
+name: grandpos-wa-inbound
+version: "1.0"
+description: >
+  Meneruskan pesan WhatsApp masuk ke Grand POS (POS yang menangani balasan),
+  sehingga agent Hermes tidak ikut menjawab pelanggan.
+requires_env:
+  - WA_WEBHOOK_SECRET

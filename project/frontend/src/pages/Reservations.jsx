@@ -443,7 +443,8 @@ export default function Reservations() {
                 isGroupWa ||
                 (r.note && (r.note.includes("WhatsApp") || r.note.includes("Booking Otomatis"))) ||
                 r.created_by === "WACloud AI" ||
-                r.created_by === "Evolution AI";
+                r.created_by === "Evolution AI" ||
+                r.created_by === "Hermes AI";
 
               return (
                 <tr key={r.id} className="border-t hover:bg-[#FAFAFA] transition" data-testid={`reservation-${r.id}`}>
@@ -964,12 +965,12 @@ export default function Reservations() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-              <Bot className="text-[#10B981]" /> Konfigurasi Webhook WACloud / Evolution API
+              <Bot className="text-[#10B981]" /> Konfigurasi Webhook WhatsApp (bridge Hermes)
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 text-xs text-[#3F3F46]">
             <p>
-              Salin URL Webhook di bawah ini dan pasang pada pengaturan Webhook di provider WhatsApp Anda (Evolution API atau WACloud.id):
+              Bridge Hermes sudah mengirim pesan masuk ke URL ini secara otomatis. URL di bawah hanya perlu dipakai bila Anda memasang gateway WhatsApp lain:
             </p>
             <div>
               <label className="text-[11px] font-bold uppercase text-[#71717A] tracking-wider block mb-1">

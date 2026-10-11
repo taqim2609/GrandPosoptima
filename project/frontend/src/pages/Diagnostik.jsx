@@ -42,7 +42,7 @@ import {
   testFirestoreConnection,
 } from "@/lib/firebase";
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
-import EvolutionDetectionCard from "@/components/EvolutionDetectionCard";
+import WhatsAppGatewayCard from "@/components/WhatsAppGatewayCard";
 import TailscaleDashboard from "@/components/TailscaleDashboard";
 import GlobalErrorDiagnosticPanel from "@/components/GlobalErrorDiagnosticPanel";
 
@@ -1281,7 +1281,7 @@ export default function Diagnostik() {
         {activeTab === "hybrid-sync" && (
           <div className="space-y-6">
             <TailscaleDashboard />
-            <EvolutionDetectionCard />
+            <WhatsAppGatewayCard />
             <HybridSyncDiagnosticPanel />
           </div>
         )}
