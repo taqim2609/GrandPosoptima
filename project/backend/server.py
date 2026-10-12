@@ -8038,22 +8038,14 @@ async def whatsapp_put_config(body: WAConfigIn, admin: dict = Depends(require_ad
 
 @api.get("/whatsapp/devices")
 async def whatsapp_devices(admin: dict = Depends(require_admin)):
-    try:
-        r = await _wacloud_request("GET", "/devices")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(400, f"Gagal menghubungi wacloud.id: {e}")
-    if r.status_code != 200:
-        try:
-            j = r.json()
-            detail = j.get("message") or j.get("error") or r.text
-        except Exception:
-            detail = r.text
-        raise HTTPException(r.status_code if r.status_code >= 400 else 400, f"wacloud.id: {detail}")
-    data = r.json()
-    devices = data.get("data", data) if isinstance(data, dict) else data
-    return {"devices": devices or []}
+    # Provider wacloud/evolution sudah dihentikan. Endpoint ini tetap hidup
+    # (frontend lama memanggilnya), tapi TIDAK lagi menghubungi wacloud.id dan
+    # TIDAK melakukan failover senyap. Balasannya 400 — bukan 410 — supaya klien
+    # versi terpasang yang menangani error generik tetap menampilkan pesan rapi.
+    raise HTTPException(
+        400,
+        "Provider WhatsApp lama (wacloud.id) sudah dinonaktifkan. Gunakan provider Hermes.",
+    )
 
 class WATestIn(BaseModel):
     to: str
@@ -8174,10 +8166,16 @@ class WAInstanceCreateIn(BaseModel):
     evolution_api_key: Optional[str] = None
     instance_name: Optional[str] = "grand-aceh-pos"
 
-@api.get("/whatsapp/status")
 @api.get("/settings/whatsapp")
-async def whatsapp_status():
-    """Memeriksa status koneksi WhatsApp Gateway aktif (Hermes / Evolution / WACloud)."""
+async def whatsapp_settings_status(admin: dict = Depends(require_admin)):
+    """Status WhatsApp yang dilindungi admin.
+
+    ``secret_masked`` hanya boleh keluar dari endpoint admin; konsumen lain
+    mendapat endpoint status publik di bawah tanpa rahasia. Pada endpoint lama
+    ini, tetap gunakan bentuk status yang sudah dipakai UI.
+    """
+    return await whatsapp_status()
+
     cfg = await _wa_config()
     provider = _wa_effective_provider(cfg)
 
@@ -8238,68 +8236,14 @@ async def whatsapp_status():
 
 @api.post("/whatsapp/instance/create")
 async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depends(require_admin)):
-    """Menghubungkan atau membuat instance WhatsApp pada Evolution API lokal dan mengambil QR Code."""
-    cfg = await _wa_config()
-    url = (body.evolution_url or cfg.get("evolution_url") or "http://localhost:8080").rstrip("/")
-    key = body.evolution_api_key or cfg.get("evolution_api_key") or ""
-    instance = body.instance_name or cfg.get("evolution_instance") or "grand-aceh-pos"
-    
-    if not url:
-        raise HTTPException(400, "URL Evolution API belum diisi")
-        
-    headers = {"apikey": key, "Content-Type": "application/json"}
-    qrcode = None
-    pairing_code = None
-    
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            # 1. Coba ambil QR code dari instance yang sudah ada
-            r = await client.get(f"{url}/instance/connect/{instance}", headers=headers)
-            if r.status_code == 200:
-                data = r.json()
-                qrcode = data.get("base64") or (data.get("qrcode") or {}).get("base64") or data.get("code")
-                pairing_code = data.get("pairingCode")
-            elif r.status_code == 404:
-                # 2. Jika instance belum ada di Evolution API, buat instance baru
-                create_payload = {
-                    "instanceName": instance,
-                    "token": key,
-                    "qrcode": True,
-                    "integration": "WHATSAPP-BAILEYS"
-                }
-                r_create = await client.post(f"{url}/instance/create", headers=headers, json=create_payload)
-                if r_create.status_code in (200, 201):
-                    data = r_create.json()
-                    qrcode = (data.get("qrcode") or {}).get("base64") or data.get("base64") or (data.get("instance") or {}).get("qrcode")
-                    pairing_code = data.get("pairingCode") or (data.get("instance") or {}).get("pairingCode")
-                else:
-                    try:
-                        err_text = r_create.json().get("response") or r_create.text
-                    except Exception:
-                        err_text = r_create.text
-                    raise HTTPException(r_create.status_code, f"Gagal membuat instance Evolution API: {err_text}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(502, f"Tidak dapat terhubung ke Evolution API ({url}): {e}")
-        
-    await db.settings.update_one(
-        {"_id": "wa"},
-        {"$set": {
-            "provider": "evolution",
-            "evolution_url": url,
-            "evolution_api_key": key,
-            "evolution_instance": instance
-        }},
-        upsert=True
+    """Endpoint kompatibilitas lama: pembuatan instance provider lama sudah
+    dihentikan; pairing sekarang dilakukan oleh operator dengan ``hermes
+    whatsapp`` di server gudang 644.
+    """
+    raise HTTPException(
+        400,
+        "Provider WhatsApp lama (Evolution) sudah dinonaktifkan. Gunakan Hermes di server gudang 644.",
     )
-    
-    return {
-        "ok": True,
-        "instance": instance,
-        "qrcode": qrcode,
-        "pairingCode": pairing_code
-    }
 
 # Webhook penerima pesan dari WACloud.id untuk booking otomatis
 def _parse_any_whatsapp_payload(payload: dict):

@@ -21,9 +21,54 @@ import json
 import os
 import sys
 import threading
+import types
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend"))
+
+# Image test minimal tidak selalu memasang dependency backend. Stub ini tetap
+# melakukan HTTP nyata via stdlib dan hanya aktif bila httpx memang tidak ada.
+try:
+    import httpx  # noqa: F401
+except ModuleNotFoundError:
+    class _HttpxResponse:
+        def __init__(self, status_code, body):
+            self.status_code = status_code
+            self._body = body
+            self.text = body.decode("utf-8", errors="replace")
+
+        def json(self):
+            return json.loads(self.text)
+
+    def _request(method, url, content=None, headers=None, timeout=5):
+        req = urllib.request.Request(url, data=content, headers=headers or {}, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                return _HttpxResponse(response.status, response.read())
+        except urllib.error.HTTPError as exc:
+            return _HttpxResponse(exc.code, exc.read())
+
+    class _AsyncClient:
+        def __init__(self, timeout=5):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, content=None, headers=None):
+            return await asyncio.to_thread(
+                _request, "POST", url, content, headers, self.timeout
+            )
+
+    httpx_stub = types.ModuleType("httpx")
+    setattr(httpx_stub, "AsyncClient", _AsyncClient)
+    setattr(httpx_stub, "get", lambda url, timeout=5: _request("GET", url, timeout=timeout))
+    sys.modules["httpx"] = httpx_stub
 
 import hermes_bridge as hb  # noqa: E402
 
@@ -142,7 +187,11 @@ def test_e2e_target_rejects_maps_to_failure():
 
 
 def test_e2e_outbox_retry_then_success():
-    """Gagal -> tersimpan -> dispatch ulang setelah gateway hidup = terkirim sekali."""
+    """Gagal -> tersimpan -> ditahan selama backoff -> lalu terkirim SEKALI.
+
+    Kegagalan melepas lease dan menjadwalkan ``next_retry_at`` supaya baris tidak
+    dicoba berulang dalam satu panggilan. Retry yang benar = tunggu backoff.
+    """
     srv, port = _serve()
     try:
         _point_env(port)
@@ -152,8 +201,17 @@ def test_e2e_outbox_retry_then_success():
         stats = asyncio.run(hb.dispatch_outbox(db))
         assert stats["failed"] == 1 and db.wa_outbox.rows[0]["sent_at"] is None
 
+        # Panggilan yang menyusul segera HARUS tidak mengirim apa pun: baris
+        # masih dalam masa backoff. Ini yang mencegah retry-storm.
+        stats_hold = asyncio.run(hb.dispatch_outbox(db))
+        assert stats_hold["scanned"] == 0 and stats_hold["sent"] == 0, stats_hold
+        assert db.wa_outbox.rows[0]["next_retry_at"], "backoff harus dijadwalkan"
+
+        # Setelah backoff lewat (disimulasikan dengan menghapus jadwal retry),
+        # gateway yang sudah hidup mengirim tepat sekali.
         _Handler.response_status = 200
         seen.clear()
+        db.wa_outbox.rows[0]["next_retry_at"] = None
         stats2 = asyncio.run(hb.dispatch_outbox(db))
         assert stats2["sent"] == 1, stats2
         assert db.wa_outbox.rows[0]["sent_at"]
@@ -187,18 +245,66 @@ class _Cursor:
 
 
 class _Outbox:
+    """Stub koleksi outbox untuk E2E.
+
+    Perlu memahami operator query Mongo (``$or``/``$exists``/``$lt``) karena
+    ``dispatch_outbox`` mengklaim baris lewat ``find_one_and_update`` dengan
+    filter lease; stub yang hanya membandingkan kesamaan literal akan selalu
+    "tidak ada baris" dan mengubah hasil tes jadi tidak bermakna.
+    """
+
     def __init__(self):
         self.rows = []
 
+    @staticmethod
+    def _matches(doc, query) -> bool:
+        for key, want in (query or {}).items():
+            if key == "$or":
+                if not any(_Outbox._matches(doc, sub) for sub in want):
+                    return False
+                continue
+            if key == "$and":
+                if not all(_Outbox._matches(doc, sub) for sub in want):
+                    return False
+                continue
+            have, present = doc.get(key), key in doc
+            if isinstance(want, dict):
+                for op, val in want.items():
+                    if op == "$exists":
+                        if bool(val) != present:
+                            return False
+                    elif op == "$lt":
+                        if have is None or not (have < val):
+                            return False
+                    elif op == "$lte":
+                        if have is None or not (have <= val):
+                            return False
+                    elif op == "$gt":
+                        if have is None or not (have > val):
+                            return False
+                    elif op == "$in":
+                        if have not in val:
+                            return False
+                    else:
+                        return False
+                continue
+            if have != want:
+                return False
+        return True
+
+    @staticmethod
+    def _apply(doc, update):
+        doc.update(update.get("$set", {}))
+        for k, v in (update.get("$inc") or {}).items():
+            doc[k] = (doc.get(k) or 0) + v
+
     async def update_one(self, query, update, upsert=False):
         for r in self.rows:
-            if all(r.get(k) == v for k, v in query.items()):
-                r.update(update.get("$set", {}))
-                for k, v in (update.get("$inc") or {}).items():
-                    r[k] = (r.get(k) or 0) + v
+            if self._matches(r, query):
+                self._apply(r, update)
                 return type("R", (), {"matched_count": 1})()
         if upsert:
-            doc = dict(query)
+            doc = {k: v for k, v in (query or {}).items() if not str(k).startswith("$")}
             doc.update(update.get("$setOnInsert") or {})
             doc.update(update.get("$set") or {})
             for k, v in (update.get("$inc") or {}).items():
@@ -207,7 +313,18 @@ class _Outbox:
         return type("R", (), {"matched_count": 0})()
 
     def find(self, query, _proj=None):
-        return _Cursor([dict(r) for r in self.rows if all(r.get(k) == v for k, v in (query or {}).items())])
+        return _Cursor([dict(r) for r in self.rows if self._matches(r, query)])
+
+    async def find_one_and_update(self, query, update, sort=None, return_document=None):
+        candidates = [r for r in self.rows if self._matches(r, query)]
+        if sort:
+            for field, direction in reversed(sort):
+                candidates.sort(key=lambda r: r.get(field) or "", reverse=direction < 0)
+        if not candidates:
+            return None
+        row = candidates[0]
+        self._apply(row, update)
+        return dict(row)
 
 
 class _FakeDB:
