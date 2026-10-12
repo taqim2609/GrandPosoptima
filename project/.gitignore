@@ -26,8 +26,11 @@ next-env.d.ts
 *.tsbuildinfo
 
 # Production builds
+# build/ TIDAK di-commit: Dockerfile frontend selalu menjalankan `npm run build`
+# dari source commit yang di-checkout, sehingga artefak lokal tidak bisa
+# menyamar menjadi isi image (lihat docs/PANDUAN-BUILD-PI.md).
 /build
-!/frontend/build
+/frontend/build
 dist/
 dist
 
@@ -100,7 +103,22 @@ frontend/node_modules/.cache/default-development/4.pack
 .wwebjs_auth/
 .wwebjs_cache/
 whatsapp-service/.wwebjs_auth/
+# Sesi Baileys (kredensial penuh nomor bot) — hanya di server gudang.
+# Sesi WhatsApp gateway Hermes TIDAK ada di repo ini (letaknya di
+# ~/.hermes/platforms/whatsapp/session) — jangan pernah disalin ke sini.
 whatsapp-service/.wwebjs_cache/
 frontend/node_modules/.cache/default-development/8.pack
 frontend/node_modules/.cache/default-development/1.pack
 frontend/node_modules/.cache/default-development/2.pack
+
+# ---------------------------------------------------------------------------
+# Berkas evolution: HANYA untuk mesin ini (runtime Evolution lokal).
+# Dikecualikan persis 7 path relatif terhadap project/.gitignore; isi working
+# tree tidak dihapus. Tanda / mengikat pola ke root directory `project/`.
+/backend/evolution_ctl_client.py
+/evolution-runtime.env.example
+/scripts/evolution-ctl-agent.py
+/scripts/evolution-ctl-agent.service
+/scripts/evolution-ctl.conf.example
+/scripts/evolution-ctl.sh
+/tests/test_evolution_secure_integration.py

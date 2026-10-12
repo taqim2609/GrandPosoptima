@@ -17,7 +17,7 @@ from pymongo import ReturnDocument
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
-import logging, uuid, io, bcrypt, jwt, asyncio, re, zipfile, math, time, json
+import logging, uuid, io, bcrypt, jwt, asyncio, re, zipfile, math, time, json, hmac
 from bson import json_util
 
 # ------------------------------------------------------------------ DB
@@ -88,6 +88,28 @@ api = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gak-pos")
 
+# ---- Identitas node ------------------------------------------------------
+# Dipakai memisahkan peran server gudang-644 (master, pengirim WhatsApp) dari
+# Pi (cadangan). WA eksklusif di 644: hanya node yang punya
+# HERMES_WA_WEBHOOK_URL + HERMES_WA_WEBHOOK_SECRET yang benar-benar mengirim.
+NODE_ID = (os.environ.get("NODE_ID") or os.uname().nodename).strip()
+# Bawaan "backup" (bukan "primary") supaya node yang belum dikonfigurasi tidak
+# pernah mengirim WhatsApp. Node pengirim harus menyatakan perannya eksplisit
+# lewat project/.env (lihat .env.gudang.example).
+NODE_ROLE = (os.environ.get("NODE_ROLE") or "backup").strip().lower()
+# Sinkronisasi outbox Pi -> 644. Hanya Pi yang mengisi URL upstream ini; 644
+# membiarkannya kosong. Token terpisah dari JWT pengguna/browser.
+WA_OUTBOX_UPSTREAM_URL = (os.environ.get("WA_OUTBOX_UPSTREAM_URL") or "").strip().rstrip("/")
+WA_OUTBOX_SYNC_TOKEN = (os.environ.get("WA_OUTBOX_SYNC_TOKEN") or "").strip()
+
+# Jembatan WhatsApp Hermes (khusus 644). Modul ini hanya memakai stdlib saat
+# di-import, dan sengaja tidak menggagalkan startup bila ada masalah.
+try:
+    import hermes_bridge
+except Exception:  # pragma: no cover - jarang terjadi
+    hermes_bridge = None
+    logger.warning("modul hermes_bridge tidak dapat dimuat; integrasi WA Hermes nonaktif")
+
 @api.get("/health")
 @app.get("/health")
 @app.get("/api/health")
@@ -97,7 +119,10 @@ async def health_check():
         "app": "gak-pos",
         "status": "ok",
         "app_name": "Grand Aceh Kuliner POS",
-        "node_role": "Google Cloud Primary / PC Server Master",
+        "node_role": NODE_ROLE,
+        "node_id": NODE_ID,
+        "node_mode": NODE_ROLE,
+        "wa_bridge": bool(hermes_bridge and hermes_bridge.bridge_configured()),
         "time": datetime.now(timezone.utc).isoformat()
     }
 
@@ -5294,6 +5319,40 @@ async def sync_push(body: SyncPushIn, user: dict = Depends(get_current_user)):
             results.append({"client_ref": o.client_ref, "status": "error", "detail": e.detail})
     return {"synced": synced, "total": len(body.orders), "results": results, "server_time": now_utc().isoformat()}
 
+class WaOutboxRowIn(BaseModel):
+    wa_id: str
+    to: str
+    text: str
+    kind: Optional[str] = "wa"
+    created_at: Optional[str] = None
+    origin_node: Optional[str] = None
+
+class WaOutboxSyncIn(BaseModel):
+    node: Optional[str] = None
+    rows: List[WaOutboxRowIn] = []
+
+@api.post("/sync/wa-outbox")
+async def sync_wa_outbox(body: WaOutboxSyncIn, request: Request):
+    """Terima outbox WhatsApp dari node backup (Pi) dan kirim dari node ini.
+
+    Autentikasi memakai token node-ke-node (``WA_OUTBOX_SYNC_TOKEN``), bukan JWT
+    pengguna: pemanggilnya proses server Pi, bukan browser. Endpoint ini
+    fail-closed — 503 bila token belum dikonfigurasi, 401 bila header salah.
+    Idempotensi dijaga oleh ``wa_id`` (unique index) sehingga kiriman ulang
+    tidak pernah menggandakan pesan.
+    """
+    if not WA_OUTBOX_SYNC_TOKEN:
+        raise HTTPException(503, "Sinkronisasi outbox belum dikonfigurasi di node ini")
+    sent_token = request.headers.get("X-WA-Sync-Token") or ""
+    if not hmac.compare_digest(sent_token, WA_OUTBOX_SYNC_TOKEN):
+        raise HTTPException(401, "Token sinkronisasi tidak sah")
+    if not hermes_bridge:
+        raise HTTPException(503, "Modul integrasi WA tidak tersedia")
+    if not hermes_bridge.bridge_configured():
+        raise HTTPException(503, "Node ini tidak mengirim WhatsApp")
+    stats = await hermes_bridge.ingest_outbox(db, [r.model_dump() for r in body.rows])
+    return {"ok": True, "node": NODE_ID, **stats}
+
 # ================================================================== AI
 def _get_chat(session, system, model):
     if not EMERGENT_LLM_KEY:
@@ -6757,9 +6816,44 @@ WACLOUD_DEFAULT_BASE = "https://app.wacloud.id/api/v1"
 async def _wa_config():
     return await db.settings.find_one({"_id": "wa"}, {"_id": 0}) or {}
 
+
+# Provider lama yang tidak dipakai lagi. Grand POS sekarang hanya memakai
+# Hermes Baileys, tetapi instalasi yang sudah berjalan masih menyimpan
+# provider "wacloud"/"evolution" di DB. Nilai itu DIPETAKAN ke "hermes" —
+# bukan ditolak dan bukan dibiarkan memakai jalur mati — supaya toko yang
+# sudah jalan tidak kehilangan notifikasi secara senyap setelah upgrade.
+_WA_LEGACY_PROVIDERS = {"wacloud", "evolution", "wacloud.id", "wacloud_id"}
+
+
+def _wa_effective_provider(cfg):
+    """Provider efektif untuk pengiriman. Aman untuk nilai legacy/kosong."""
+    raw = str((cfg or {}).get("provider") or "").strip().lower()
+    if not raw or raw in _WA_LEGACY_PROVIDERS:
+        return "hermes"
+    return raw
+
+
+class _HermesResult:
+    """Hasil kirim bridge Hermes, dibungkus agar menyerupai respons HTTP.
+
+    `_send_whatsapp` membaca `status_code` dan `json()` dari objek respons;
+    kelas ini menyediakan keduanya sehingga jalur lama tidak perlu diubah.
+    """
+
+    __slots__ = ("status_code", "_body")
+
+    def __init__(self, info: dict):
+        self.status_code = 200
+        self._body = {"success": True, "key": {"id": (info or {}).get("id") or "sent"}}
+
+    def json(self):
+        return self._body
+
 async def _wa_configured():
     c = await _wa_config()
-    prov = c.get("provider") or "wacloud"
+    prov = _wa_effective_provider(c)
+    if prov == "hermes":
+        return bool(hermes_bridge and hermes_bridge.bridge_configured())
     if prov == "evolution":
         return bool(c.get("evolution_url") and c.get("evolution_api_key"))
     return bool(c.get("api_key") and c.get("device_id"))
@@ -6793,8 +6887,18 @@ async def _wacloud_request(method, path, **kw):
 
 async def _wa_send_text(to, text):
     cfg = await _wa_config()
-    prov = cfg.get("provider") or "wacloud"
-    
+    prov = _wa_effective_provider(cfg)
+
+    if prov == "hermes":
+        # Bridge Baileys Hermes (khusus 644, localhost). Mengembalikan objek kecil
+        # yang meniru respons HTTP agar pemanggil lama tidak perlu diubah.
+        if not hermes_bridge:
+            raise HTTPException(503, "Integrasi WhatsApp Hermes tidak tersedia di node ini")
+        ok, info = await hermes_bridge.send_text(to, text)
+        if not ok:
+            raise HTTPException(502, str(info.get("error") or "bridge Hermes gagal"))
+        return _HermesResult(info)
+
     if prov == "evolution":
         import httpx
         url = cfg.get("evolution_url") or "http://localhost:8080"
@@ -7650,7 +7754,64 @@ async def _send_shift_wa_auto(sid):
     return {"enabled": True, "ok": ok, "recipients": recips, "sent": result,
             "error": None if ok else (result[0].get("error") if result else "tidak diketahui")}
 
-async def _send_whatsapp(recipients, text):
+async def _wa_outbox_enqueue(to, text, kind="wa"):
+    """Simpan pesan gagal kirim ke outbox idempoten.
+
+    Kunci idempotensi = sha256(nomor|isi|tanggal WIB). Pesan yang sama yang
+    dicoba ulang pada hari yang sama TIDAK digandakan; setelah bridge hidup
+    (hanya mungkin di 644), `dispatch_outbox` mengirimnya sekali.
+    """
+    if not hermes_bridge:
+        return None
+    import hashlib as _hashlib
+    key = _hashlib.sha256(f"{to}|{_wa_normalize(to)}|{wib_today()}|{text}".encode()).hexdigest()
+    try:
+        return await hermes_bridge.enqueue(db, to, text, kind=kind, wa_id=key)
+    except Exception as e:
+        logger.warning("outbox WA gagal menyimpan (kind=%s): %s", kind, type(e).__name__)
+        return None
+
+
+async def dispatch_wa_outbox(limit=20):
+    """Teruskan outbox Pi ke primary, atau kirim ke Hermes pada node primary."""
+    if not hermes_bridge:
+        return {"enabled": False, "sent": 0, "failed": 0, "scanned": 0}
+    try:
+        # Jalur Pi -> 644 berjalan dari tick scheduler yang sama. Pada node
+        # primary helper ini tidak dipanggil; primary langsung dispatch lokal.
+        if (WA_OUTBOX_UPSTREAM_URL and WA_OUTBOX_SYNC_TOKEN
+                and hermes_bridge.node_role() not in ("primary", "master", "gudang", "644")):
+            return await hermes_bridge.push_outbox_upstream(
+                db, WA_OUTBOX_UPSTREAM_URL, WA_OUTBOX_SYNC_TOKEN, limit=limit
+            )
+        return await hermes_bridge.dispatch_outbox(db, limit=limit)
+    except Exception as e:
+        logger.error("dispatch/sinkronisasi outbox WA gagal: %s", type(e).__name__)
+        return {"enabled": True, "sent": 0, "failed": 0, "scanned": 0, "error": type(e).__name__}
+
+
+_WA_REDACT_NUM = re.compile(r"(?<!\d)(?:\+?62|0)8\d{7,12}(?!\d)")
+_WA_REDACT_SECRET = re.compile(r"\b[A-Za-z0-9_\-]{20,}\b")
+
+
+def _redact_wa_error(value, max_len: int = 200) -> str:
+    """Bersihkan pesan galat sebelum keluar/log.
+
+    Ditaruh di **fungsi pengirim** (bukan di 7 call-site) supaya semua jalur
+    otomatis aman: satu call-site yang terlewat tidak bisa membocorkan nomor
+    telepon pelanggan atau potongan token ke log/response.
+
+    Yang diredam: nomor WA (format 08…/62…/+62…8) dan deretan alfanumerik
+    panjang yang menyerupai token/API key. Panjang dipotong agar tidak membanjiri
+    response.
+    """
+    s = str(value or "")
+    s = _WA_REDACT_NUM.sub("<nomor>", s)
+    s = _WA_REDACT_SECRET.sub("<rahasia>", s)
+    return s[:max_len]
+
+
+async def _send_whatsapp(recipients, text, kind="wa"):
     if not await _feat("wa.enabled"):
         raise HTTPException(400, "Fitur WhatsApp dimatikan. Nyalakan di Pengaturan → Fitur & Integrasi.")
     out = []
@@ -7666,11 +7827,18 @@ async def _send_whatsapp(recipients, text):
                 msg_id = (body.get("key") or {}).get("id") or (body.get("data") or {}).get("message_id") or "sent"
                 out.append({"to": to, "ok": True, "id": msg_id})
             else:
-                out.append({"to": to, "ok": False, "error": body.get("error") or body.get("message") or r.text})
+                # Simpan agar tidak hilang (mis. saat dijeda ke Pi / bridge mati).
+                await _wa_outbox_enqueue(to, text, kind)
+                # ``r.text`` mentah TIDAK pernah diteruskan: bisa memuat nomor
+                # tujuan atau token provider. Redaksi dilakukan di sini.
+                detail = body.get("error") or body.get("message") or r.text
+                out.append({"to": to, "ok": False, "error": _redact_wa_error(detail)})
         except HTTPException as he:
-            out.append({"to": to, "ok": False, "error": he.detail})
+            await _wa_outbox_enqueue(to, text, kind)
+            out.append({"to": to, "ok": False, "error": _redact_wa_error(he.detail)})
         except Exception as e:
-            out.append({"to": to, "ok": False, "error": str(e)})
+            await _wa_outbox_enqueue(to, text, kind)
+            out.append({"to": to, "ok": False, "error": _redact_wa_error(str(e))})
     return out
 
 class WhatsAppSendIn(BaseModel):
@@ -7834,10 +8002,14 @@ class WAConfigIn(BaseModel):
 async def whatsapp_get_config(admin: dict = Depends(require_admin)):
     c = await _wa_config()
     key = c.get("api_key") or ""
-    provider = c.get("provider") or "wacloud"
-    
+    provider = _wa_effective_provider(c)
+
     # Check configured based on chosen provider
-    if provider == "evolution":
+    if provider == "hermes":
+        # Kredensial Hermes tidak tersimpan di app (ada di env server gudang),
+        # jadi "configured" = bridge benar-benar siap di node ini.
+        configured = bool(hermes_bridge and hermes_bridge.bridge_configured())
+    elif provider == "evolution":
         configured = bool(c.get("evolution_url") and c.get("evolution_api_key"))
     else:
         configured = bool(c.get("api_key") and c.get("device_id"))
@@ -7861,7 +8033,10 @@ async def whatsapp_get_config(admin: dict = Depends(require_admin)):
 async def whatsapp_put_config(body: WAConfigIn, admin: dict = Depends(require_admin)):
     upd = {}
     if body.provider is not None:
-        upd["provider"] = body.provider.strip()
+        # Nilai legacy ("wacloud"/"evolution") yang dikirim klien lama tetap
+        # diterima dan dipetakan ke provider baru — bukan ditolak — agar
+        # instalasi lama tidak mati notifikasi setelah upgrade.
+        upd["provider"] = _wa_effective_provider({"provider": body.provider})
     if body.api_key is not None:
         upd["api_key"] = body.api_key.strip()
     if body.base_url is not None:
@@ -7887,26 +8062,129 @@ async def whatsapp_put_config(body: WAConfigIn, admin: dict = Depends(require_ad
 
 @api.get("/whatsapp/devices")
 async def whatsapp_devices(admin: dict = Depends(require_admin)):
-    try:
-        r = await _wacloud_request("GET", "/devices")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(400, f"Gagal menghubungi wacloud.id: {e}")
-    if r.status_code != 200:
-        try:
-            j = r.json()
-            detail = j.get("message") or j.get("error") or r.text
-        except Exception:
-            detail = r.text
-        raise HTTPException(r.status_code if r.status_code >= 400 else 400, f"wacloud.id: {detail}")
-    data = r.json()
-    devices = data.get("data", data) if isinstance(data, dict) else data
-    return {"devices": devices or []}
+    # Provider wacloud/evolution sudah dihentikan. Endpoint ini tetap hidup
+    # (frontend lama memanggilnya), tapi TIDAK lagi menghubungi wacloud.id dan
+    # TIDAK melakukan failover senyap. Balasannya 400 — bukan 410 — supaya klien
+    # versi terpasang yang menangani error generik tetap menampilkan pesan rapi.
+    raise HTTPException(
+        400,
+        "Provider WhatsApp lama (wacloud.id) sudah dinonaktifkan. Gunakan provider Hermes.",
+    )
 
 class WATestIn(BaseModel):
     to: str
     message: Optional[str] = "Tes notifikasi Grand Aceh Kuliner POS ✅"
+
+
+async def _hermes_status(include_secret_hint: bool = True):
+    """Status gateway Hermes untuk UI.
+
+    ``secret_masked`` hanya disertakan bila ``include_secret_hint=True``, yaitu
+    dari endpoint ber-admin. Endpoint status yang boleh diakses non-admin
+    memanggil ini dengan ``False`` sehingga yang keluar cuma ``has_secret``
+    (boolean) — tidak ada potongan rahasia sama sekali.
+
+    Yang diperiksa adalah ``/health`` gateway Hermes (adapter webhook), bukan
+    endpoint kirim-pesan bikinan sendiri: Hermes tidak menyediakan REST outbound,
+    jadi "siap" berarti gateway hidup dan route-nya terdaftar.
+    """
+    if not hermes_bridge:
+        return {"status": "disconnected", "state": "unavailable", "provider": "hermes",
+                "api_url": "", "has_key": False, "has_secret": False, "details": {}}
+    c = hermes_bridge.bridge_config()
+    configured = hermes_bridge.bridge_configured(c)
+    state = "unconfigured"
+    details = {}
+    ready = False
+    if configured:
+        import httpx
+        hurl = hermes_bridge.health_url(c)
+        try:
+            async with httpx.AsyncClient(timeout=4) as client:
+                r = await client.get(hurl)
+            if r.status_code == 200:
+                ready = True
+                state = "open"
+                details = {"ready": True, "gateway": (r.json() or {}).get("platform") or "webhook"}
+            else:
+                state = "offline"
+                details = {"http": r.status_code}
+        except Exception as e:
+            state = "offline"
+            details = {"error": type(e).__name__}
+    payload = {
+        "status": "connected" if ready else "disconnected",
+        "state": state,
+        "provider": "hermes",
+        "api_url": c.get("url") or "",
+        "instance_name": "Hermes gateway (nomor bot terpisah)",
+        "has_key": bool(c.get("secret")),
+        "has_secret": bool(c.get("secret")),
+        "localhost_only": hermes_bridge.is_local_bridge_url(c.get("url") or ""),
+        "allowlist": {k: list(v) for k, v in hermes_bridge.command_allowlist().items()},
+        "details": details,
+        "node_id": NODE_ID,
+        "node_mode": NODE_ROLE,
+    }
+    if include_secret_hint:
+        # Hanya jalur ber-admin: indikator "secret sudah diisi" yang bisa
+        # dibandingkan operator. Non-admin tidak pernah menerima ini.
+        payload["secret_masked"] = hermes_bridge.mask_secret(c.get("secret") or "")
+    return payload
+
+
+@api.get("/whatsapp/hermes/status")
+async def whatsapp_hermes_status(admin: dict = Depends(require_admin)):
+    """Status khusus bridge Hermes (dipakai halaman WhatsApp & Diagnostik)."""
+    return await _hermes_status()
+
+
+@api.get("/whatsapp/hermes/pairing-info")
+async def whatsapp_hermes_pairing_info(admin: dict = Depends(require_admin)):
+    """Cara pairing nomor bot. QR TIDAK diambil lewat API POS.
+
+    Sesi WhatsApp dipegang gateway Hermes (bukan app ini), jadi pairing
+    dilakukan di server gudang dengan perintah ``hermes whatsapp``. Endpoint ini
+    hanya memberi tahu operator perintah yang benar — app tidak pernah
+    menyentuh kredensial sesi WhatsApp.
+    """
+    if not hermes_bridge:
+        raise HTTPException(503, "Modul integrasi WA tidak tersedia")
+    c = hermes_bridge.bridge_config()
+    return {
+        "ok": True,
+        "paired_by": "hermes whatsapp",
+        "host_requirement": "jalankan di server gudang (644) pada host yang menjalankan gateway Hermes",
+        "bridge_configured": hermes_bridge.bridge_configured(c),
+        "node_id": NODE_ID,
+        "node_mode": NODE_ROLE,
+        "note": ("Nomor bot harus nomor terpisah dari nomor pribadi pemilik. "
+                 "QR tidak ditampilkan di aplikasi POS."),
+    }
+
+
+@api.get("/whatsapp/outbox")
+async def whatsapp_outbox(admin: dict = Depends(require_admin)):
+    """Ringkasan outbox WA. TIDAK mengembalikan nomor atau isi pesan."""
+    pending = await db.wa_outbox.count_documents({"sent_at": None})
+    failed_docs = await db.wa_outbox.find(
+        {"sent_at": None, "attempts": {"$gt": 0}}, {"_id": 0, "attempts": 1, "last_error": 1, "kind": 1}
+    ).sort("updated_at", -1).limit(10).to_list(10)
+    return {
+        "pending": pending,
+        "recent_failures": [
+            {"kind": d.get("kind"), "attempts": d.get("attempts"), "error": d.get("last_error")}
+            for d in failed_docs
+        ],
+        "bridge_configured": bool(hermes_bridge and hermes_bridge.bridge_configured()),
+        "node_id": NODE_ID,
+    }
+
+
+@api.post("/whatsapp/outbox/dispatch")
+async def whatsapp_outbox_dispatch(admin: dict = Depends(require_admin)):
+    """Kirim ulang outbox. Di node tanpa bridge (Pi) hasilnya nol — memang begitu."""
+    return await dispatch_wa_outbox()
 
 @api.post("/whatsapp/test")
 async def whatsapp_test(body: WATestIn, admin: dict = Depends(require_admin)):
@@ -7922,129 +8200,108 @@ class WAInstanceCreateIn(BaseModel):
     evolution_api_key: Optional[str] = None
     instance_name: Optional[str] = "grand-aceh-pos"
 
-@api.get("/whatsapp/status")
-@api.get("/settings/whatsapp")
-async def whatsapp_status():
-    """Memeriksa status koneksi WhatsApp Gateway aktif (Evolution API atau WACloud.id)."""
+async def _wa_status_payload(include_secret_hint: bool):
+    """Bentuk status WhatsApp untuk UI.
+
+    ``include_secret_hint=False`` adalah bentuk aman-untuk-non-admin: hanya
+    ``has_secret`` (boolean). Potongan rahasia (``secret_masked``) tidak pernah
+    keluar dari jalur ini.
+    """
     cfg = await _wa_config()
-    provider = cfg.get("provider") or "wacloud"
-    
+    provider = _wa_effective_provider(cfg)
+
+    if provider == "hermes":
+        return await _hermes_status(include_secret_hint=include_secret_hint)
+
     if provider == "evolution":
+        # Provider lama: status dibaca tanpa membocorkan kunci. ``key`` sengaja
+        # TIDAK pernah dikembalikan (dulu dikirim mentah ke klien).
         url = (cfg.get("evolution_url") or "http://localhost:8080").rstrip("/")
         instance = cfg.get("evolution_instance") or "grand-aceh-pos"
         key = cfg.get("evolution_api_key") or ""
-        
+
         state = "disconnected"
         details = {}
         if url and key:
             try:
                 headers = {"apikey": key}
+                import httpx
                 async with httpx.AsyncClient(timeout=4) as client:
                     r = await client.get(f"{url}/instance/connectionState/{instance}", headers=headers)
-                    if r.status_code == 200:
-                        data = r.json()
-                        inst_state = (data.get("instance") or {}).get("state") or data.get("state") or ""
-                        if inst_state.lower() in ("open", "connected"):
-                            state = "connected"
-                        else:
-                            state = inst_state.lower() or "connecting"
-                        details = data
-                    elif r.status_code == 404:
-                        state = "not_created"
+                if r.status_code == 200:
+                    data = r.json()
+                    inst_state = (data.get("instance") or {}).get("state") or data.get("state") or ""
+                    state = "connected" if inst_state.lower() in ("open", "connected") else (inst_state.lower() or "connecting")
+                elif r.status_code == 404:
+                    state = "not_created"
             except Exception as e:
                 state = "offline"
-                details = {"error": str(e)}
+                details = {"error": type(e).__name__}
         else:
             state = "unconfigured"
-            
-        status = "connected" if state == "connected" else "disconnected"
-        return {
-            "status": status,
+
+        payload = {
+            "status": "connected" if state == "connected" else "disconnected",
             "state": state,
             "provider": "evolution",
             "api_url": url,
             "instance_name": instance,
-            "api_key": key,
             "has_key": bool(key),
-            "details": details
+            "has_secret": bool(key),
+            "details": details,
         }
-    else:
-        configured = bool(cfg.get("api_key") and cfg.get("device_id"))
-        return {
-            "status": "connected" if configured else "disconnected",
-            "state": "open" if configured else "disconnected",
-            "provider": "wacloud",
-            "device_name": cfg.get("device_name", ""),
-            "device_id": cfg.get("device_id", ""),
-            "api_url": cfg.get("base_url") or WACLOUD_DEFAULT_BASE,
-            "instance_name": cfg.get("device_name", "Device WACloud"),
-            "has_key": bool(cfg.get("api_key"))
-        }
+        if include_secret_hint:
+            payload["api_key_masked"] = (key[:6] + "…" + key[-4:]) if len(key) > 12 else ("•" * len(key))
+        return payload
+
+    configured = bool(cfg.get("api_key") and cfg.get("device_id"))
+    payload = {
+        "status": "connected" if configured else "disconnected",
+        "state": "open" if configured else "disconnected",
+        "provider": "wacloud",
+        "device_name": cfg.get("device_name", ""),
+        "device_id": cfg.get("device_id", ""),
+        "api_url": cfg.get("base_url") or WACLOUD_DEFAULT_BASE,
+        "instance_name": cfg.get("device_name", "Device WACloud"),
+        "has_key": bool(cfg.get("api_key")),
+        "has_secret": bool(cfg.get("api_key")),
+    }
+    if include_secret_hint:
+        key = cfg.get("api_key") or ""
+        payload["api_key_masked"] = (key[:6] + "…" + key[-4:]) if len(key) > 12 else ("•" * len(key))
+    return payload
+
+
+@api.get("/whatsapp/status")
+async def whatsapp_status_public():
+    """Status ringkas WhatsApp untuk konsumen non-admin.
+
+    Sengaja TIDAK memuat potongan rahasia: non-admin cukup tahu apakah secret
+    sudah diisi (``has_secret``). Endpoint ber-admin di bawah memakai bentuk
+    penuh.
+    """
+    return await _wa_status_payload(include_secret_hint=False)
+
+
+@api.get("/settings/whatsapp")
+async def whatsapp_settings_status(admin: dict = Depends(require_admin)):
+    """Status WhatsApp lengkap — hanya untuk admin.
+
+    Di sinilah potongan rahasia (``secret_masked`` / ``api_key_masked``) boleh
+    keluar, karena operator perlu membandingkannya saat mendiagnosa.
+    """
+    return await _wa_status_payload(include_secret_hint=True)
 
 @api.post("/whatsapp/instance/create")
 async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depends(require_admin)):
-    """Menghubungkan atau membuat instance WhatsApp pada Evolution API lokal dan mengambil QR Code."""
-    cfg = await _wa_config()
-    url = (body.evolution_url or cfg.get("evolution_url") or "http://localhost:8080").rstrip("/")
-    key = body.evolution_api_key or cfg.get("evolution_api_key") or ""
-    instance = body.instance_name or cfg.get("evolution_instance") or "grand-aceh-pos"
-    
-    if not url:
-        raise HTTPException(400, "URL Evolution API belum diisi")
-        
-    headers = {"apikey": key, "Content-Type": "application/json"}
-    qrcode = None
-    pairing_code = None
-    
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            # 1. Coba ambil QR code dari instance yang sudah ada
-            r = await client.get(f"{url}/instance/connect/{instance}", headers=headers)
-            if r.status_code == 200:
-                data = r.json()
-                qrcode = data.get("base64") or (data.get("qrcode") or {}).get("base64") or data.get("code")
-                pairing_code = data.get("pairingCode")
-            elif r.status_code == 404:
-                # 2. Jika instance belum ada di Evolution API, buat instance baru
-                create_payload = {
-                    "instanceName": instance,
-                    "token": key,
-                    "qrcode": True,
-                    "integration": "WHATSAPP-BAILEYS"
-                }
-                r_create = await client.post(f"{url}/instance/create", headers=headers, json=create_payload)
-                if r_create.status_code in (200, 201):
-                    data = r_create.json()
-                    qrcode = (data.get("qrcode") or {}).get("base64") or data.get("base64") or (data.get("instance") or {}).get("qrcode")
-                    pairing_code = data.get("pairingCode") or (data.get("instance") or {}).get("pairingCode")
-                else:
-                    try:
-                        err_text = r_create.json().get("response") or r_create.text
-                    except Exception:
-                        err_text = r_create.text
-                    raise HTTPException(r_create.status_code, f"Gagal membuat instance Evolution API: {err_text}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(502, f"Tidak dapat terhubung ke Evolution API ({url}): {e}")
-        
-    await db.settings.update_one(
-        {"_id": "wa"},
-        {"$set": {
-            "provider": "evolution",
-            "evolution_url": url,
-            "evolution_api_key": key,
-            "evolution_instance": instance
-        }},
-        upsert=True
+    """Endpoint kompatibilitas lama: pembuatan instance provider lama sudah
+    dihentikan; pairing sekarang dilakukan oleh operator dengan ``hermes
+    whatsapp`` di server gudang 644.
+    """
+    raise HTTPException(
+        400,
+        "Provider WhatsApp lama (Evolution) sudah dinonaktifkan. Gunakan Hermes di server gudang 644.",
     )
-    
-    return {
-        "ok": True,
-        "instance": instance,
-        "qrcode": qrcode,
-        "pairingCode": pairing_code
-    }
 
 # Webhook penerima pesan dari WACloud.id untuk booking otomatis
 def _parse_any_whatsapp_payload(payload: dict):
@@ -8103,10 +8360,10 @@ def _parse_any_whatsapp_payload(payload: dict):
     return sender, body, from_me, is_group, remote_jid, participant
 
 async def _process_whatsapp_webhook(payload: dict):
-    logger.info(f"Menerima webhook WhatsApp: {payload}")
     sender, body, from_me, is_group, remote_jid, participant = _parse_any_whatsapp_payload(payload)
+    # CATATAN keamanan: JANGAN mencatat payload mentah — berisi nomor & isi pesan.
     if not sender or not body:
-        logger.warning("Webhook tidak memiliki sender atau body.")
+        logger.warning("Webhook WhatsApp tanpa pengirim/isi, diabaikan")
         return
         
     body_str = str(body)
@@ -8136,6 +8393,24 @@ async def _process_whatsapp_webhook(payload: dict):
     if any(bk in body_lower for bk in bot_keywords):
         logger.info("Mengabaikan pesan yang mengandung tanda/balasan bot.")
         return
+
+    # ---- Perintah dua arah (allowlist per-role) ------------------------------
+    # Dijalankan SEBELUM alur reservasi supaya perintah seperti /stok tidak
+    # ikut diproses sebagai permintaan booking. Read-only, idempoten.
+    if hermes_bridge and body_lower.startswith("/"):
+        try:
+            reply = await hermes_bridge.handle_command(db, body_str, sender)
+        except Exception as e:
+            logger.error("perintah WA gagal diproses: %s", type(e).__name__)
+            reply = None
+        if reply:
+            try:
+                await _send_whatsapp([sender], reply, kind="command")
+            except Exception as e:
+                # Balasan gagal (mis. fitur WA dimatikan / bridge mati) tidak boleh
+                # menjatuhkan task webhook; pesannya sudah masuk outbox.
+                logger.warning("balasan perintah WA tidak terkirim: %s", type(e).__name__)
+            return
 
     # Ambil konfigurasi WhatsApp & Aturan Grup
     cfg = await _wa_config()
@@ -8264,8 +8539,9 @@ async def _process_whatsapp_webhook(payload: dict):
 
         # Simpan reservasi ke database
         cfg = await _wa_config()
-        provider = cfg.get("provider") or "wacloud"
-        created_by_str = "Evolution AI" if provider == "evolution" else "WACloud AI"
+        provider = _wa_effective_provider(cfg)
+        # Label asal reservasi mengikuti provider efektif (legacy dipetakan ke Hermes).
+        created_by_str = {"hermes": "Hermes AI", "evolution": "Evolution AI"}.get(provider, "WACloud AI")
 
         doc = {
             "id": new_id(),
@@ -8318,12 +8594,27 @@ async def _process_whatsapp_webhook(payload: dict):
 
 @api.post("/webhook/whatsapp")
 async def wacloud_webhook(request: Request, background_tasks: BackgroundTasks):
-    """Endpoint Webhook publik untuk memproses booking otomatis via WACloud.id."""
+    """Endpoint webhook pesan WhatsApp masuk (dipakai bridge Hermes/Baileys).
+
+    Bila WA_WEBHOOK_SECRET diisi, header X-Hermes-Secret wajib cocok. Ini
+    melindungi endpoint dari kiriman pihak lain karena bridge Hermes selalu
+    mengirimkan secret tersebut.
+    """
+    # Fail-closed: tanpa secret terkonfigurasi, webhook DITOLAK. Kalau tidak,
+    # siapa pun yang bisa menjangkau endpoint ini bisa menyuntikkan pesan
+    # (termasuk perintah) seolah-olah dari WhatsApp.
+    expected = (os.environ.get("WA_WEBHOOK_SECRET") or "").strip()
+    if not expected:
+        raise HTTPException(503, "Webhook WhatsApp belum dikonfigurasi (WA_WEBHOOK_SECRET kosong)")
+    import hmac as _hmac
+    given = (request.headers.get("X-Hermes-Secret") or "").strip()
+    if not (given and _hmac.compare_digest(given, expected)):
+        raise HTTPException(401, "unauthorized")
     try:
         payload = await request.json()
     except Exception:
         return {"ok": False, "error": "Invalid JSON payload"}
-        
+
     background_tasks.add_task(_process_whatsapp_webhook, payload)
     return {"ok": True, "message": "Webhook received"}
 
@@ -10331,6 +10622,11 @@ async def _ensure_indexes():
     # jadi keduanya memakai indeks PARSIAL yang hanya mencakup nilai bermakna.
     _IDX_MEANINGFUL = {"$type": "string", "$gt": ""}   # string, bukan kosong
     await _mk("orders", "client_ref", unique=True, partial={"client_ref": _IDX_MEANINGFUL})   # idempotensi sync offline
+    # Outbox WhatsApp: kunci idempoten mencegah pesan yang gagal terkirim ganda
+    # saat dispatcher dijalankan berulang (mis. tiap menit oleh scheduler).
+    await _mk("wa_outbox", "wa_id", unique=True)
+    await _mk("wa_outbox", [("sent_at", 1), ("created_at", 1)])
+    await _mk("users", "phone")
     await _mk("orders", "payment_ref", unique=True, sparse=True)  # idempotensi pembayaran (retry)
     await _mk("orders", "id", unique=True)                        # get/pay/void/split/merge per id
     await _mk("orders", [("status", 1), ("created_at", -1)])      # laporan: status paid + rentang tanggal
@@ -10450,6 +10746,17 @@ async def startup():
         await _aio.sleep(_random.uniform(0, min(3.0, 0.6 * WORKERS)))
     logger.info(f"backend start: worker={os.getpid()} UVICORN_WORKERS={WORKERS} "
                 f"mongo_pool={MONGO_POOL_SIZE}")
+    # Diagnostik identitas node & WhatsApp — sengaja tanpa token/nomor.
+    if hermes_bridge:
+        _cfg = hermes_bridge.bridge_config()
+        _ok = hermes_bridge.bridge_configured(_cfg)
+        logger.info(f"node: id={NODE_ID} role={NODE_ROLE} wa_bridge={_ok}")
+        if _cfg.get("url") and not _ok:
+            logger.warning("HERMES_WA_WEBHOOK_URL terisi tetapi gateway tidak siap "
+                           "(peran node bukan primary, URL bukan localhost, atau secret kosong) "
+                           "— pesan WA akan masuk outbox, bukan hilang.")
+    else:
+        logger.warning("modul hermes_bridge tidak tersedia; WA Hermes nonaktif")
     await _ensure_indexes()
     await _migrate_shift_scopes()
     # ---- MIGRASI akun: email -> username (tanpa email) ----
@@ -10555,6 +10862,16 @@ async def startup():
                 await _maybe_integrity_auto()
             except Exception as e:
                 logger.error(f"integrity scheduler tick failed: {e}")
+            # Outbox WhatsApp: primary mengirim ke Hermes; Pi meneruskan antrean
+            # ke primary bila WA_OUTBOX_UPSTREAM_URL + token terkonfigurasi.
+            try:
+                stats = await dispatch_wa_outbox()
+                if stats.get("sent"):
+                    logger.info("outbox WA terkirim: %s pesan", stats["sent"])
+                if stats.get("pushed"):
+                    logger.info("outbox WA diteruskan ke primary: %s pesan", stats["pushed"])
+            except Exception as e:
+                logger.error(f"dispatch/sinkronisasi outbox WA gagal: {e}")
             await _asyncio.sleep(600)  # cek tiap 10 menit
     _asyncio.create_task(_report_scheduler())
     if WORKERS > 1:

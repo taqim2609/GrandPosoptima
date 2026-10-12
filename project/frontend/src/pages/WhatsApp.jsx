@@ -3,57 +3,43 @@ import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
 import {
   MessageCircle, Loader2, Save, Send, RefreshCw, CheckCircle2,
-  KeyRound, Smartphone, QrCode, Cloud, Radio, Sparkles, Terminal, Copy, Check, Server, Sliders,
-  ShieldCheck, ShieldAlert, Zap, AlertTriangle, ArrowRightLeft
+  KeyRound, Sliders, Zap,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
+/**
+ * Pengaturan WhatsApp Gateway — Hermes Baileys.
+ *
+ * Rancangan yang dikunci:
+ *  - WhatsApp hanya dikirim/diterima di server gudang (644); bridge bind 127.0.0.1.
+ *  - Pi tidak pernah memanggil bridge. Pesan yang gagal dikirim masuk `wa_outbox`
+ *    dengan idempotency key, lalu dikirim SEKALI oleh server gudang setelah sinkron.
+ *  - Halaman ini tidak menyimpan kredensial bridge: konfigurasi bridge ada di env
+ *    server gudang. Status dan outbox dibaca langsung dari backend.
+ */
 export default function WhatsApp() {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [provider, setProvider] = useState("evolution"); // "evolution" | "wacloud"
-  const [autoFailover, setAutoFailover] = useState(true);
-  const [cfg, setCfg] = useState({
+  const [savingProvider, setSavingProvider] = useState(false);
+
+  // Status bridge Hermes (nomor bot terpisah, hanya server gudang 644)
+  const [hermes, setHermes] = useState({
     configured: false,
-    provider: "evolution",
-    auto_failover: true,
-    wacloud_configured: false,
-    evolution_url: "",
-    evolution_api_key: "",
-    evolution_instance: "grand-aceh-pos",
-    api_key: "",
-    base_url: "https://app.wacloud.id/api/v1",
-    device_id: "",
-    device_name: "",
-    phone: "",
-    status: "disconnected",
+    state: "unconfigured",
+    api_url: "",
+    localhost_only: false,
+    secret_masked: "",
+    allowlist: {},
+    node_id: "",
+    node_mode: "primary",
+    bot: "",
+    error: "",
   });
+  const [outbox, setOutbox] = useState({ pending: 0, recent_failures: [], bridge_configured: false });
+  const [dispatching, setDispatching] = useState(false);
 
-  // State inputs for Evolution API
-  const [evolutionUrl, setEvolutionUrl] = useState("");
-  const [evolutionKey, setEvolutionKey] = useState("");
-  const [instanceName, setInstanceName] = useState("grand-aceh-pos");
-
-  // State inputs for WACloud
-  const [waCloudKey, setWaCloudKey] = useState("");
-  const [waCloudBase, setWaCloudBase] = useState("https://app.wacloud.id/api/v1");
-  const [waCloudDeviceId, setWaCloudDeviceId] = useState("");
-  const [waCloudDeviceName, setWaCloudDeviceName] = useState("");
-  const [devicesList, setDevicesList] = useState([]);
-  const [loadingDevices, setLoadingDevices] = useState(false);
-  const [showFailoverConfig, setShowFailoverConfig] = useState(false);
-
-  // QR & Pairing for Evolution API
-  const [qrLoading, setQrLoading] = useState(false);
-  const [qrData, setQrData] = useState(null);
-  const [pairingCode, setPairingCode] = useState(null);
-  const [statusChecking, setStatusChecking] = useState(false);
   const [statusState, setStatusState] = useState("disconnected");
-
-  // General testing
+  const [statusChecking, setStatusChecking] = useState(false);
   const [testNo, setTestNo] = useState("");
   const [testing, setTesting] = useState(false);
-  const [copiedDeploy, setCopiedDeploy] = useState(false);
 
   // Group reservation rules state
   const [groupOnly, setGroupOnly] = useState(true);
@@ -64,42 +50,47 @@ export default function WhatsApp() {
   const [rejectPrivate, setRejectPrivate] = useState(true);
   const [savingResRules, setSavingResRules] = useState(false);
 
+  const loadHermes = async () => {
+    try {
+      const r = await api.get("/whatsapp/hermes/status");
+      const d = r.data || {};
+      setHermes({
+        configured: d.state !== "unconfigured",
+        state: d.state || "unconfigured",
+        api_url: d.api_url || "",
+        localhost_only: !!d.localhost_only,
+        secret_masked: d.secret_masked || "",
+        allowlist: d.allowlist || {},
+        node_id: d.node_id || "",
+        node_mode: d.node_mode || "primary",
+        bot: d.details?.bot || "",
+        error: d.details?.error || "",
+      });
+      setStatusState(d.status || "disconnected");
+    } catch (e) {
+      setHermes((h) => ({ ...h, state: "offline" }));
+      setStatusState("disconnected");
+    }
+    try {
+      const o = await api.get("/whatsapp/outbox");
+      setOutbox(o.data || { pending: 0, recent_failures: [], bridge_configured: false });
+    } catch (e) {
+      /* ringkasan outbox bersifat opsional */
+    }
+  };
+
   const load = async () => {
     try {
       const r = await api.get("/whatsapp/config");
       const c = r.data || {};
-      setCfg(c);
-      const prov = c.provider || "evolution";
-      setProvider(prov);
-      setAutoFailover(c.auto_failover !== false);
-
       setGroupOnly(c.group_only_reservation !== false);
       setResKeywords(c.reservation_keywords || "#reservasi, #booking, !reservasi, reservasi");
       setTargetGroupId(c.target_group_id || "");
       setReplyGroup(c.reply_to_group !== false);
       setSendPrivate(c.send_private_confirm !== false);
       setRejectPrivate(c.reject_private_booking !== false);
-      
-      // Load Evolution inputs
-      setEvolutionUrl(c.evolution_url || "");
-      setEvolutionKey(c.evolution_api_key || "");
-      setInstanceName(c.evolution_instance || "grand-aceh-pos");
-      
-      // Load WACloud inputs
-      setWaCloudKey(c.api_key || "");
-      setWaCloudBase(c.base_url || "https://app.wacloud.id/api/v1");
-      setWaCloudDeviceId(c.device_id || "");
-      setWaCloudDeviceName(c.device_name || "");
-      
-      if (c.phone) {
-        setTestNo(c.phone);
-      }
-      setStatusState(c.status || "disconnected");
-      
-      // If api_key exists, fetch devices list to make failover dropdown ready
-      if (c.api_key) {
-        fetchDevices(c.api_key, c.base_url);
-      }
+      if (c.phone) setTestNo(c.phone);
+      await loadHermes();
     } catch (e) {
       toast.error(apiError(e.response?.data?.detail));
     } finally {
@@ -107,20 +98,21 @@ export default function WhatsApp() {
     }
   };
 
-  const fetchDevices = async (apiKey = waCloudKey, baseUrl = waCloudBase) => {
-    if (!apiKey) return;
-    setLoadingDevices(true);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const activateHermes = async () => {
+    setSavingProvider(true);
     try {
-      await api.put("/whatsapp/config", {
-        api_key: apiKey.trim(),
-        base_url: baseUrl.trim()
-      });
-      const r = await api.get("/whatsapp/devices");
-      setDevicesList(r.data.devices || []);
+      await api.put("/whatsapp/config", { provider: "hermes" });
+      toast.success("Provider Hermes Baileys diaktifkan");
+      await loadHermes();
     } catch (e) {
-      console.error("Gagal memuat daftar device WACloud", e);
+      toast.error(apiError(e.response?.data?.detail));
     } finally {
-      setLoadingDevices(false);
+      setSavingProvider(false);
     }
   };
 
@@ -130,10 +122,11 @@ export default function WhatsApp() {
       const r = await api.get("/whatsapp/status");
       setStatusState(r.data.status || "connected");
       if (r.data.status === "connected" || r.data.state === "open") {
-        toast.success(`WhatsApp Gateway (${provider === "evolution" ? "Evolution" : "WACloud"}) Terhubung!`);
+        toast.success("WhatsApp Gateway (Hermes Baileys) Terhubung!");
       } else {
         toast.info(`Status Gateway: ${r.data.state || r.data.status}`);
       }
+      await loadHermes();
     } catch (e) {
       toast.error("Gagal memeriksa status koneksi");
     } finally {
@@ -141,71 +134,21 @@ export default function WhatsApp() {
     }
   };
 
-  const fetchQrCode = async () => {
-    setQrLoading(true);
+  const dispatchOutbox = async () => {
+    setDispatching(true);
     try {
-      const r = await api.post("/whatsapp/instance/create", {
-        evolution_url: evolutionUrl,
-        evolution_api_key: evolutionKey,
-        instance_name: instanceName,
-      });
-      if (r.data.qrcode) {
-        setQrData(r.data.qrcode);
-        setPairingCode(r.data.pairingCode);
-        toast.success("QR Code siap di-scan dengan nomor WhatsApp Toko");
+      const r = await api.post("/whatsapp/outbox/dispatch");
+      const d = r.data || {};
+      if (d.skipped) {
+        toast.info("Node ini tidak punya bridge — outbox akan dikirim oleh server gudang.");
       } else {
-        toast.info("Instance siap atau sudah terhubung");
+        toast.success(`Outbox dikirim: ${d.sent || 0} berhasil, ${d.failed || 0} gagal`);
       }
+      await loadHermes();
     } catch (e) {
-      toast.error("Gagal memuat QR Code dari Evolution API");
+      toast.error(apiError(e.response?.data?.detail));
     } finally {
-      setQrLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const saveConfig = async (overrideFailover = autoFailover) => {
-    setSaving(true);
-    try {
-      const selectedDev = devicesList.find(d => String(d.id) === String(waCloudDeviceId));
-      const devName = selectedDev ? selectedDev.name : waCloudDeviceName;
-
-      await api.put("/whatsapp/config", {
-        provider,
-        auto_failover: overrideFailover,
-        evolution_url: evolutionUrl.trim(),
-        evolution_api_key: evolutionKey.trim(),
-        evolution_instance: instanceName.trim() || "grand-aceh-pos",
-        api_key: waCloudKey.trim(),
-        base_url: waCloudBase.trim(),
-        device_id: waCloudDeviceId.trim(),
-        device_name: devName || "Device WACloud",
-        status: "connected",
-      });
-      toast.success(
-        provider === "evolution"
-          ? "Pengaturan Evolution API & Failover WACloud berhasil disimpan"
-          : "Pengaturan WACloud.id berhasil disimpan"
-      );
-      await load();
-      return true;
-    } catch (e) {
-      const errDetail = e.response?.data?.detail || e.response?.data?.message || e.response?.data?.error || e.message;
-      toast.error(apiError(errDetail));
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveAndGenerateQr = async () => {
-    const ok = await saveConfig();
-    if (ok) {
-      await fetchQrCode();
+      setDispatching(false);
     }
   };
 
@@ -224,36 +167,6 @@ export default function WhatsApp() {
       setTesting(false);
     }
   };
-
-  const deploySnippet = `version: "3.8"
-services:
-  evolution-api:
-    image: atendai/evolution-api:v2.1.2
-    container_name: evolution-api
-    ports:
-      - "8080:8080"
-    environment:
-      - AUTHENTICATION_API_KEY=GAK_EVOLUTION_SECRET_KEY_2026
-      - DATABASE_SAVE_DATA_INSTANCE=true
-      - QRCODE_LIMIT=30
-      - SESSION_SECRET_KEY=grandacehsecret
-      - WEBSOCKET_ENABLED=true
-    restart: always`;
-
-  const copyCommand = () => {
-    navigator.clipboard.writeText(deploySnippet);
-    setCopiedDeploy(true);
-    toast.success("Konfigurasi Docker Compose disalin ke clipboard!");
-    setTimeout(() => setCopiedDeploy(false), 3000);
-  };
-
-  if (loading) {
-    return (
-      <div className="h-full grid place-items-center">
-        <Loader2 className="animate-spin text-[#E63946]" />
-      </div>
-    );
-  }
 
   const saveResRules = async () => {
     setSavingResRules(true);
@@ -274,7 +187,15 @@ services:
     }
   };
 
-  const isConnected = statusState === "connected" || cfg.status === "connected";
+  if (loading) {
+    return (
+      <div className="h-full grid place-items-center">
+        <Loader2 className="animate-spin text-[#E63946]" />
+      </div>
+    );
+  }
+
+  const isConnected = hermes.state === "open" || statusState === "connected";
 
   return (
     <div className="h-full overflow-y-auto p-6 lg:p-8" data-testid="wa-config-page">
@@ -285,48 +206,41 @@ services:
             <MessageCircle className="text-[#25D366]" /> Pengaturan WhatsApp Gateway
           </h1>
           <p className="text-sm text-[#52525B] mt-1">
-            Kirim struk otomatis, laporan shift kasir, and notifikasi berkala harian menggunakan pilihan penyedia gateway lokal atau cloud.
+            Kirim struk otomatis, laporan shift, dan terima perintah WhatsApp melalui Hermes Baileys
+            (nomor bot terpisah) di server gudang.
           </p>
         </div>
 
-        {/* PROVIDER SWITCH */}
+        {/* PROVIDER */}
         <div className="bg-white rounded-2xl border p-5 space-y-4">
-          <div className="flex items-center gap-2 font-black text-sm text-slate-800">
-            <Sliders size={16} className="text-indigo-600" />
-            Pilih Provider WhatsApp Gateway
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 font-black text-sm text-slate-800">
+              <Sliders size={16} className="text-indigo-600" />
+              Provider Gateway
+            </div>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 border border-emerald-200 text-emerald-700">
+              aktif
+            </span>
           </div>
-          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+          <div className="grid grid-cols-1 bg-slate-100 p-1 rounded-xl">
             <button
-              onClick={() => setProvider("evolution")}
-              className={`py-3 text-xs font-black rounded-lg transition duration-150 flex items-center justify-center gap-2 ${
-                provider === "evolution"
-                  ? "bg-white text-slate-900 shadow-sm border border-slate-200"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
+              type="button"
+              onClick={activateHermes}
+              disabled={savingProvider}
+              className="py-3 text-xs font-black rounded-lg transition duration-150 flex items-center justify-center gap-2 bg-white text-slate-900 shadow-sm border border-slate-200 disabled:opacity-60"
+              data-testid="wa-provider-hermes"
             >
-              <Server size={14} />
-              Evolution API (Server VPS)
-            </button>
-            <button
-              onClick={() => setProvider("wacloud")}
-              className={`py-3 text-xs font-black rounded-lg transition duration-150 flex items-center justify-center gap-2 ${
-                provider === "wacloud"
-                  ? "bg-white text-slate-900 shadow-sm border border-slate-200"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Cloud size={14} />
-              WACloud.id (SaaS Cloud API)
+              {savingProvider ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+              Hermes Baileys — server gudang-644
             </button>
           </div>
           <p className="text-[11px] text-slate-500 italic leading-relaxed">
-            {provider === "evolution"
-              ? "Sangat direkomendasikan untuk menekan biaya operasional. Menggunakan nomor WhatsApp pribadi Anda via Evolution API yang berjalan di Cloud VPS 24/7."
-              : "Solusi enterprise berbasis Cloud. Menggunakan layanan wacloud.id tanpa perlu mengelola server VPS secara mandiri."}
+            Gateway eksklusif Grand POS: Hermes Baileys dengan nomor bot terpisah. Bridge hanya berjalan
+            di server gudang (127.0.0.1); Pi tidak mengirim atau menerima WhatsApp.
           </p>
         </div>
 
-        {/* UNIFIED STATUS CARD */}
+        {/* STATUS */}
         <div
           className={`rounded-2xl border p-5 flex flex-col gap-3 transition-colors ${
             isConnected
@@ -342,25 +256,17 @@ services:
               </div>
               <div>
                 <div className="font-extrabold text-sm flex items-center gap-2 text-slate-900">
-                  {isConnected ? "WhatsApp Gateway Aktif & Siap Digunakan" : "Gateway Menunggu Konfigurasi"}
+                  {isConnected ? "WhatsApp Gateway Aktif & Siap Digunakan" : "Gateway Menunggu Koneksi Bridge"}
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-white border border-slate-200 text-slate-700 shadow-xs">
-                    {provider === "evolution" ? "Evolution API (VPS)" : "WACloud (Cloud)"}
+                    Hermes Baileys (localhost / gudang-644)
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {provider === "evolution" ? (
-                    <>
-                      <span>Instance: <b className="text-slate-700">{instanceName || "grand-aceh-pos"}</b></span>
-                      <span>·</span>
-                      <span>URL: <span className="font-mono text-slate-700">{evolutionUrl || "http://localhost:8080"}</span></span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Device: <b className="text-slate-700">{waCloudDeviceName || waCloudDeviceId || "Belum dipilih"}</b></span>
-                      <span>·</span>
-                      <span>Endpoint: <span className="font-mono text-slate-700">{waCloudBase}</span></span>
-                    </>
-                  )}
+                  <span>Node: <b className="text-slate-700">{hermes.node_id || "-"} ({hermes.node_mode})</b></span>
+                  <span>·</span>
+                  <span>Nomor bot: <b className="text-slate-700">{hermes.bot || "belum terhubung"}</b></span>
+                  <span>·</span>
+                  <span>Bridge: <span className="font-mono text-slate-700">{hermes.api_url || "belum diset"}</span></span>
                 </div>
               </div>
             </div>
@@ -368,14 +274,14 @@ services:
               <button
                 onClick={checkStatus}
                 disabled={statusChecking}
-                className="tap h-9 px-3.5 rounded-xl bg-white border border-slate-200 font-bold text-xs inline-flex items-center gap-1.5 shadow-xs hover:bg-slate-50 text-slate-700"
+                className="tap h-9 px-3.5 rounded-xl bg-white border border-slate-200 font-bold text-xs inline-flex items-center gap-1.5 shadow-xs hover:bg-slate-50 text-slate-700 disabled:opacity-50"
               >
                 {statusChecking ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                 Uji Koneksi &amp; Cek Sesi
               </button>
             </div>
           </div>
-          
+
           <div className="text-xs pt-1 border-t border-slate-200/60 flex items-center gap-1.5">
             {isConnected ? (
               <span className="text-[#047857] flex items-center gap-1.5">
@@ -384,429 +290,88 @@ services:
               </span>
             ) : (
               <span className="text-[#B45309]">
-                {provider === "evolution"
-                  ? "Pastikan container Docker Evolution API di VPS Anda sudah aktif dan scan QR Code di bawah."
-                  : "Masukkan API Key WACloud Anda dan pilih device aktif untuk menghubungkan gateway."}
+                Bridge Hermes belum terhubung. QR pairing hanya bisa diambil di server gudang (bridge = localhost).
               </span>
             )}
           </div>
         </div>
 
-        {/* SMART AUTO-FAILOVER TO WACLOUD CARD */}
-        <div className="bg-gradient-to-br from-amber-50/70 via-white to-orange-50/60 rounded-2xl border border-amber-200/90 p-5 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-700 shrink-0 mt-0.5">
-                <ArrowRightLeft size={22} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm font-black text-slate-900">
-                    Auto-Failover ke WACloud (Jika Evolution API di VPS Gangguan)
-                  </h3>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${
-                    autoFailover && waCloudKey && waCloudDeviceId
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : autoFailover
-                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                      : "bg-slate-100 text-slate-600 border-slate-200"
-                  }`}>
-                    {autoFailover && waCloudKey && waCloudDeviceId
-                      ? "✅ Siaga Aktif (Failover Ready)"
-                      : autoFailover
-                      ? "⚠️ Perlu Kredensial WACloud"
-                      : "Nonaktif"}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Jika container Evolution API di VPS mengalami gangguan atau sesi terputus, sistem <b>secara otomatis</b> mengalihkan pengiriman konfirmasi <b>Reservasi Meja &amp; Struk Digital</b> ke WACloud.id. Tidak ada pesan ke pelanggan yang gagal terkirim.
-                </p>
-              </div>
+        {/* PANEL BRIDGE */}
+        <div className="bg-white rounded-2xl border p-5 space-y-4" data-testid="wa-hermes-panel">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 font-black text-sm text-slate-800">
+              <Zap size={16} className="text-indigo-600" />
+              Bridge Hermes Baileys
             </div>
-
-            <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
-              <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-amber-200 shadow-2xs">
-                <input
-                  type="checkbox"
-                  checked={autoFailover}
-                  onChange={(e) => {
-                    const val = e.target.checked;
-                    setAutoFailover(val);
-                    saveConfig(val);
-                  }}
-                  className="rounded text-amber-600 focus:ring-amber-500 h-4 w-4"
-                />
-                <span className="text-xs font-bold text-slate-800">
-                  {autoFailover ? "Auto-Failover Aktif" : "Auto-Failover Mati"}
-                </span>
-              </label>
-            </div>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border ${
+              hermes.localhost_only
+                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                : "bg-amber-50 border-amber-200 text-amber-700"
+            }`}>
+              {hermes.localhost_only ? "localhost-only" : "perlu dikonfigurasi"}
+            </span>
           </div>
 
-          {/* Failover Status Info & Quick Settings */}
-          <div className="bg-white/90 rounded-xl border border-amber-200/80 p-3.5 text-xs space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2 text-slate-700">
-                <ShieldCheck size={16} className={waCloudKey && waCloudDeviceId ? "text-emerald-600" : "text-amber-500"} />
-                <span className="font-bold">
-                  {waCloudKey && waCloudDeviceId
-                    ? `Device Cadangan Siaga: ${waCloudDeviceName || waCloudDeviceId} (wacloud.id)`
-                    : "Kredensial akun cadangan WACloud belum disimpan lengkap"}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowFailoverConfig(!showFailoverConfig)}
-                className="text-xs font-extrabold text-amber-700 hover:text-amber-800 underline flex items-center gap-1 cursor-pointer"
-              >
-                {showFailoverConfig ? "Tutup Form Kredensial Cadangan" : "Atur / Ubah Kredensial WACloud Cadangan"}
-              </button>
+          <div className="grid gap-2 text-xs text-slate-600">
+            <div>Endpoint: <span className="font-mono text-slate-800">{hermes.api_url || "(kosong)"}</span></div>
+            <div>Secret: <span className="font-mono text-slate-800">{hermes.secret_masked || "(belum diset)"}</span></div>
+            <div>
+              Perintah (allowlist per-role):{" "}
+              {Object.keys(hermes.allowlist || {}).length === 0
+                ? "(belum ada)"
+                : Object.entries(hermes.allowlist).map(([cmd, roles]) => (
+                    <span key={cmd} className="inline-block mr-2 font-mono text-slate-800">
+                      {cmd} → {roles.join(",")}
+                    </span>
+                  ))}
             </div>
-
-            {/* Collapsible/Expandable Credential Inputs for Failover */}
-            {(showFailoverConfig || !waCloudKey || !waCloudDeviceId) && (
-              <div className="pt-3 border-t border-slate-100 grid gap-3 sm:grid-cols-2 bg-amber-50/40 p-3 rounded-lg">
-                <div className="sm:col-span-2">
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                    API Key WACloud Cadangan
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={waCloudKey}
-                      onChange={(e) => setWaCloudKey(e.target.value)}
-                      placeholder="Masukkan API Key wacloud.id untuk cadangan failover"
-                      className="flex-1 h-9 rounded-lg border px-3 font-mono text-xs bg-white outline-none focus:border-amber-500"
-                    />
-                    <Button
-                      variant="outline"
-                      className="h-9 rounded-lg border font-bold text-xs px-3 bg-white"
-                      onClick={() => fetchDevices(waCloudKey, waCloudBase)}
-                      disabled={loadingDevices || !waCloudKey}
-                    >
-                      {loadingDevices ? <Loader2 className="animate-spin h-3 w-3" /> : "Muat Device"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                    Pilih Device WACloud Cadangan
-                  </label>
-                  {devicesList.length > 0 ? (
-                    <select
-                      value={waCloudDeviceId}
-                      onChange={(e) => {
-                        setWaCloudDeviceId(e.target.value);
-                        const matched = devicesList.find(d => String(d.id) === String(e.target.value));
-                        if (matched) setWaCloudDeviceName(matched.name);
-                      }}
-                      className="w-full h-9 rounded-lg border px-3 font-bold text-xs bg-white outline-none focus:border-amber-500"
-                    >
-                      <option value="">-- Pilih Device Cadangan --</option>
-                      {devicesList.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name} ({d.sender_number || "No. WA"}) - {d.status || "online"}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={waCloudDeviceId}
-                      onChange={(e) => setWaCloudDeviceId(e.target.value)}
-                      placeholder="ID Device WACloud (Contoh: 12345)"
-                      className="w-full h-9 rounded-lg border px-3 font-mono text-xs bg-white outline-none focus:border-amber-500"
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                    Base URL WACloud
-                  </label>
-                  <input
-                    type="text"
-                    value={waCloudBase}
-                    onChange={(e) => setWaCloudBase(e.target.value)}
-                    placeholder="https://app.wacloud.id/api/v1"
-                    className="w-full h-9 rounded-lg border px-3 font-mono text-xs bg-white outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div className="sm:col-span-2 flex items-center justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => saveConfig(autoFailover)}
-                    disabled={saving}
-                    className="tap h-9 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
-                  >
-                    {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                    Simpan Cadangan Failover
-                  </button>
-                </div>
-              </div>
+            {hermes.error && (
+              <div className="text-amber-700">Catatan bridge: {hermes.error}</div>
             )}
           </div>
+
+          <div className="rounded-xl border bg-slate-50 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs">
+              <div className="font-bold text-slate-800">Outbox WhatsApp</div>
+              <div className="text-slate-500">
+                {outbox.pending} pesan menunggu
+                {outbox.pending > 0 && !outbox.bridge_configured && " — akan dikirim oleh server gudang setelah sinkron"}
+              </div>
+            </div>
+            <button
+              onClick={dispatchOutbox}
+              disabled={dispatching}
+              className="tap h-9 px-3.5 rounded-xl bg-white border border-slate-200 font-bold text-xs inline-flex items-center gap-1.5 shadow-xs hover:bg-slate-50 text-slate-700 disabled:opacity-50"
+              data-testid="wa-outbox-dispatch"
+            >
+              {dispatching ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              Kirim ulang outbox
+            </button>
+          </div>
+
+          {!!(outbox.recent_failures || []).length && (
+            <div className="text-[11px] text-slate-500">
+              Kegagalan terakhir (tanpa nomor/isi pesan):{" "}
+              {outbox.recent_failures.map((f, i) => (
+                <span key={i} className="inline-block mr-2 font-mono">
+                  {f.kind || "wa"}×{f.attempts || 0}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p className="text-[11px] text-slate-500 italic leading-relaxed">
+            Bridge Baileys memakai nomor bot terpisah, hanya berjalan di server gudang (127.0.0.1).
+            Server Pi tidak mengirim/menerima WhatsApp — pesan yang gagal tersimpan di outbox dan dikirim
+            sekali oleh server gudang setelah sinkron. Ganti nomor/QR di server gudang, bukan dari sini.
+          </p>
         </div>
 
-        {/* EVOLUTION CONFIGURATION PANELS */}
-        {provider === "evolution" && (
-          <>
-            {/* STEP 1: DOCKER COMPOSE VPS SERVER GUIDE */}
-            <div className="bg-white rounded-2xl border p-6 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="font-extrabold flex items-center gap-2">
-                  <span className="h-6 w-6 rounded-full bg-[#1D4ED8] text-white grid place-items-center text-xs font-black">1</span>
-                  Langkah 1: Jalankan Evolution API di Server VPS (Docker Compose)
-                </div>
-                <button
-                  onClick={copyCommand}
-                  className="tap h-8 px-2.5 rounded-lg bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] font-bold text-xs flex items-center gap-1.5"
-                >
-                  {copiedDeploy ? <Check size={13} /> : <Copy size={13} />}
-                  {copiedDeploy ? "Tersalin" : "Salin Konfigurasi"}
-                </button>
-              </div>
-              <p className="text-xs text-[#52525B]">
-                Salin konfigurasi di bawah ini ke berkas <b>docker-compose.vps.yml</b> di Server VPS Anda, lalu jalankan perintah <code>docker compose -f docker-compose.vps.yml up -d</code>:
-              </p>
-              <div className="bg-[#0F172A] text-[#F8FAFC] p-3.5 rounded-xl font-mono text-[11px] overflow-x-auto border border-zinc-800 relative">
-                <pre className="whitespace-pre">{deploySnippet}</pre>
-              </div>
-            </div>
-
-            {/* STEP 2: EVOLUTION CONFIGURATION */}
-            <div className="bg-white rounded-2xl border p-6 space-y-4">
-              <div className="font-extrabold flex items-center gap-2">
-                <span className="h-6 w-6 rounded-full bg-[#E63946] text-white grid place-items-center text-xs font-black">2</span>
-                Langkah 2: Hubungkan URL &amp; API Key ke POS
-              </div>
-              <p className="text-xs text-[#52525B]">
-                Masukkan Service URL Evolution API di VPS Anda (mis. <code>https://wa.domainanda.com</code> atau <code>http://IP_VPS:8080</code>) beserta API Key:
-              </p>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className="text-xs font-bold text-[#52525B] uppercase tracking-wider block mb-1">
-                    Evolution API Service URL (VPS Server / Cloud Domain)
-                  </label>
-                  <input
-                    data-testid="evolution-url-input"
-                    type="text"
-                    value={evolutionUrl}
-                    onChange={(e) => setEvolutionUrl(e.target.value)}
-                    placeholder="http://IP_VPS:8080 atau https://wa.domainanda.com"
-                    className="w-full h-11 rounded-xl border px-3 font-mono text-xs outline-none focus:border-[#E63946]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-[#52525B] uppercase tracking-wider block mb-1">
-                    Global API Key
-                  </label>
-                  <input
-                    data-testid="evolution-key-input"
-                    type="password"
-                    value={evolutionKey}
-                    onChange={(e) => setEvolutionKey(e.target.value)}
-                    placeholder="GAK_EVOLUTION_SECRET_KEY_2026"
-                    className="w-full h-11 rounded-xl border px-3 font-mono text-xs outline-none focus:border-[#E63946]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-[#52525B] uppercase tracking-wider block mb-1">
-                    Nama Instance WhatsApp
-                  </label>
-                  <input
-                    data-testid="evolution-instance-input"
-                    type="text"
-                    value={instanceName}
-                    onChange={(e) => setInstanceName(e.target.value)}
-                    placeholder="grand-aceh-pos"
-                    className="w-full h-11 rounded-xl border px-3 font-mono text-xs outline-none focus:border-[#E63946]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-                <button
-                  data-testid="save-evolution-btn"
-                  onClick={() => saveConfig()}
-                  disabled={saving}
-                  className="tap h-11 px-4 rounded-xl border border-zinc-300 bg-white text-zinc-800 font-bold text-xs inline-flex items-center gap-2 hover:bg-zinc-50 disabled:opacity-50"
-                >
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  Simpan Konfigurasi
-                </button>
-                <button
-                  data-testid="save-and-qr-btn"
-                  onClick={handleSaveAndGenerateQr}
-                  disabled={saving || qrLoading}
-                  className="tap h-11 px-5 rounded-xl bg-[#E63946] text-white font-extrabold text-xs inline-flex items-center gap-2 shadow-sm hover:bg-[#D62828] disabled:opacity-50"
-                >
-                  {(saving || qrLoading) ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
-                  Simpan &amp; Tampilkan QR Code
-                </button>
-              </div>
-            </div>
-
-            {/* STEP 3: SCAN QR CODE */}
-            <div className="bg-white rounded-2xl border p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="font-extrabold flex items-center gap-2">
-                  <span className="h-6 w-6 rounded-full bg-[#16A34A] text-white grid place-items-center text-xs font-black">3</span>
-                  Langkah 3: Scan QR Code WhatsApp Toko
-                </div>
-                <button
-                  onClick={fetchQrCode}
-                  disabled={qrLoading}
-                  className="tap h-9 px-3 rounded-xl bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] font-bold text-xs inline-flex items-center gap-1.5"
-                >
-                  {qrLoading ? <Loader2 size={13} className="animate-spin" /> : <QrCode size={13} />}
-                  Generate / Muat QR Code
-                </button>
-              </div>
-
-              <p className="text-xs text-[#52525B]">
-                Buka aplikasi WhatsApp di HP kasir/toko &rarr; Menu Titik Tiga / Pengaturan &rarr; <b>Perangkat Tertaut (Linked Devices)</b> &rarr; <b>Tautkan Perangkat</b> lalu scan QR di bawah ini:
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-xl bg-zinc-50 border">
-                <div className="h-44 w-44 bg-white rounded-xl border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center p-2 shrink-0">
-                  {qrData ? (
-                    <img
-                      src={qrData.startsWith("data:") ? qrData : `data:image/png;base64,${qrData}`}
-                      alt="WhatsApp QR Code"
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <div className="text-center p-3">
-                      <QrCode size={36} className="text-zinc-300 mx-auto mb-2" />
-                      <span className="text-[11px] text-[#71717A] font-semibold block leading-tight">
-                        Klik tombol "Generate QR" untuk memindai
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 text-xs text-[#52525B]">
-                  <div className="font-bold text-zinc-900 flex items-center gap-1.5">
-                    <Smartphone size={16} className="text-[#16A34A]" />
-                    Koneksi Multi-Device Berkelanjutan
-                  </div>
-                  <p>
-                    Setelah di-scan, nomor WhatsApp kasir akan otomatis terhubung ke sistem Cloud Run. Server Evolution API akan mempertahankan sesi tanpa perlu scan ulang.
-                  </p>
-                  {pairingCode && (
-                    <div className="p-2 bg-white rounded-lg border font-mono text-[11px]">
-                      Kode Pairing Manual: <span className="font-bold text-[#1D4ED8]">{pairingCode}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* WACLOUD CONFIGURATION PANELS */}
-        {provider === "wacloud" && (
-          <div className="bg-white rounded-2xl border p-6 space-y-4">
-            <div className="font-extrabold flex items-center gap-2">
-              <Cloud className="text-[#3B82F6]" />
-              Pengaturan Gateway WACloud.id
-            </div>
-            <p className="text-xs text-[#52525B]">
-              Masukkan detail kredensial akun wacloud.id Anda untuk mengaktifkan pengiriman cloud:
-            </p>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-[#52525B] uppercase tracking-wider block mb-1">
-                  API Key WACloud
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={waCloudKey}
-                    onChange={(e) => setWaCloudKey(e.target.value)}
-                    placeholder="Masukkan API Key wacloud.id Anda"
-                    className="flex-1 h-11 rounded-xl border px-3 font-mono text-xs outline-none focus:border-[#E63946]"
-                  />
-                  <Button
-                    variant="outline"
-                    className="h-11 rounded-xl border font-bold text-xs px-4"
-                    onClick={() => fetchDevices(waCloudKey, waCloudBase)}
-                    disabled={loadingDevices || !waCloudKey}
-                  >
-                    {loadingDevices ? <Loader2 className="animate-spin h-3 w-3" /> : "Muat Device"}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-[#52525B] uppercase tracking-wider block mb-1">
-                  Base URL API
-                </label>
-                <input
-                  type="text"
-                  value={waCloudBase}
-                  onChange={(e) => setWaCloudBase(e.target.value)}
-                  placeholder="https://app.wacloud.id/api/v1"
-                  className="w-full h-11 rounded-xl border px-3 font-mono text-xs outline-none focus:border-[#E63946]"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-[#52525B] uppercase tracking-wider block mb-1">
-                  Pilih Device Terhubung
-                </label>
-                {devicesList.length > 0 ? (
-                  <select
-                    value={waCloudDeviceId}
-                    onChange={(e) => {
-                      setWaCloudDeviceId(e.target.value);
-                      const matched = devicesList.find(d => String(d.id) === String(e.target.value));
-                      if (matched) setWaCloudDeviceName(matched.name);
-                    }}
-                    className="w-full h-11 rounded-xl border px-3 font-bold text-xs bg-white outline-none focus:border-[#E63946]"
-                  >
-                    <option value="">-- Pilih Device Anda --</option>
-                    {devicesList.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name} ({d.sender_number || "Tidak Ada Nomor"}) - {d.status || "offline"}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="p-3 border border-dashed rounded-xl bg-slate-50 text-center text-xs text-slate-400">
-                    Belum ada device dimuat. Pastikan API Key di atas benar dan klik "Muat Device".
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={saveConfig}
-                disabled={saving}
-                className="tap h-11 px-5 rounded-xl bg-[#0A0A0A] text-white font-bold text-sm inline-flex items-center gap-2 disabled:opacity-50"
-              >
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                Simpan Konfigurasi WACloud
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 4: TEST SEND */}
+        {/* TEST SEND */}
         <div className="bg-white rounded-2xl border p-6 space-y-3">
           <div className="font-extrabold flex items-center gap-2">
-            <span className="h-6 w-6 rounded-full bg-[#E63946] text-white grid place-items-center text-xs font-black">
-              {provider === "evolution" ? "4" : "3"}
-            </span>
-            Langkah {provider === "evolution" ? "4" : "3"}: Uji Coba Pengiriman Pesan
+            <span className="h-6 w-6 rounded-full bg-[#E63946] text-white grid place-items-center text-xs font-black">3</span>
+            Langkah 3: Uji Coba Pengiriman Pesan
           </div>
           <div className="flex gap-2">
             <input
@@ -827,11 +392,12 @@ services:
             </button>
           </div>
           <p className="text-[11px] text-[#71717A]">
-            Pesan tes akan dikirimkan langsung dari nomor toko yang ditautkan di {provider === "evolution" ? "Evolution API" : "WACloud.id"}.
+            Pesan tes dikirim dari nomor bot yang ditautkan ke bridge Hermes di server gudang.
+            Bila bridge tidak aktif, pesan masuk ke outbox (tidak hilang).
           </p>
         </div>
 
-        {/* STEP 5: RESERVASI KHUSUS GRUP & KATA KUNCI */}
+        {/* RESERVASI KHUSUS GRUP & KATA KUNCI */}
         <div className="bg-white rounded-2xl border p-6 space-y-4 shadow-sm" data-testid="group-reservation-card">
           <div className="flex items-center justify-between flex-wrap gap-2 border-b pb-3">
             <div className="font-extrabold flex items-center gap-2 text-base text-[#0F172A]">

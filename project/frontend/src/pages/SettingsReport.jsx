@@ -54,7 +54,7 @@ export default function SettingsReport() {
           <ShieldAlert size={20} className="shrink-0 mt-0.5" />
           <div className="text-sm">
             <div className="font-extrabold">WhatsApp Gateway belum aktif</div>
-            Buka tab <b>Gateway &amp; Koneksi</b> di atas untuk menghubungkan Evolution API (PC Lokal) atau WACloud.id agar pengiriman laporan otomatis aktif.
+            Buka tab <b>Gateway &amp; Koneksi</b> di atas untuk memeriksa bridge Hermes (nomor bot) agar pengiriman laporan otomatis aktif.
           </div>
         </div>
       )}
