@@ -359,12 +359,10 @@ def test_dispatch_sends_once_and_marks_sent():
 
 
 def test_dispatch_records_error_without_phone_in_log():
-    """Satu dispatch TIDAK boleh retry-storm: baris gagal di-hold oleh backoff.
+    """Satu dispatch TIDAK boleh retry-storm: baris gagal memakai backoff.
 
-    Regresi yang dijaga: dengan filter klaim M1 yang hanya ``$or``
-    ``{"sending_at": {"$lt": expired}}``, baris gagal tetap terklaim ulang
-    sehingga satu panggilan dispatch memanggil sender 20x berturut ke nomor
-    yang sama (attempts=20). Sekarang baris di-hold `sending_at = now + backoff`.
+    Lease aktif dan jadwal retry disimpan terpisah agar worker paralel tidak
+    mengirim ganda tanpa memperpanjang backoff secara tidak sengaja.
     """
     _primary(HERMES_WA_WEBHOOK_URL="http://127.0.0.1:8644/webhooks/x", HERMES_WA_WEBHOOK_SECRET="s")
     db = FakeDB()
@@ -380,13 +378,26 @@ def test_dispatch_records_error_without_phone_in_log():
     assert len(calls) == 1, f"satu dispatch memanggil sender {len(calls)}x (retry-storm)"
     row = db.wa_outbox.rows[0]
     assert row["sent_at"] is None
-    assert row["sending_at"], "baris gagal harus di-hold backoff (bukan None)"
+    assert row["sending_at"] is None
+    assert row["lease_until"] is None
+    assert row["next_retry_at"], "baris gagal harus memiliki jadwal retry"
     assert row["attempts"] == 1
     assert "0812345678" not in str(row.get("last_error") or "")
     # Panggilan kedua masih di dalam backoff → tidak menyentuh baris (atau hanya 1x).
     stats2 = asyncio.run(hb.dispatch_outbox(db, sender=fake_send))
     assert stats2["sent"] == 0
     assert len(calls) == 1
+
+
+def test_claim_filter_keeps_lease_and_retry_independent():
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 12, tzinfo=timezone.utc)
+    query = hb._claim_filter(now, 120)
+    lease_clause, retry_clause = query["$and"]
+    assert {"lease_until": {"$lte": now.isoformat()}} in lease_clause["$or"]
+    assert {"next_retry_at": {"$lte": now.isoformat()}} in retry_clause["$or"]
+    assert "sending_at" not in str(query)
 
 
 def test_command_requires_registered_phone_and_role():

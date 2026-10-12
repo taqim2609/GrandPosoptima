@@ -103,31 +103,28 @@ def bridge_configured(cfg: dict | None = None) -> bool:
     return bool(c.get("enabled") and c.get("url") and c.get("secret") and is_local_bridge_url(c["url"]))
 
 
-def _claim_filter(now_dt, lease_seconds: int) -> dict:
-    """Filter klaim baris outbox: belum terkirim dan **lease-nya tidak aktif**.
+def _claim_filter(now_dt, _lease_seconds: int) -> dict:
+    """Filter klaim atomik: tidak sedang disewa dan waktu retry sudah tiba.
 
-    ``sending_at`` menyimpan waktu *kapan baris boleh diklaim lagi*, jadi satu
-    field menangani dua hal sekaligus tanpa cabang tambahan:
-
-    * baris baru / setelah kirim sukses → ``None`` → boleh diklaim;
-    * baris yang sedang diproses → waktu kedaluwarsa lease (masa depan) → tidak
-      diklaim sampai lease habis (mencegah dua worker mengirim pesan yang sama);
-    * baris yang gagal → waktu ``now + backoff`` (masa depan) → tidak diklaim
-      sampai backoff lewat (mencegah retry-storm dalam satu panggilan).
-
-    Dua klausa lease (``sending_at`` None/tidak ada, ATAU ``sending_at`` sudah
-    lewat) diperlukan; jangan disederhanakan jadi satu klausa ``$or`` karena
-    baris hasil backoff juga "lebih tua dari ambang lease" dan akan terklaim
-    ulang setiap iterasi (inilah regresi 20x retry yang diperbaiki di sini).
+    ``lease_until`` dan ``next_retry_at`` sengaja dipisah. Lease melindungi
+    pengiriman yang sedang berjalan dari worker lain, sedangkan retry timestamp
+    menerapkan backoff persis sejak kegagalan terakhir. Dokumen lama tanpa kedua
+    field tetap dapat diklaim.
     """
-    expired = (now_dt - timedelta(seconds=lease_seconds)).isoformat()
     now = now_dt.isoformat()
     return {
         "sent_at": None,
-        "$or": [
-            {"sending_at": None},
-            {"sending_at": {"$exists": False}},
-            {"$and": [{"sending_at": {"$lt": expired}}, {"sending_at": {"$lte": now}}]},
+        "$and": [
+            {"$or": [
+                {"lease_until": None},
+                {"lease_until": {"$exists": False}},
+                {"lease_until": {"$lte": now}},
+            ]},
+            {"$or": [
+                {"next_retry_at": None},
+                {"next_retry_at": {"$exists": False}},
+                {"next_retry_at": {"$lte": now}},
+            ]},
         ],
     }
 
@@ -340,11 +337,9 @@ async def dispatch_outbox(db, limit: int = 20, cfg: dict | None = None, sender=N
     Ringkasan tidak memuat nomor/isi pesan.
 
     Pagar anti-retry-storm: satu panggilan ``dispatch_outbox`` **tidak pernah**
-    mencoba baris yang sama dua kali. Baris gagal di-``unclaim`` dengan
-    ``sending_at`` = waktu backoff (masa depan), sehingga baru boleh dicoba lagi
-    setelah ``HERMES_WA_RETRY_BACKOFF_SECONDS`` lewat. Tanpa ini satu kegagalan
-    jaringan berubah menjadi ``limit`` percobaan kirim berturut-turut ke nomor
-    yang sama.
+    mencoba baris yang sama dua kali. Klaim mengisi ``lease_until``; kegagalan
+    melepas lease dan mengisi ``next_retry_at``. Pemisahan ini menjaga lease
+    antar-worker dan backoff retry tanpa menumpangkan dua arti pada satu field.
     """
     c = cfg or bridge_config()
     stats = {"enabled": bool(c.get("url")), "scanned": 0, "sent": 0, "failed": 0, "skipped": True}
@@ -357,9 +352,11 @@ async def dispatch_outbox(db, limit: int = 20, cfg: dict | None = None, sender=N
     for _ in range(max(1, int(limit))):
         now_dt = datetime.now(timezone.utc)
         now = now_dt.isoformat()
+        lease_until = (now_dt + timedelta(seconds=lease_seconds)).isoformat()
         row = await db.wa_outbox.find_one_and_update(
             _claim_filter(now_dt, lease_seconds),
-            {"$set": {"sending_at": now, "updated_at": now}, "$inc": {"attempts": 1}},
+            {"$set": {"lease_until": lease_until, "sending_at": now, "updated_at": now},
+             "$inc": {"attempts": 1}},
             sort=[("created_at", 1)],
             return_document=True,
         )
@@ -380,16 +377,17 @@ async def dispatch_outbox(db, limit: int = 20, cfg: dict | None = None, sender=N
         if ok:
             await db.wa_outbox.update_one(
                 {"wa_id": row["wa_id"], "sent_at": None},
-                {"$set": {"sent_at": done, "sending_at": None, "updated_at": done, "last_error": None}},
+                {"$set": {"sent_at": done, "sending_at": None, "lease_until": None,
+                           "next_retry_at": None, "updated_at": done, "last_error": None}},
             )
             stats["sent"] += 1
         else:
-            # ``sending_at`` diisi waktu backoff (bukan None) sehingga baris TIDAK
-            # diambil ulang pada panggilan ini — inilah pagar anti-retry-storm.
-            hold = (datetime.now(timezone.utc) + timedelta(seconds=backoff_seconds)).isoformat()
+            retry_at = (datetime.now(timezone.utc) + timedelta(seconds=backoff_seconds)).isoformat()
             await db.wa_outbox.update_one(
                 {"wa_id": row["wa_id"], "sent_at": None},
-                {"$set": {"sending_at": hold, "updated_at": done, "last_error": str(info.get("error"))[:200]}},
+                {"$set": {"sending_at": None, "lease_until": None,
+                           "next_retry_at": retry_at, "updated_at": done,
+                           "last_error": str(info.get("error"))[:200]}},
             )
             stats["failed"] += 1
     return stats
@@ -433,6 +431,8 @@ async def ingest_outbox(db, rows, sender=None) -> dict:
                     "created_at": str(row.get("created_at") or now),
                     "sent_at": None,
                     "sending_at": None,
+                    "lease_until": None,
+                    "next_retry_at": None,
                     "attempts": 0,
                     "last_error": None,
                     "origin_node": str(row.get("origin_node") or "upstream"),
