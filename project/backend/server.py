@@ -17,7 +17,7 @@ from pymongo import ReturnDocument
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
-import logging, uuid, io, bcrypt, jwt, asyncio, re, zipfile, math, time, json
+import logging, uuid, io, bcrypt, jwt, asyncio, re, zipfile, math, time, json, hmac
 from bson import json_util
 
 # ------------------------------------------------------------------ DB
