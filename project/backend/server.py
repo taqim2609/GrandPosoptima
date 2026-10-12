@@ -7790,6 +7790,27 @@ async def dispatch_wa_outbox(limit=20):
         return {"enabled": True, "sent": 0, "failed": 0, "scanned": 0, "error": type(e).__name__}
 
 
+_WA_REDACT_NUM = re.compile(r"(?<!\d)(?:\+?62|0)8\d{7,12}(?!\d)")
+_WA_REDACT_SECRET = re.compile(r"\b[A-Za-z0-9_\-]{20,}\b")
+
+
+def _redact_wa_error(value, max_len: int = 200) -> str:
+    """Bersihkan pesan galat sebelum keluar/log.
+
+    Ditaruh di **fungsi pengirim** (bukan di 7 call-site) supaya semua jalur
+    otomatis aman: satu call-site yang terlewat tidak bisa membocorkan nomor
+    telepon pelanggan atau potongan token ke log/response.
+
+    Yang diredam: nomor WA (format 08…/62…/+62…8) dan deretan alfanumerik
+    panjang yang menyerupai token/API key. Panjang dipotong agar tidak membanjiri
+    response.
+    """
+    s = str(value or "")
+    s = _WA_REDACT_NUM.sub("<nomor>", s)
+    s = _WA_REDACT_SECRET.sub("<rahasia>", s)
+    return s[:max_len]
+
+
 async def _send_whatsapp(recipients, text, kind="wa"):
     if not await _feat("wa.enabled"):
         raise HTTPException(400, "Fitur WhatsApp dimatikan. Nyalakan di Pengaturan → Fitur & Integrasi.")
@@ -7808,13 +7829,16 @@ async def _send_whatsapp(recipients, text, kind="wa"):
             else:
                 # Simpan agar tidak hilang (mis. saat dijeda ke Pi / bridge mati).
                 await _wa_outbox_enqueue(to, text, kind)
-                out.append({"to": to, "ok": False, "error": body.get("error") or body.get("message") or r.text})
+                # ``r.text`` mentah TIDAK pernah diteruskan: bisa memuat nomor
+                # tujuan atau token provider. Redaksi dilakukan di sini.
+                detail = body.get("error") or body.get("message") or r.text
+                out.append({"to": to, "ok": False, "error": _redact_wa_error(detail)})
         except HTTPException as he:
             await _wa_outbox_enqueue(to, text, kind)
-            out.append({"to": to, "ok": False, "error": he.detail})
+            out.append({"to": to, "ok": False, "error": _redact_wa_error(he.detail)})
         except Exception as e:
             await _wa_outbox_enqueue(to, text, kind)
-            out.append({"to": to, "ok": False, "error": str(e)})
+            out.append({"to": to, "ok": False, "error": _redact_wa_error(str(e))})
     return out
 
 class WhatsAppSendIn(BaseModel):
@@ -8052,8 +8076,13 @@ class WATestIn(BaseModel):
     message: Optional[str] = "Tes notifikasi Grand Aceh Kuliner POS ✅"
 
 
-async def _hermes_status():
-    """Status gateway Hermes untuk UI. Tidak pernah mengembalikan secret.
+async def _hermes_status(include_secret_hint: bool = True):
+    """Status gateway Hermes untuk UI.
+
+    ``secret_masked`` hanya disertakan bila ``include_secret_hint=True``, yaitu
+    dari endpoint ber-admin. Endpoint status yang boleh diakses non-admin
+    memanggil ini dengan ``False`` sehingga yang keluar cuma ``has_secret``
+    (boolean) — tidak ada potongan rahasia sama sekali.
 
     Yang diperiksa adalah ``/health`` gateway Hermes (adapter webhook), bukan
     endpoint kirim-pesan bikinan sendiri: Hermes tidak menyediakan REST outbound,
@@ -8061,7 +8090,7 @@ async def _hermes_status():
     """
     if not hermes_bridge:
         return {"status": "disconnected", "state": "unavailable", "provider": "hermes",
-                "api_url": "", "has_key": False, "details": {}}
+                "api_url": "", "has_key": False, "has_secret": False, "details": {}}
     c = hermes_bridge.bridge_config()
     configured = hermes_bridge.bridge_configured(c)
     state = "unconfigured"
@@ -8083,20 +8112,25 @@ async def _hermes_status():
         except Exception as e:
             state = "offline"
             details = {"error": type(e).__name__}
-    return {
+    payload = {
         "status": "connected" if ready else "disconnected",
         "state": state,
         "provider": "hermes",
         "api_url": c.get("url") or "",
         "instance_name": "Hermes gateway (nomor bot terpisah)",
         "has_key": bool(c.get("secret")),
-        "secret_masked": hermes_bridge.mask_secret(c.get("secret") or ""),
+        "has_secret": bool(c.get("secret")),
         "localhost_only": hermes_bridge.is_local_bridge_url(c.get("url") or ""),
         "allowlist": {k: list(v) for k, v in hermes_bridge.command_allowlist().items()},
         "details": details,
         "node_id": NODE_ID,
         "node_mode": NODE_ROLE,
     }
+    if include_secret_hint:
+        # Hanya jalur ber-admin: indikator "secret sudah diisi" yang bisa
+        # dibandingkan operator. Non-admin tidak pernah menerima ini.
+        payload["secret_masked"] = hermes_bridge.mask_secret(c.get("secret") or "")
+    return payload
 
 
 @api.get("/whatsapp/hermes/status")
@@ -8166,73 +8200,97 @@ class WAInstanceCreateIn(BaseModel):
     evolution_api_key: Optional[str] = None
     instance_name: Optional[str] = "grand-aceh-pos"
 
-@api.get("/settings/whatsapp")
-async def whatsapp_settings_status(admin: dict = Depends(require_admin)):
-    """Status WhatsApp yang dilindungi admin.
+async def _wa_status_payload(include_secret_hint: bool):
+    """Bentuk status WhatsApp untuk UI.
 
-    ``secret_masked`` hanya boleh keluar dari endpoint admin; konsumen lain
-    mendapat endpoint status publik di bawah tanpa rahasia. Pada endpoint lama
-    ini, tetap gunakan bentuk status yang sudah dipakai UI.
+    ``include_secret_hint=False`` adalah bentuk aman-untuk-non-admin: hanya
+    ``has_secret`` (boolean). Potongan rahasia (``secret_masked``) tidak pernah
+    keluar dari jalur ini.
     """
-    return await whatsapp_status()
-
     cfg = await _wa_config()
     provider = _wa_effective_provider(cfg)
 
     if provider == "hermes":
-        return await _hermes_status()
+        return await _hermes_status(include_secret_hint=include_secret_hint)
 
     if provider == "evolution":
+        # Provider lama: status dibaca tanpa membocorkan kunci. ``key`` sengaja
+        # TIDAK pernah dikembalikan (dulu dikirim mentah ke klien).
         url = (cfg.get("evolution_url") or "http://localhost:8080").rstrip("/")
         instance = cfg.get("evolution_instance") or "grand-aceh-pos"
         key = cfg.get("evolution_api_key") or ""
-        
+
         state = "disconnected"
         details = {}
         if url and key:
             try:
                 headers = {"apikey": key}
+                import httpx
                 async with httpx.AsyncClient(timeout=4) as client:
                     r = await client.get(f"{url}/instance/connectionState/{instance}", headers=headers)
-                    if r.status_code == 200:
-                        data = r.json()
-                        inst_state = (data.get("instance") or {}).get("state") or data.get("state") or ""
-                        if inst_state.lower() in ("open", "connected"):
-                            state = "connected"
-                        else:
-                            state = inst_state.lower() or "connecting"
-                        details = data
-                    elif r.status_code == 404:
-                        state = "not_created"
+                if r.status_code == 200:
+                    data = r.json()
+                    inst_state = (data.get("instance") or {}).get("state") or data.get("state") or ""
+                    state = "connected" if inst_state.lower() in ("open", "connected") else (inst_state.lower() or "connecting")
+                elif r.status_code == 404:
+                    state = "not_created"
             except Exception as e:
                 state = "offline"
-                details = {"error": str(e)}
+                details = {"error": type(e).__name__}
         else:
             state = "unconfigured"
-            
-        status = "connected" if state == "connected" else "disconnected"
-        return {
-            "status": status,
+
+        payload = {
+            "status": "connected" if state == "connected" else "disconnected",
             "state": state,
             "provider": "evolution",
             "api_url": url,
             "instance_name": instance,
-            "api_key": key,
             "has_key": bool(key),
-            "details": details
+            "has_secret": bool(key),
+            "details": details,
         }
-    else:
-        configured = bool(cfg.get("api_key") and cfg.get("device_id"))
-        return {
-            "status": "connected" if configured else "disconnected",
-            "state": "open" if configured else "disconnected",
-            "provider": "wacloud",
-            "device_name": cfg.get("device_name", ""),
-            "device_id": cfg.get("device_id", ""),
-            "api_url": cfg.get("base_url") or WACLOUD_DEFAULT_BASE,
-            "instance_name": cfg.get("device_name", "Device WACloud"),
-            "has_key": bool(cfg.get("api_key"))
-        }
+        if include_secret_hint:
+            payload["api_key_masked"] = (key[:6] + "…" + key[-4:]) if len(key) > 12 else ("•" * len(key))
+        return payload
+
+    configured = bool(cfg.get("api_key") and cfg.get("device_id"))
+    payload = {
+        "status": "connected" if configured else "disconnected",
+        "state": "open" if configured else "disconnected",
+        "provider": "wacloud",
+        "device_name": cfg.get("device_name", ""),
+        "device_id": cfg.get("device_id", ""),
+        "api_url": cfg.get("base_url") or WACLOUD_DEFAULT_BASE,
+        "instance_name": cfg.get("device_name", "Device WACloud"),
+        "has_key": bool(cfg.get("api_key")),
+        "has_secret": bool(cfg.get("api_key")),
+    }
+    if include_secret_hint:
+        key = cfg.get("api_key") or ""
+        payload["api_key_masked"] = (key[:6] + "…" + key[-4:]) if len(key) > 12 else ("•" * len(key))
+    return payload
+
+
+@api.get("/whatsapp/status")
+async def whatsapp_status_public():
+    """Status ringkas WhatsApp untuk konsumen non-admin.
+
+    Sengaja TIDAK memuat potongan rahasia: non-admin cukup tahu apakah secret
+    sudah diisi (``has_secret``). Endpoint ber-admin di bawah memakai bentuk
+    penuh.
+    """
+    return await _wa_status_payload(include_secret_hint=False)
+
+
+@api.get("/settings/whatsapp")
+async def whatsapp_settings_status(admin: dict = Depends(require_admin)):
+    """Status WhatsApp lengkap — hanya untuk admin.
+
+    Di sinilah potongan rahasia (``secret_masked`` / ``api_key_masked``) boleh
+    keluar, karena operator perlu membandingkannya saat mendiagnosa.
+    """
+    return await _wa_status_payload(include_secret_hint=True)
 
 @api.post("/whatsapp/instance/create")
 async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depends(require_admin)):
