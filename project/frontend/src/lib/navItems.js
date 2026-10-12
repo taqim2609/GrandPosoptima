@@ -1,7 +1,8 @@
 /* Daftar menu samping aplikasi — SATU sumber kebenaran.
    Dipakai Layout (render menu) & Pengaturan → Menu & Tampilan UI (atur urutan/nama).
    Jangan duplikasi daftar ini di tempat lain. */
-import { Ban, BarChart3, Bot, Boxes, CalendarCheck, Clock, FileSpreadsheet, FlaskConical, HandCoins, LayoutDashboard, Package, Printer, Settings, ShoppingCart, Tag, Ticket, Users, Wallet } from "lucide-react";
+import { WHATSAPP_PAIRING_SETTINGS_URL } from "@/lib/whatsappSettings";
+import { Ban, BarChart3, Bot, Boxes, CalendarCheck, Clock, FileSpreadsheet, HandCoins, LayoutDashboard, Package, Printer, Settings, ShoppingCart, Smartphone, Tag, Users, Wallet } from "lucide-react";
 
 export const NAV_ITEMS = [
   // Operasional
@@ -26,5 +27,6 @@ export const NAV_ITEMS = [
   { to: "/laporan", label: "Laporan", icon: BarChart3, roles: ["admin", "kasir"], mod: "laporan", section: "Laporan & Sistem" },
   { to: "/asisten-ai", label: "Asisten AI", icon: Bot, roles: ["admin", "kasir"], mod: "ai", section: "Laporan & Sistem" },
   { to: "/device", label: "Perangkat", icon: Printer, roles: ["kasir", "input"], section: "Laporan & Sistem" },
+  { to: WHATSAPP_PAIRING_SETTINGS_URL, label: "Pairing WhatsApp", icon: Smartphone, roles: ["admin"], mod: "pengaturan", section: "Laporan & Sistem", activePath: "/settings" },
   { to: "/settings", label: "Pengaturan", icon: Settings, roles: ["admin"], mods: ["pengaturan", "pengguna", "role_izin"], section: "Laporan & Sistem" },
 ];

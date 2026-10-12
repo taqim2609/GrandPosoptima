@@ -47,6 +47,7 @@ export default function WhatsApp() {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrData, setQrData] = useState(null);
   const [pairingCode, setPairingCode] = useState(null);
+  const [pairingPhone, setPairingPhone] = useState("");
   const [statusChecking, setStatusChecking] = useState(false);
   const [statusState, setStatusState] = useState("disconnected");
 
@@ -93,6 +94,7 @@ export default function WhatsApp() {
       
       if (c.phone) {
         setTestNo(c.phone);
+        setPairingPhone(c.phone);
       }
       setStatusState(c.status || "disconnected");
       
@@ -148,10 +150,17 @@ export default function WhatsApp() {
         evolution_url: evolutionUrl,
         evolution_api_key: evolutionKey,
         instance_name: instanceName,
+        phone_number: pairingPhone.trim() || undefined,
       });
-      if (r.data.qrcode) {
-        setQrData(r.data.qrcode);
-        setPairingCode(r.data.pairingCode);
+      setQrData(r.data.qrcode || null);
+      setPairingCode(r.data.pairingCode || null);
+      if (r.data.phone) {
+        setPairingPhone(r.data.phone);
+        setTestNo((current) => current || r.data.phone);
+      }
+      if (r.data.pairingCode) {
+        toast.success("Kode pairing nomor WhatsApp berhasil dibuat");
+      } else if (r.data.qrcode) {
         toast.success("QR Code siap di-scan dengan nomor WhatsApp Toko");
       } else {
         toast.info("Instance siap atau sudah terhubung");
@@ -165,6 +174,9 @@ export default function WhatsApp() {
 
   useEffect(() => {
     load();
+    if (new URLSearchParams(window.location.search).get("waView") === "pairing") {
+      window.setTimeout(() => document.getElementById("wa-pairing")?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -184,6 +196,7 @@ export default function WhatsApp() {
         base_url: waCloudBase.trim(),
         device_id: waCloudDeviceId.trim(),
         device_name: devName || "Device WACloud",
+        phone: pairingPhone.trim(),
         status: "connected",
       });
       toast.success(
@@ -277,16 +290,21 @@ services:
   const isConnected = statusState === "connected" || cfg.status === "connected";
 
   return (
-    <div className="h-full overflow-y-auto p-6 lg:p-8" data-testid="wa-config-page">
-      <div className="max-w-3xl space-y-6">
+    <div className="app-shell h-full overflow-y-auto px-4 py-5 sm:px-6 lg:px-8" data-testid="wa-config-page">
+      <div className="app-container space-y-6">
         {/* HEADER */}
-        <div>
-          <h1 className="text-2xl font-extrabold flex items-center gap-2">
-            <MessageCircle className="text-[#25D366]" /> Pengaturan WhatsApp Gateway
-          </h1>
-          <p className="text-sm text-[#52525B] mt-1">
-            Kirim struk otomatis, laporan shift kasir, and notifikasi berkala harian menggunakan pilihan penyedia gateway lokal atau cloud.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-black tracking-tight flex items-center gap-2">
+              <MessageCircle className="text-[#25D366]" /> Pengaturan WhatsApp Gateway
+            </h1>
+            <p className="text-sm text-[#52525B] mt-1">
+              Hubungkan nomor toko, atur provider, lalu uji pengiriman dari satu tempat.
+            </p>
+          </div>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+            Pairing nomor tersedia di Koneksi Evolution
+          </div>
         </div>
 
         {/* PROVIDER SWITCH */}
@@ -652,25 +670,54 @@ services:
               </div>
             </div>
 
-            {/* STEP 3: SCAN QR CODE */}
-            <div className="bg-white rounded-2xl border p-6 space-y-4">
+            {/* STEP 3: PAIR PHONE NUMBER / SCAN QR CODE */}
+            <div id="wa-pairing" className="bg-white rounded-2xl border p-6 space-y-4 scroll-mt-6">
               <div className="flex items-center justify-between">
                 <div className="font-extrabold flex items-center gap-2">
                   <span className="h-6 w-6 rounded-full bg-[#16A34A] text-white grid place-items-center text-xs font-black">3</span>
-                  Langkah 3: Scan QR Code WhatsApp Toko
+                  Pairing Nomor WhatsApp / Scan QR
                 </div>
                 <button
                   onClick={fetchQrCode}
                   disabled={qrLoading}
                   className="tap h-9 px-3 rounded-xl bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] font-bold text-xs inline-flex items-center gap-1.5"
                 >
-                  {qrLoading ? <Loader2 size={13} className="animate-spin" /> : <QrCode size={13} />}
-                  Generate / Muat QR Code
+                  {qrLoading ? <Loader2 size={13} className="animate-spin" /> : <Smartphone size={13} />}
+                  Buat Kode Pairing / QR
+                </button>
+              </div>
+
+              <div className="grid sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                <div>
+                  <label htmlFor="wa-pairing-phone" className="text-xs uppercase tracking-wider font-bold text-[#166534]">
+                    Nomor WhatsApp yang akan dipairing
+                  </label>
+                  <div className="relative mt-2">
+                    <Smartphone size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#16A34A]" />
+                    <input
+                      id="wa-pairing-phone"
+                      data-testid="wa-pairing-phone"
+                      inputMode="tel"
+                      value={pairingPhone}
+                      onChange={(e) => setPairingPhone(e.target.value)}
+                      placeholder="Contoh: 081234567890"
+                      className="h-11 w-full rounded-xl border border-emerald-200 bg-white pl-10 pr-3 text-sm font-semibold outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-emerald-100"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-[#3F6212]">Boleh memakai format 08... atau 62.... Nomor akan disimpan sebagai nomor gateway toko.</p>
+                </div>
+                <button
+                  data-testid="wa-generate-pairing"
+                  onClick={fetchQrCode}
+                  disabled={qrLoading || !pairingPhone.trim()}
+                  className="tap h-11 rounded-xl bg-[#16A34A] px-4 text-sm font-extrabold text-white shadow-sm disabled:opacity-50"
+                >
+                  {qrLoading ? "Memproses..." : "Pairing Nomor"}
                 </button>
               </div>
 
               <p className="text-xs text-[#52525B]">
-                Buka aplikasi WhatsApp di HP kasir/toko &rarr; Menu Titik Tiga / Pengaturan &rarr; <b>Perangkat Tertaut (Linked Devices)</b> &rarr; <b>Tautkan Perangkat</b> lalu scan QR di bawah ini:
+                Gunakan kode pairing di WhatsApp melalui <b>Perangkat Tertaut &rarr; Tautkan dengan nomor telepon</b>, atau gunakan QR sebagai alternatif.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-xl bg-zinc-50 border">
@@ -700,8 +747,9 @@ services:
                     Setelah di-scan, nomor WhatsApp kasir akan otomatis terhubung ke sistem Cloud Run. Server Evolution API akan mempertahankan sesi tanpa perlu scan ulang.
                   </p>
                   {pairingCode && (
-                    <div className="p-2 bg-white rounded-lg border font-mono text-[11px]">
-                      Kode Pairing Manual: <span className="font-bold text-[#1D4ED8]">{pairingCode}</span>
+                    <div className="p-3 bg-[#EFF6FF] rounded-xl border border-[#BFDBFE]">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#1D4ED8]">Kode Pairing</div>
+                      <div className="mt-1 font-mono text-2xl font-black tracking-[0.25em] text-[#1E3A8A]">{pairingCode}</div>
                     </div>
                   )}
                 </div>

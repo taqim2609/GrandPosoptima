@@ -19,6 +19,8 @@ from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
 import logging, uuid, io, bcrypt, jwt, asyncio, re, zipfile, math, time, json
 from bson import json_util
+from whatsapp_pairing import normalize_whatsapp_pairing_number, validate_evolution_url
+import whatsapp_pairing as _wa_pairing
 
 # ------------------------------------------------------------------ DB
 mongo_url = os.environ['MONGO_URL']
@@ -7921,6 +7923,7 @@ class WAInstanceCreateIn(BaseModel):
     evolution_url: Optional[str] = None
     evolution_api_key: Optional[str] = None
     instance_name: Optional[str] = "grand-aceh-pos"
+    phone_number: Optional[str] = None
 
 @api.get("/whatsapp/status")
 @api.get("/settings/whatsapp")
@@ -7982,12 +7985,26 @@ async def whatsapp_status():
         }
 
 @api.post("/whatsapp/instance/create")
-async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depends(require_admin)):
+async def whatsapp_instance_create(body: WAInstanceCreateIn, _admin: dict = Depends(require_admin)):
     """Menghubungkan atau membuat instance WhatsApp pada Evolution API lokal dan mengambil QR Code."""
     cfg = await _wa_config()
-    url = (body.evolution_url or cfg.get("evolution_url") or "http://localhost:8080").rstrip("/")
+    configured_url = cfg.get("evolution_url") or ""
+    env_url = os.environ.get("EVOLUTION_API_URL", "")
+    raw_url = body.evolution_url or configured_url or env_url
+    # URL dari request harus publik. URL private hanya dipercaya bila berasal dari env
+    # server, termasuk salinan env yang tersimpan oleh pairing sebelumnya.
+    allow_private_url = not body.evolution_url and (not configured_url or configured_url == env_url)
+
+    try:
+        url = _wa_pairing.validate_evolution_url(raw_url, allow_private=allow_private_url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     key = body.evolution_api_key or cfg.get("evolution_api_key") or ""
     instance = body.instance_name or cfg.get("evolution_instance") or "grand-aceh-pos"
+    pairing_number = normalize_whatsapp_pairing_number(body.phone_number or "")
+
+    if body.phone_number and not pairing_number:
+        raise HTTPException(400, "Nomor WhatsApp pairing tidak valid. Gunakan 08... atau 62...")
     
     if not url:
         raise HTTPException(400, "URL Evolution API belum diisi")
@@ -7996,14 +8013,27 @@ async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depen
     qrcode = None
     pairing_code = None
     
+    import httpx
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             # 1. Coba ambil QR code dari instance yang sudah ada
-            r = await client.get(f"{url}/instance/connect/{instance}", headers=headers)
+            r = await client.get(
+                f"{url}/instance/connect/{instance}",
+                headers=headers,
+                params={"number": pairing_number} if pairing_number else None,
+            )
             if r.status_code == 200:
-                data = r.json()
+                try:
+                    data = r.json()
+                except Exception as exc:
+                    raise HTTPException(502, "Respons Evolution API tidak valid") from exc
                 qrcode = data.get("base64") or (data.get("qrcode") or {}).get("base64") or data.get("code")
-                pairing_code = data.get("pairingCode")
+                pairing_code = data.get("pairingCode") or (data.get("instance") or {}).get("pairingCode")
+                if not qrcode and not pairing_code:
+                    # Evolution membalas 200 tanpa QR/pairingCode (mis. body error JSON).
+                    # Jangan laporkan sukses palsu ke kasir — permukaan pesan provider.
+                    detail = data.get("message") or (data.get("response") or {}).get("message") or str(data)[:200]
+                    raise HTTPException(502, f"Evolution API tidak mengembalikan QR/pairing code: {detail}")
             elif r.status_code == 404:
                 # 2. Jika instance belum ada di Evolution API, buat instance baru
                 create_payload = {
@@ -8012,17 +8042,27 @@ async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depen
                     "qrcode": True,
                     "integration": "WHATSAPP-BAILEYS"
                 }
+                if pairing_number:
+                    create_payload["number"] = pairing_number
                 r_create = await client.post(f"{url}/instance/create", headers=headers, json=create_payload)
                 if r_create.status_code in (200, 201):
-                    data = r_create.json()
+                    try:
+                        data = r_create.json()
+                    except Exception as exc:
+                        raise HTTPException(502, "Respons pembuatan instance Evolution API tidak valid") from exc
                     qrcode = (data.get("qrcode") or {}).get("base64") or data.get("base64") or (data.get("instance") or {}).get("qrcode")
                     pairing_code = data.get("pairingCode") or (data.get("instance") or {}).get("pairingCode")
+                    if not qrcode and not pairing_code:
+                        detail = data.get("message") or (data.get("response") or {}).get("message") or str(data)[:200]
+                        raise HTTPException(502, f"Evolution API tidak mengembalikan QR/pairing code: {detail}")
                 else:
                     try:
                         err_text = r_create.json().get("response") or r_create.text
                     except Exception:
                         err_text = r_create.text
                     raise HTTPException(r_create.status_code, f"Gagal membuat instance Evolution API: {err_text}")
+            else:
+                raise HTTPException(502, f"Evolution API menolak koneksi (HTTP {r.status_code})")
     except HTTPException:
         raise
     except Exception as e:
@@ -8034,7 +8074,8 @@ async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depen
             "provider": "evolution",
             "evolution_url": url,
             "evolution_api_key": key,
-            "evolution_instance": instance
+            "evolution_instance": instance,
+            **({"phone": pairing_number} if pairing_number else {}),
         }},
         upsert=True
     )
@@ -8042,6 +8083,7 @@ async def whatsapp_instance_create(body: WAInstanceCreateIn, admin: dict = Depen
     return {
         "ok": True,
         "instance": instance,
+        "phone": pairing_number or cfg.get("phone", ""),
         "qrcode": qrcode,
         "pairingCode": pairing_code
     }
