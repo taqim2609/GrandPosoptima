@@ -358,28 +358,35 @@ def test_dispatch_sends_once_and_marks_sent():
     assert stats2["sent"] == 0 and len(calls) == 1
 
 
-def _quarantined_test_dispatch_records_error_without_phone_in_log():
-    # DIKARANTINA pada commit ini (M1). Tes ini ditulis untuk implementasi M2 yang
-    # menarik kembali baris gagal dengan sending_at=None + backoff; patch M1
-    # (89960adf) hanya menambah $inc attempts. Dengan M1, baris gagal tetap
-    # terklaim sehingga SATU dispatch_outbox memanggil sender 20 kali berturut ke
-    # nomor yang sama ($or menyertakan {"sending_at": {"$lt": expired}} yang
-    # mengklaim ulang baris ber-sending_at=now setiap iterasi). Bukti mentah:
-    # {"scanned": 20, "failed": 20}, attempts=20, sending_at=None.
-    # Dinonaktifkan karena mengubah/percayai hasilnya demi "hijau" akan
-    # menyembunyikan regression nyata pada jalur darurat WA (provider=M2).
+def test_dispatch_records_error_without_phone_in_log():
+    """Satu dispatch TIDAK boleh retry-storm: baris gagal di-hold oleh backoff.
+
+    Regresi yang dijaga: dengan filter klaim M1 yang hanya ``$or``
+    ``{"sending_at": {"$lt": expired}}``, baris gagal tetap terklaim ulang
+    sehingga satu panggilan dispatch memanggil sender 20x berturut ke nomor
+    yang sama (attempts=20). Sekarang baris di-hold `sending_at = now + backoff`.
+    """
     _primary(HERMES_WA_WEBHOOK_URL="http://127.0.0.1:8644/webhooks/x", HERMES_WA_WEBHOOK_SECRET="s")
     db = FakeDB()
     asyncio.run(hb.enqueue(db, "0812345678", "x", wa_id="K4"))
+    calls = []
 
     async def fake_send(to, text, cfg=None):
+        calls.append(to)
         return False, {"error": "bridge tidak dapat dihubungi (ConnectError)"}
 
     stats = asyncio.run(hb.dispatch_outbox(db, sender=fake_send))
     assert stats["failed"] == 1
+    assert len(calls) == 1, f"satu dispatch memanggil sender {len(calls)}x (retry-storm)"
     row = db.wa_outbox.rows[0]
     assert row["sent_at"] is None
+    assert row["sending_at"], "baris gagal harus di-hold backoff (bukan None)"
+    assert row["attempts"] == 1
     assert "0812345678" not in str(row.get("last_error") or "")
+    # Panggilan kedua masih di dalam backoff → tidak menyentuh baris (atau hanya 1x).
+    stats2 = asyncio.run(hb.dispatch_outbox(db, sender=fake_send))
+    assert stats2["sent"] == 0
+    assert len(calls) == 1
 
 
 def test_command_requires_registered_phone_and_role():
