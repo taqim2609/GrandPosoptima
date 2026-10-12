@@ -110,3 +110,19 @@ whatsapp-service/.wwebjs_cache/
 frontend/node_modules/.cache/default-development/8.pack
 frontend/node_modules/.cache/default-development/1.pack
 frontend/node_modules/.cache/default-development/2.pack
+
+# ---------------------------------------------------------------------------
+# Berkas evolution: HANYA untuk mesin ini (runtime Evolution lokal).
+# Tanpa ini mereka muncul sebagai untracked (??) dan ikut terbawa `git add -A`.
+# Dikecualikan persis 7 berkas; isi working tree tidak dihapus.
+project/backend/evolution_ctl_client.py
+project/evolution-runtime.env.example
+project/scripts/evolution-ctl-agent.py
+project/scripts/evolution-ctl-agent.service
+project/scripts/evolution-ctl.conf.example
+project/scripts/evolution-ctl.sh
+project/tests/test_evolution_secure_integration.py
+
+# Kecuali .gitignore/.gitattributes: template contoh env tetap harus bisa di-commit.
+!project/evolution-runtime.env.example
+!project/scripts/evolution-ctl.conf.example

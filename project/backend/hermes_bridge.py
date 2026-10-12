@@ -226,7 +226,7 @@ def health_url(cfg: dict | None = None) -> str:
     return f"{m.group(1)}{WA_HEALTH_PATH}" if m else ""
 
 
-async def send_text(to: str, text: str, cfg: dict | None = None):
+async def send_text(to: str, text: str, cfg: dict | None = None, request_id: str = ""):
     """Kirim teks lewat webhook adapter Hermes (``deliver_only``).
 
     Selalu mengembalikan ``(ok: bool, info: dict)`` dan **tidak pernah** melempar
@@ -250,6 +250,10 @@ async def send_text(to: str, text: str, cfg: dict | None = None):
     # Payload dipakai template route: prompt="{message}", deliver_extra.chat_id="{to}".
     body = json.dumps({"to": to_jid(to), "message": text}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     headers = {"Content-Type": "application/json", **sign_v2(c["secret"], body)}
+    # Hermes memakai header ini sebagai delivery_id/dedupe key. wa_id yang stabil
+    # membuat retry setelah timeout tidak menggandakan pesan di gateway.
+    if request_id:
+        headers["X-Request-ID"] = str(request_id)[:128]
     try:
         async with httpx.AsyncClient(timeout=c.get("timeout") or 20.0) as client:
             r = await client.post(c["url"], content=body, headers=headers)
@@ -299,9 +303,12 @@ async def enqueue(db, to: str, text: str, kind: str = "manual", wa_id: str = "",
 
 
 async def dispatch_outbox(db, limit: int = 20, cfg: dict | None = None, sender=None) -> dict:
-    """Kirim ulang isi outbox. Hanya node 644 (bridge terkonfigurasi) yang jalan.
+    """Kirim ulang outbox dengan claim/lease atomik.
 
-    Return ringkasan angka saja — tidak memuat nomor/isi pesan.
+    Beberapa worker/scheduler/endpoint manual boleh berjalan paralel: setiap row
+    lebih dahulu diklaim lewat ``find_one_and_update``. ``X-Request-ID=wa_id``
+    menjadi pagar kedua di gateway untuk retry setelah timeout jaringan.
+    Ringkasan tidak memuat nomor/isi pesan.
     """
     c = cfg or bridge_config()
     stats = {"enabled": bool(c.get("url")), "scanned": 0, "sent": 0, "failed": 0, "skipped": True}
@@ -309,25 +316,153 @@ async def dispatch_outbox(db, limit: int = 20, cfg: dict | None = None, sender=N
         return stats
     send = sender or send_text
     stats["skipped"] = False
-    cursor = db.wa_outbox.find({"sent_at": None}).sort("created_at", 1).limit(max(1, int(limit)))
-    async for row in cursor:
+    lease_seconds = max(30, int(_env_float("HERMES_WA_LEASE_SECONDS", 120)))
+    for _ in range(max(1, int(limit))):
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+        expired = (now_dt - timedelta(seconds=lease_seconds)).isoformat()
+        row = await db.wa_outbox.find_one_and_update(
+            {
+                "sent_at": None,
+                "$or": [
+                    {"sending_at": None},
+                    {"sending_at": {"$exists": False}},
+                    {"sending_at": {"$lt": expired}},
+                ],
+            },
+            {"$set": {"sending_at": now, "updated_at": now}, "$inc": {"attempts": 1}},
+            sort=[("created_at", 1)],
+            return_document=True,
+        )
+        if not row:
+            break
         stats["scanned"] += 1
-        ok, info = await send(row.get("to"), row.get("text"), c)
-        now = datetime.now(timezone.utc).isoformat()
+        try:
+            # Sender test lama menerima 3 argumen; sender produksi menerima request_id.
+            try:
+                ok, info = await send(row.get("to"), row.get("text"), c, request_id=row.get("wa_id") or "")
+            except TypeError:
+                ok, info = await send(row.get("to"), row.get("text"), c)
+        except Exception as e:
+            ok, info = False, {"error": type(e).__name__}
+        done = datetime.now(timezone.utc).isoformat()
         if ok:
             await db.wa_outbox.update_one(
-                {"wa_id": row["wa_id"]},
-                {"$set": {"sent_at": now, "updated_at": now, "last_error": None},
-                 "$inc": {"attempts": 1}},
+                {"wa_id": row["wa_id"], "sent_at": None},
+                {"$set": {"sent_at": done, "sending_at": None, "updated_at": done, "last_error": None}},
             )
             stats["sent"] += 1
         else:
             await db.wa_outbox.update_one(
-                {"wa_id": row["wa_id"]},
-                {"$set": {"updated_at": now, "last_error": str(info.get("error"))[:200]},
-                 "$inc": {"attempts": 1}},
+                {"wa_id": row["wa_id"], "sent_at": None},
+                {"$set": {"sending_at": None, "updated_at": done, "last_error": str(info.get("error"))[:200]}},
             )
             stats["failed"] += 1
+    return stats
+
+
+def _row_public(row: dict) -> dict:
+    """Bentuk baris outbox untuk dikirim antar-node (tanpa _id Mongo)."""
+    return {
+        "wa_id": row.get("wa_id"),
+        "to": row.get("to"),
+        "text": row.get("text"),
+        "kind": row.get("kind") or "wa",
+        "created_at": row.get("created_at") or datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def ingest_outbox(db, rows, sender=None) -> dict:
+    """Terima baris outbox dari node lain (Pi -> 644) secara idempoten.
+
+    Upsert per ``wa_id``: baris yang sudah ada (apalagi yang sudah terkirim)
+    tidak ditimpa, sehingga pengiriman ulang tidak pernah menggandakan pesan.
+    Setelah tersimpan, dispatcher node ini yang mengirim.
+    """
+    accepted = 0
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        wa_id = str(row.get("wa_id") or "").strip()
+        to = str(row.get("to") or "").strip()
+        text = str(row.get("text") or "")
+        if not wa_id or not to or not text:
+            continue
+        now = datetime.now(timezone.utc).isoformat()
+        await db.wa_outbox.update_one(
+            {"wa_id": wa_id},
+            {
+                "$setOnInsert": {
+                    "to": to,
+                    "text": text,
+                    "kind": str(row.get("kind") or "wa"),
+                    "created_at": str(row.get("created_at") or now),
+                    "sent_at": None,
+                    "attempts": 0,
+                    "last_error": None,
+                    "origin_node": str(row.get("origin_node") or "upstream"),
+                },
+                "$set": {"updated_at": now},
+            },
+            upsert=True,
+        )
+        accepted += 1
+    stats = await dispatch_outbox(db, limit=max(1, min(50, accepted or 20)), sender=sender)
+    stats["accepted"] = accepted
+    return stats
+
+
+async def push_outbox_upstream(db, url: str, token: str, limit: int = 50, timeout: float = 10.0) -> dict:
+    """Pi -> 644: kirim baris outbox yang belum diteruskan.
+
+    Dipanggil berkala oleh node backup. Setelah 644 menerima (HTTP 2xx), baris
+    ditandai ``forwarded_at``; baris tetap disimpan sampai 644 benar-benar
+    mengirim, dan akan dicoba lagi setelah ``lease`` kedaluwarsa (jaring aman
+    bila respons hilang di tengah jalan).
+    """
+    stats = {"pushed": 0, "failed": 0, "skipped": True}
+    url = (url or "").strip().rstrip("/")
+    if not url or not token:
+        return stats
+    if node_role() in ("primary", "master", "gudang", "644"):
+        # Node pengirim tidak perlu meneruskan ke dirinya sendiri.
+        return stats
+    lease = (datetime.now(timezone.utc) - timedelta(seconds=max(600, int(_env_float("WA_OUTBOX_FORWARD_LEASE", 3600))))).isoformat()
+    rows = []
+    cursor = db.wa_outbox.find(
+        {
+            "sent_at": None,
+            "$or": [{"forwarded_at": None}, {"forwarded_at": {"$exists": False}}, {"forwarded_at": {"$lt": lease}}],
+        }
+    ).sort("created_at", 1).limit(max(1, int(limit)))
+    async for row in cursor:
+        rows.append(_row_public(row))
+    if not rows:
+        return stats
+    stats["skipped"] = False
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.post(
+                f"{url}/api/sync/wa-outbox",
+                json={"node": node_role(), "rows": rows},
+                headers={"X-WA-Sync-Token": token, "Content-Type": "application/json"},
+            )
+    except Exception as e:
+        logger.warning("outbox ke node utama gagal: %s", type(e).__name__)
+        stats["failed"] = len(rows)
+        return stats
+    if r.status_code >= 300:
+        logger.warning("node utama menolak outbox: HTTP %s", r.status_code)
+        stats["failed"] = len(rows)
+        return stats
+    now = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        await db.wa_outbox.update_one(
+            {"wa_id": row["wa_id"], "sent_at": None},
+            {"$set": {"forwarded_at": now, "updated_at": now}},
+        )
+    stats["pushed"] = len(rows)
     return stats
 
 

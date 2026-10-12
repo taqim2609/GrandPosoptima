@@ -97,6 +97,10 @@ NODE_ID = (os.environ.get("NODE_ID") or os.uname().nodename).strip()
 # pernah mengirim WhatsApp. Node pengirim harus menyatakan perannya eksplisit
 # lewat project/.env (lihat .env.gudang.example).
 NODE_ROLE = (os.environ.get("NODE_ROLE") or "backup").strip().lower()
+# Sinkronisasi outbox Pi -> 644. Hanya Pi yang mengisi URL upstream ini; 644
+# membiarkannya kosong. Token terpisah dari JWT pengguna/browser.
+WA_OUTBOX_UPSTREAM_URL = (os.environ.get("WA_OUTBOX_UPSTREAM_URL") or "").strip().rstrip("/")
+WA_OUTBOX_SYNC_TOKEN = (os.environ.get("WA_OUTBOX_SYNC_TOKEN") or "").strip()
 
 # Jembatan WhatsApp Hermes (khusus 644). Modul ini hanya memakai stdlib saat
 # di-import, dan sengaja tidak menggagalkan startup bila ada masalah.
@@ -5314,6 +5318,40 @@ async def sync_push(body: SyncPushIn, user: dict = Depends(get_current_user)):
         except HTTPException as e:
             results.append({"client_ref": o.client_ref, "status": "error", "detail": e.detail})
     return {"synced": synced, "total": len(body.orders), "results": results, "server_time": now_utc().isoformat()}
+
+class WaOutboxRowIn(BaseModel):
+    wa_id: str
+    to: str
+    text: str
+    kind: Optional[str] = "wa"
+    created_at: Optional[str] = None
+    origin_node: Optional[str] = None
+
+class WaOutboxSyncIn(BaseModel):
+    node: Optional[str] = None
+    rows: List[WaOutboxRowIn] = []
+
+@api.post("/sync/wa-outbox")
+async def sync_wa_outbox(body: WaOutboxSyncIn, request: Request):
+    """Terima outbox WhatsApp dari node backup (Pi) dan kirim dari node ini.
+
+    Autentikasi memakai token node-ke-node (``WA_OUTBOX_SYNC_TOKEN``), bukan JWT
+    pengguna: pemanggilnya proses server Pi, bukan browser. Endpoint ini
+    fail-closed — 503 bila token belum dikonfigurasi, 401 bila header salah.
+    Idempotensi dijaga oleh ``wa_id`` (unique index) sehingga kiriman ulang
+    tidak pernah menggandakan pesan.
+    """
+    if not WA_OUTBOX_SYNC_TOKEN:
+        raise HTTPException(503, "Sinkronisasi outbox belum dikonfigurasi di node ini")
+    sent_token = request.headers.get("X-WA-Sync-Token") or ""
+    if not hmac.compare_digest(sent_token, WA_OUTBOX_SYNC_TOKEN):
+        raise HTTPException(401, "Token sinkronisasi tidak sah")
+    if not hermes_bridge:
+        raise HTTPException(503, "Modul integrasi WA tidak tersedia")
+    if not hermes_bridge.bridge_configured():
+        raise HTTPException(503, "Node ini tidak mengirim WhatsApp")
+    stats = await hermes_bridge.ingest_outbox(db, [r.model_dump() for r in body.rows])
+    return {"ok": True, "node": NODE_ID, **stats}
 
 # ================================================================== AI
 def _get_chat(session, system, model):
