@@ -6,6 +6,7 @@ adalah perilaku nyata: payload yang dikirim, header secret, dan keputusan hook.
 Jalankan: ``python3 project/tests/test_hermes_plugin_inbound.py``
 """
 
+import asyncio
 import json
 import os
 import sys
@@ -27,6 +28,15 @@ spec.loader.exec_module(plugin)
 
 SECRET = "rahasia-webhook-uji"
 received = []
+
+
+def dispatch(event, **kwargs):
+    """Panggil hook seperti gateway: hook-nya ``async def`` sejak M3.
+
+    Hook sengaja async supaya POS yang lambat tidak memblokir seluruh event loop
+    gateway; tes harus menjalankannya lewat event loop, bukan memanggil mentah.
+    """
+    return asyncio.run(plugin.on_pre_gateway_dispatch(event, **kwargs))
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -71,7 +81,7 @@ def test_dm_is_forwarded_and_agent_skipped():
     try:
         _env(port)
         received.clear()
-        out = plugin.on_pre_gateway_dispatch(_event("halo kak"))
+        out = dispatch(_event("halo kak"))
         assert out == {"action": "skip", "reason": "grandpos-forwarded"}, out
         assert len(received) == 1
         assert received[0]["secret"] == SECRET
@@ -89,7 +99,7 @@ def test_group_message_marks_participant():
     try:
         _env(port)
         received.clear()
-        plugin.on_pre_gateway_dispatch(_event("#reservasi meja 4", chat_type="group"))
+        dispatch(_event("#reservasi meja 4", chat_type="group"))
         d = received[0]["payload"]["data"]
         assert d["isGroup"] is True
         assert d["participant"] == "628111222333"
@@ -102,7 +112,7 @@ def test_non_whatsapp_platform_passes_through():
     try:
         _env(port)
         received.clear()
-        assert plugin.on_pre_gateway_dispatch(_event("hai", platform="telegram")) is None
+        assert dispatch(_event("hai", platform="telegram")) is None
         assert received == []
     finally:
         srv.shutdown()
@@ -113,7 +123,7 @@ def test_internal_event_ignored():
     try:
         _env(port)
         received.clear()
-        assert plugin.on_pre_gateway_dispatch(_event("internal", internal=True)) is None
+        assert dispatch(_event("internal", internal=True)) is None
         assert received == []
     finally:
         srv.shutdown()
@@ -124,7 +134,7 @@ def test_pos_unreachable_keeps_bot_silent():
     os.environ["GRANDPOS_WEBHOOK_URL"] = "http://127.0.0.1:9/api/webhook/whatsapp"
     os.environ["WA_WEBHOOK_SECRET"] = SECRET
     os.environ["GRANDPOS_FORWARD_TIMEOUT"] = "2"
-    out = plugin.on_pre_gateway_dispatch(_event("halo"))
+    out = dispatch(_event("halo"))
     assert out == {"action": "skip", "reason": "grandpos-unreachable"}, out
 
 
@@ -133,7 +143,7 @@ def test_missing_secret_fails_closed():
     try:
         _env(port, secret="")
         received.clear()
-        out = plugin.on_pre_gateway_dispatch(_event("halo"))
+        out = dispatch(_event("halo"))
         assert out["reason"] == "grandpos-unreachable"
         assert received == []  # tidak ada request tanpa secret
     finally:
@@ -145,7 +155,7 @@ def test_pos_rejecting_keeps_bot_silent():
     try:
         _env(port)
         _Handler.status = 401
-        out = plugin.on_pre_gateway_dispatch(_event("halo"))
+        out = dispatch(_event("halo"))
         assert out["reason"] == "grandpos-unreachable"
     finally:
         _Handler.status = 200
@@ -157,7 +167,7 @@ def test_empty_text_skipped_without_forward():
     try:
         _env(port)
         received.clear()
-        out = plugin.on_pre_gateway_dispatch(_event("   "))
+        out = dispatch(_event("   "))
         assert out == {"action": "skip", "reason": "grandpos-non-teks"}
         assert received == []
     finally:

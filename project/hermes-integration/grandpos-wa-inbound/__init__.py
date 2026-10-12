@@ -21,12 +21,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-import urllib.error
-import urllib.request
 
 logger = logging.getLogger("grandpos-wa-inbound")
 
 DEFAULT_POS_URL = "http://127.0.0.1:8001/api/webhook/whatsapp"
+
+# Batas keras timeout: gateway Hermes memanggil hook ini secara serial, jadi
+# satu POS yang lambat tidak boleh menahan seluruh antrean pesan.
+MAX_FORWARD_TIMEOUT = 2.0
 
 
 def _pos_url() -> str:
@@ -38,10 +40,16 @@ def _secret() -> str:
 
 
 def _timeout() -> float:
+    """Timeout diteruskan-ke-POS, **selalu** dipotong ke ``MAX_FORWARD_TIMEOUT``.
+
+    Dibuat ``min(...)`` di kode — bukan hanya disarankan di komentar — supaya
+    nilai env yang salah (mis. 30 dtk) tidak bisa memblokir gateway.
+    """
     try:
-        return float(os.environ.get("GRANDPOS_FORWARD_TIMEOUT") or 8)
+        value = float(os.environ.get("GRANDPOS_FORWARD_TIMEOUT") or MAX_FORWARD_TIMEOUT)
     except Exception:
-        return 8.0
+        value = MAX_FORWARD_TIMEOUT
+    return max(0.1, min(value, MAX_FORWARD_TIMEOUT))
 
 
 def _platform_name(platform) -> str:
@@ -83,39 +91,63 @@ def build_payload(event) -> dict:
     }
 
 
-def forward(payload: dict, url: str = "", secret: str = "", timeout: float = 0) -> tuple:
-    """POST payload ke POS. Mengembalikan ``(ok, keterangan)`` tanpa pernah
-    melempar exception dan tanpa menulis nomor/isi pesan ke log."""
+def _httpx():
+    """Import httpx secara lazy — host Hermes mungkin tidak memasangnya, dan
+    ketiadaan itu harus menjadi *fail-soft*, bukan ImportError saat load plugin.
+    """
+    try:
+        import httpx  # noqa: PLC0415
+        return httpx
+    except Exception:
+        return None
+
+
+async def forward(payload: dict, url: str = "", secret: str = "", timeout: float = 0) -> tuple:
+    """POST payload ke POS **secara async**. Mengembalikan ``(ok, keterangan)``
+    tanpa pernah melempar exception dan tanpa menulis nomor/isi pesan ke log.
+
+    Memakai ``httpx.AsyncClient`` (bukan ``urlopen``) supaya hook yang memanggil
+    tidak memblokir event loop gateway — dulu ``urlopen`` sinkron di dalam hook
+    sinkron bisa menahan seluruh gateway sampai timeout habis.
+    """
     url = url or _pos_url()
     secret = secret or _secret()
     timeout = timeout or _timeout()
     if not secret:
         logger.error("WA_WEBHOOK_SECRET belum diset — pesan WA tidak diteruskan")
         return False, "secret kosong"
+    httpx = _httpx()
+    if httpx is None:
+        logger.error("httpx tidak tersedia di host Hermes — pesan WA tidak diteruskan")
+        return False, "httpx tidak tersedia"
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "X-Hermes-Secret": secret,
-        },
-    )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            ok = 200 <= int(resp.status) < 300
-            return ok, f"HTTP {resp.status}"
-    except urllib.error.HTTPError as e:
-        logger.warning("POS menolak pesan WA masuk: HTTP %s", e.code)
-        return False, f"HTTP {e.code}"
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                url,
+                content=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Hermes-Secret": secret,
+                },
+            )
+        ok = 200 <= int(resp.status_code) < 300
+        if not ok:
+            # Hanya statusnya yang dicatat — bukan body, yang bisa memuat nomor.
+            logger.warning("POS menolak pesan WA masuk: HTTP %s", resp.status_code)
+        return ok, f"HTTP {resp.status_code}"
     except Exception as e:
         logger.warning("POS tidak dapat dihubungi: %s", type(e).__name__)
         return False, type(e).__name__
 
 
-def on_pre_gateway_dispatch(event, **kwargs):
-    """Hook: serahkan pesan WA ke POS lalu hentikan dispatch agent."""
+async def on_pre_gateway_dispatch(event, **kwargs):
+    """Hook async: serahkan pesan WA ke POS lalu hentikan dispatch agent.
+
+    ``async def`` di sini **bukan** kosmetik: kalau hook ini sinkron, satu
+    panggilan HTTP yang lambat menahan seluruh gateway. Karena itu ``forward``
+    juga async dan tidak memakai ``urlopen``.
+    """
     if getattr(event, "internal", False):
         return None  # event internal bukan pesan pengguna
     source = getattr(event, "source", None)
@@ -123,7 +155,7 @@ def on_pre_gateway_dispatch(event, **kwargs):
         return None  # platform lain: biarkan Hermes menangani seperti biasa
     if not str(getattr(event, "text", "") or "").strip():
         return {"action": "skip", "reason": "grandpos-non-teks"}
-    ok, detail = forward(build_payload(event))
+    ok, detail = await forward(build_payload(event))
     if not ok:
         # Sengaja tetap skip: lebih baik bot diam daripada agent membalas
         # pelanggan dengan teks yang tidak sesuai skenario POS.
