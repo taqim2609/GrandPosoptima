@@ -7773,13 +7773,20 @@ async def _wa_outbox_enqueue(to, text, kind="wa"):
 
 
 async def dispatch_wa_outbox(limit=20):
-    """Kirim ulang outbox. Hanya node 644 (bridge terkonfigurasi) yang mengirim."""
+    """Teruskan outbox Pi ke primary, atau kirim ke Hermes pada node primary."""
     if not hermes_bridge:
         return {"enabled": False, "sent": 0, "failed": 0, "scanned": 0}
     try:
+        # Jalur Pi -> 644 berjalan dari tick scheduler yang sama. Pada node
+        # primary helper ini tidak dipanggil; primary langsung dispatch lokal.
+        if (WA_OUTBOX_UPSTREAM_URL and WA_OUTBOX_SYNC_TOKEN
+                and hermes_bridge.node_role() not in ("primary", "master", "gudang", "644")):
+            return await hermes_bridge.push_outbox_upstream(
+                db, WA_OUTBOX_UPSTREAM_URL, WA_OUTBOX_SYNC_TOKEN, limit=limit
+            )
         return await hermes_bridge.dispatch_outbox(db, limit=limit)
     except Exception as e:
-        logger.error("dispatch outbox WA gagal: %s", type(e).__name__)
+        logger.error("dispatch/sinkronisasi outbox WA gagal: %s", type(e).__name__)
         return {"enabled": True, "sent": 0, "failed": 0, "scanned": 0, "error": type(e).__name__}
 
 
@@ -10853,14 +10860,16 @@ async def startup():
                 await _maybe_integrity_auto()
             except Exception as e:
                 logger.error(f"integrity scheduler tick failed: {e}")
-            # Outbox WhatsApp: hanya node dengan bridge (644) yang benar-benar
-            # mengirim; di Pi fungsi ini langsung keluar tanpa melakukan apa pun.
+            # Outbox WhatsApp: primary mengirim ke Hermes; Pi meneruskan antrean
+            # ke primary bila WA_OUTBOX_UPSTREAM_URL + token terkonfigurasi.
             try:
                 stats = await dispatch_wa_outbox()
                 if stats.get("sent"):
                     logger.info("outbox WA terkirim: %s pesan", stats["sent"])
+                if stats.get("pushed"):
+                    logger.info("outbox WA diteruskan ke primary: %s pesan", stats["pushed"])
             except Exception as e:
-                logger.error(f"dispatch outbox WA gagal: {e}")
+                logger.error(f"dispatch/sinkronisasi outbox WA gagal: {e}")
             await _asyncio.sleep(600)  # cek tiap 10 menit
     _asyncio.create_task(_report_scheduler())
     if WORKERS > 1:
