@@ -1,10 +1,1 @@
-# Berkas evolution bersifat lokal-lingkungan: tinggal di working tree mesin ini,
-# tidak untuk repo bersama. Diabaikan lewat .gitignore (lihat project/.gitignore);
-# atribut di bawah hanya jaring kedua bila core.attributesfile mendukung.
-project/backend/evolution_ctl_client.py gitignore
-project/evolution-runtime.env.example gitignore
-project/scripts/evolution-ctl-agent.py gitignore
-project/scripts/evolution-ctl-agent.service gitignore
-project/scripts/evolution-ctl.conf.example gitignore
-project/scripts/evolution-ctl.sh gitignore
-project/tests/test_evolution_secure_integration.py gitignore
+
