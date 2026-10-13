@@ -505,7 +505,7 @@ export default function Layout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-[#F4F5F7]">
       {/* Top Header for Mobile & Desktop */}
-      <header className="fixed top-0 left-0 lg:left-[268px] right-0 h-14 bg-white border-b border-[#E4E4E7] z-30 flex items-center justify-between px-3 lg:px-6 shadow-xs">
+      <header className="fixed top-0 left-0 lg:left-[240px] right-0 h-14 bg-white border-b border-[#E4E4E7] z-30 flex items-center justify-between px-3 lg:px-6 shadow-xs">
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             data-testid="sidebar-toggle"
@@ -522,7 +522,7 @@ export default function Layout({ children }) {
       </header>
 
       {sidebarOpen && <div data-testid="sidebar-backdrop" onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />}
-      <aside className={`fixed lg:static z-50 h-full w-[268px] shrink-0 text-white flex flex-col transition-transform duration-300 shadow-2xl lg:shadow-none ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+      <aside className={`fixed lg:static z-50 h-full w-[240px] shrink-0 text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         style={{ backgroundImage: "linear-gradient(180deg, var(--gak-side1), var(--gak-side2) 55%, var(--gak-side3))" }}>
         <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
@@ -570,18 +570,18 @@ export default function Layout({ children }) {
                     to={n.to}
                     data-testid={`nav-${n.to.slice(1)}`}
                     onClick={() => setSidebarOpen(false)}
-                    className={({ isActive }) => {
-                      const active = n.activePath ? window.location.pathname === n.activePath && window.location.search.includes("waView=pairing") : isActive;
-                      return `tap flex items-center gap-3 px-3.5 h-11 rounded-xl font-medium text-xs sm:text-sm transition-all ${
-                        active
+                    className={({ isActive }) =>
+                      `tap flex items-center gap-2.5 px-3 h-10 rounded-xl font-medium text-xs sm:text-sm transition-all ${
+                        isActive
                           ? "text-white font-bold shadow-md shadow-black/25 ring-1 ring-white/20"
                           : "text-white/75 hover:bg-white/10 hover:text-white"
-                      }`;
-                    }}
-                    style={({ isActive }) => {
-                      const active = n.activePath ? window.location.pathname === n.activePath && window.location.search.includes("waView=pairing") : isActive;
-                      return active ? { backgroundImage: "linear-gradient(90deg, var(--gak-p), var(--gak-a))" } : undefined;
-                    }}
+                      }`
+                    }
+                    style={({ isActive }) =>
+                      isActive
+                        ? { backgroundImage: "linear-gradient(90deg, var(--gak-p), var(--gak-a))" }
+                        : undefined
+                    }
                   >
                     <n.icon size={16} className="shrink-0" />
                     <span className="truncate">{navLabel(n, ui)}</span>
@@ -620,7 +620,7 @@ export default function Layout({ children }) {
           </button>
         </div>
       </aside>
-      <main className="flex-1 min-w-0 overflow-hidden flex flex-col pt-14 bg-[#F4F5F7]">
+      <main className="flex-1 overflow-hidden flex flex-col pt-14">
         <HeaderConnectionBanner onOpenQueue={() => setQueueOpen(true)} />
         <div className="flex-1 overflow-hidden">{children}</div>
       </main>

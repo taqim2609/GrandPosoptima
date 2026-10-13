@@ -105,8 +105,7 @@ function IntegrationsTab() {
   try {
     const sp = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     const raw = sp.get("sub") || sp.get("tab");
-    if (raw === "wa" || raw === "whatsapp") initial = "wa";
-    else if (raw === "ai") initial = "ai";
+    if (raw === "ai") initial = "ai";
     else if (raw === "addons" || raw === "fitur") initial = "addons";
   } catch (e) {}
 
@@ -231,7 +230,7 @@ export default function Settings() {
 
   return (
     <div className="h-full flex flex-col bg-[#F4F5F7]">
-      <div className="px-4 sm:px-6 md:px-8 pt-5 pb-0 bg-white border-b border-[#E4E4E7] shadow-sm">
+      <div className="px-6 md:px-8 pt-5 pb-0 bg-white border-b border-[#E4E4E7]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
           <div>
             <h1 className="text-2xl font-black text-[#0A0A0A]">Pengaturan Sistem</h1>

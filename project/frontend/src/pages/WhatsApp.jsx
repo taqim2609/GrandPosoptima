@@ -290,10 +290,26 @@ export default function WhatsApp() {
               </span>
             ) : (
               <span className="text-[#B45309]">
-                Bridge Hermes belum terhubung. QR pairing hanya bisa diambil di server gudang (bridge = localhost).
+                Bridge Hermes belum terhubung. Pasangkan nomor bot dengan perintah hermes whatsapp di server gudang.
               </span>
             )}
           </div>
+        </div>
+
+        {/* PANEL PAIRING NOMOR BOT (pairing dilakukan di server gudang via Hermes) */}
+        <div className="bg-white rounded-2xl border p-5 space-y-3" data-testid="wa-pairing-panel">
+          <div className="flex items-center gap-2 font-black text-sm text-slate-800">
+            <Zap size={16} className="text-indigo-600" />
+            Pairing Nomor Bot WhatsApp
+          </div>
+          <p className="text-xs text-slate-600">
+            Nomor bot dipasangkan di server gudang 644 melalui gateway Hermes, bukan dari aplikasi ini.
+            Jalankan perintah berikut di server gudang lalu pindai QR dengan nomor bot terpisah:
+          </p>
+          <pre className="rounded-xl bg-slate-900 text-slate-100 text-xs p-3 overflow-x-auto"><code>hermes whatsapp</code></pre>
+          <p className="text-[11px] text-slate-500">
+            Gunakan nomor bot terpisah, bukan nomor pribadi pemilik. Setelah terhubung, tekan &quot;Uji Koneksi &amp; Cek Sesi&quot; di atas.
+          </p>
         </div>
 
         {/* PANEL BRIDGE */}
