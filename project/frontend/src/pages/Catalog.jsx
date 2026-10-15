@@ -1,12 +1,11 @@
-import { useState, useEffect, Suspense, lazy } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Package, Boxes, Tags, Store, FlaskConical } from "lucide-react";
-
-const Products = lazy(() => import("@/pages/Products"));
-const Inventory = lazy(() => import("@/pages/Inventory"));
-const Categories = lazy(() => import("@/pages/Categories"));
-const Vendors = lazy(() => import("@/pages/Vendors"));
-const Recipes = lazy(() => import("@/pages/Recipes"));
+import Products from "@/pages/Products";
+import Inventory from "@/pages/Inventory";
+import Categories from "@/pages/Categories";
+import Vendors from "@/pages/Vendors";
+import Recipes from "@/pages/Recipes";
 
 const TABS = [
   { k: "produk", l: "Produk", i: Package, C: Products },
@@ -43,9 +42,7 @@ export default function Catalog() {
         ))}
       </div>
       <div className="flex-1 overflow-hidden">
-        <Suspense fallback={<div className="flex h-full items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-[#E63946] border-t-transparent rounded-full"></div></div>}>
-          <Active />
-        </Suspense>
+        <Active />
       </div>
     </div>
   );

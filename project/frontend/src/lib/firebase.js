@@ -414,3 +414,70 @@ export async function syncOrderToFirestore(order) {
   }
 }
 
+// Real-time WhatsApp Outbox & Live Chat Sync with Cloud Firestore
+export async function syncWaOutboxToFirestore(item) {
+  if (!item || (!item.id && !item.wa_id)) return { success: false, error: "Invalid item" };
+  const id = String(item.id || item.wa_id);
+  setFirestoreSyncing(true, 800);
+  try {
+    const docRef = doc(db, "wa_outbox", id);
+    const payload = {
+      id,
+      to: String(item.to || ""),
+      text: String(item.text || ""),
+      kind: String(item.kind || "wa"),
+      status: String(item.status || "pending"),
+      provider: String(item.provider || "hermes"),
+      created_at: String(item.created_at || new Date().toISOString()),
+      updated_at: serverTimestamp(),
+    };
+    await setDoc(docRef, payload, { merge: true });
+    setFirestoreSyncing(false);
+    return { success: true, id };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `wa_outbox/${id}`);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function syncWaMessageToFirestore(chatId, message) {
+  if (!chatId || !message || !message.id) return { success: false, error: "Invalid parameters" };
+  setFirestoreSyncing(true, 800);
+  try {
+    const chatDocRef = doc(db, "wa_chats", String(chatId));
+    await setDoc(
+      chatDocRef,
+      {
+        id: String(chatId),
+        phone: String(chatId),
+        name: String(message.name || chatId),
+        last_message: String(message.text || ""),
+        updated_at: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    const msgDocRef = doc(db, "wa_chats", String(chatId), "messages", String(message.id));
+    await setDoc(
+      msgDocRef,
+      {
+        id: String(message.id),
+        chat_id: String(chatId),
+        sender: String(message.sender || "pelanggan"),
+        direction: String(message.direction || "inbound"),
+        text: String(message.text || ""),
+        status: String(message.status || "sent"),
+        provider: String(message.provider || "hermes"),
+        timestamp: String(message.created_at || new Date().toISOString()),
+        updated_at: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    setFirestoreSyncing(false);
+    return { success: true };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `wa_chats/${chatId}/messages/${message.id}`);
+    return { success: false, error: err.message };
+  }
+}
+

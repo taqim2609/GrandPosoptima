@@ -1,0 +1,7 @@
+interface:
+  display_name: "Planora Next"
+  short_description: "Execute and verify one ready product TODO item."
+  default_prompt: "Use $planora-next to execute the next dependency-ready product TODO item and update its verified status."
+
+policy:
+  allow_implicit_invocation: false

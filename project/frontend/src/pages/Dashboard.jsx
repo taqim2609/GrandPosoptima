@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, memo, lazy, Suspense } from "react";
+import { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { apiError } from "@/lib/api";
 import { rupiah, ORDER_TYPE_LABEL, wibToday } from "@/lib/format";
@@ -15,22 +15,10 @@ import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
 import { useFeatures } from "@/lib/features";
 import { useUI, orderWidgets } from "@/lib/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-
-// Lazy-loaded heavy components for optimal Time to Interactive (TTI)
-const LazyVpsAnalyticsCard = lazy(() => import("@/components/VpsConnectionAnalyticsCard"));
-const VisualSyncStatusCard = lazy(() => import("@/components/VisualSyncStatus"));
-const LazyWidgetTrend = lazy(() =>
-  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.WidgetTrend }))
-);
-const LazyWidgetTerlaris = lazy(() =>
-  import("@/components/dashboard/DashboardCharts").then((m) => ({ default: m.WidgetTerlaris }))
-);
-const LazyWidgetKustomCard = lazy(() =>
-  import("@/components/WidgetKustom").then((m) => ({ default: m.WidgetKustomCard }))
-);
-const LazyFillDataDialog = lazy(() =>
-  import("@/components/WidgetKustom").then((m) => ({ default: m.FillDataDialog }))
-);
+import VpsAnalyticsCard from "@/components/VpsConnectionAnalyticsCard";
+import VisualSyncStatusCard from "@/components/VisualSyncStatus";
+import { WidgetTrend, WidgetTerlaris } from "@/components/dashboard/DashboardCharts";
+import { WidgetKustomCard, FillDataDialog } from "@/components/WidgetKustom";
 
 // Lightweight skeleton fallbacks during lazy load
 const SyncStatusSkeleton = () => (
@@ -587,17 +575,9 @@ export default function Dashboard() {
   const renderWidget = (id) => {
     switch (id) {
       case "vps_analytics":
-        return (
-          <Suspense fallback={<SyncStatusSkeleton />}>
-            <LazyVpsAnalyticsCard />
-          </Suspense>
-        );
+        return <VpsAnalyticsCard />;
       case "firestore":
-        return (
-          <Suspense fallback={<SyncStatusSkeleton />}>
-            <VisualSyncStatusCard />
-          </Suspense>
-        );
+        return <VisualSyncStatusCard />;
       case "kpi":
         return data && <WidgetKpi data={data} view={view} lb={lb} />;
       case "jenis":
@@ -605,19 +585,11 @@ export default function Dashboard() {
       case "finansial":
         return data && <WidgetFinansial data={data} view={view} lb={lb} />;
       case "trend":
-        return hasSummary ? (
-          <Suspense fallback={<ChartSkeleton height={240} title="Memuat Tren Penjualan..." />}>
-            <LazyWidgetTrend view={view} />
-          </Suspense>
-        ) : null;
+        return hasSummary ? <WidgetTrend view={view} /> : null;
       case "kategori":
         return data && <WidgetKategori data={data} />;
       case "terlaris":
-        return data ? (
-          <Suspense fallback={<ChartSkeleton height={200} title="Memuat Produk Terlaris..." />}>
-            <LazyWidgetTerlaris data={data} view={view} lb={lb} />
-          </Suspense>
-        ) : null;
+        return data ? <WidgetTerlaris data={data} view={view} lb={lb} /> : null;
       case "metode":
         return data && <WidgetMetode data={data} />;
       case "ai":
@@ -635,10 +607,8 @@ export default function Dashboard() {
       const d = cwById[cwid];
       if (!d || !d.enabled) return null;
       return (
-        <Suspense key={id} fallback={<CustomWidgetSkeleton />}>
-          <LazyWidgetKustomCard def={d} daily={cwDailyOf(cwid)} summary={data} date={date}
-            fillable onFill={(def) => setCwFill({ def })} />
-        </Suspense>
+        <WidgetKustomCard key={id} def={d} daily={cwDailyOf(cwid)} summary={data} date={date}
+          fillable onFill={(def) => setCwFill({ def })} />
       );
     }
     return (
@@ -779,16 +749,14 @@ export default function Dashboard() {
 
       {/* Dialog isi data harian widget kustom */}
       {cwFill && (
-        <Suspense fallback={null}>
-          <LazyFillDataDialog
-            open={!!cwFill}
-            onOpenChange={(v) => { if (!v) setCwFill(null); }}
-            def={cwFill.def}
-            date={date}
-            daily={cwDailyOf(cwFill.def.id)}
-            onSaved={(dly) => setCwEntries((prev) => ({ ...prev, [cwFill.def.id]: { date, daily: dly } }))}
-          />
-        </Suspense>
+        <FillDataDialog
+          open={!!cwFill}
+          onOpenChange={(v) => { if (!v) setCwFill(null); }}
+          def={cwFill.def}
+          date={date}
+          daily={cwDailyOf(cwFill.def.id)}
+          onSaved={(dly) => setCwEntries((prev) => ({ ...prev, [cwFill.def.id]: { date, daily: dly } }))}
+        />
       )}
     </div>
   );

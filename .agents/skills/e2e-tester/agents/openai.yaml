@@ -1,0 +1,8 @@
+interface:
+  display_name: "E2E Tester"
+  short_description: "Validate prepared user journeys in a real browser."
+  default_prompt: "Use $e2e-tester to run this browser E2E handoff and report evidence."
+
+policy:
+  allow_implicit_invocation: false
+

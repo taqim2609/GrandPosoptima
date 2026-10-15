@@ -15,17 +15,15 @@ import {
   subscribeFirestoreSync,
   testFirestoreConnection,
   firestoreDatabaseId,
-  getLastSyncInfo,
 } from "@/lib/firebase";
 import { VisualSyncBadge } from "@/components/VisualSyncStatus";
 import VisualSyncStatusCard from "@/components/VisualSyncStatus";
 import ThreeServerMatrix from "@/components/ThreeServerMatrix";
 import {
-  LayoutDashboard, ShoppingCart, Package, Boxes,
-  Clock, FileSpreadsheet, LogOut, ShieldCheck, Menu, X, Printer,
-  Wallet, Wifi, WifiOff, RefreshCw, CloudOff, Database, KeyRound, Settings, Bot, BarChart3,
-  Users, Tag, CalendarCheck, FlaskConical, Ticket, Trash2, ChevronDown, ChevronUp, Info, MessageCircle,
-  Cloud, CheckCircle2,
+  Clock, LogOut, ShieldCheck, Menu, X,
+  Wifi, WifiOff, RefreshCw, CloudOff, Database, KeyRound,
+  Trash2, ChevronDown, ChevronUp, Info, MessageCircle,
+  PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 
 function ChangePasswordDialog({ open, onClose }) {
@@ -62,7 +60,6 @@ function ChangePasswordDialog({ open, onClose }) {
     </Dialog>
   );
 }
-
 
 function HeaderConnectionBanner({ onOpenQueue }) {
   const { online, pendingCount, syncing, syncNow } = useOffline();
@@ -120,89 +117,8 @@ function HeaderConnectionBanner({ onOpenQueue }) {
   );
 }
 
-function HeaderFirestoreBadge() {
-  const [syncing, setSyncing] = useState(false);
-  const [tested, setTested] = useState(null);
-  const [testing, setTesting] = useState(false);
-
-  useEffect(() => {
-    return subscribeFirestoreSync((active) => {
-      setSyncing(active);
-    });
-  }, []);
-
-  // Initial connection test on mount
-  useEffect(() => {
-    testFirestoreConnection().then((res) => {
-      setTested(res);
-    });
-  }, []);
-
-  const handleManualVerify = async (e) => {
-    e.preventDefault();
-    if (testing) return;
-    setTesting(true);
-    toast.info("Memverifikasi persistensi database Firestore...", { duration: 1200 });
-    const res = await testFirestoreConnection();
-    setTested(res);
-    setTesting(false);
-    if (res.ok) {
-      toast.success(`Firestore Terhubung Aktif (${res.latencyMs}ms) — Persistensi Cloud 100% Terverifikasi!`, {
-        description: `Database ID: ${res.databaseId}`,
-      });
-    } else {
-      toast.warning("Status Firestore: Offline / Cache lokal aktif", {
-        description: res.error || "Koneksi cloud sedang dialihkan ke cache lokal",
-      });
-    }
-  };
-
-  const isConnected = tested?.ok !== false;
-
-  return (
-    <button
-      type="button"
-      data-testid="header-firestore-status"
-      onClick={handleManualVerify}
-      title={`Firestore Cloud Database: ${isConnected ? "Terhubung & Aktif" : "Offline / Cache Lokal"} (${firestoreDatabaseId}) - Klik untuk uji persistensi`}
-      className={`tap h-9 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-all ${
-        syncing || testing
-          ? "bg-[#EFF6FF] text-[#1D4ED8] border-[#93C5FD] shadow-xs ring-2 ring-blue-400/20"
-          : isConnected
-          ? "bg-[#F0FDF4] text-[#15803D] border-[#BBF7D0] hover:bg-[#DCFCE7]"
-          : "bg-[#FFFBEB] text-[#B45309] border-[#FDE68A] hover:bg-[#FEF3C7]"
-      }`}
-    >
-      <div className="relative flex items-center justify-center">
-        {syncing || testing ? (
-          <RefreshCw size={13} className="text-[#2563EB] animate-spin" />
-        ) : (
-          <Database size={13} className={isConnected ? "text-[#16A34A]" : "text-[#D97706]"} />
-        )}
-        {(syncing || testing) && (
-          <span className="absolute -top-1 -right-1 flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-          </span>
-        )}
-      </div>
-      <span className="hidden sm:inline">
-        {syncing || testing ? "Firestore Sinkron..." : "Firestore Cloud"}
-      </span>
-      <span className="sm:hidden">
-        {syncing || testing ? "Sync..." : "DB"}
-      </span>
-      {tested?.ok && !syncing && !testing && (
-        <span className="hidden lg:inline text-[10px] font-num px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold">
-          {tested.latencyMs ? `${tested.latencyMs}ms` : "Live"}
-        </span>
-      )}
-    </button>
-  );
-}
-
 function HeaderConnectionBadge({ onOpenQueue, onOpenSyncModal }) {
-  const { online, pendingCount, syncing, syncNow } = useOffline();
+  const { online, pendingCount } = useOffline();
   const [shift, setShift] = useState(undefined);
   const [waStatus, setWaStatus] = useState({ status: "checking", state: "checking", message: "" });
 
@@ -213,7 +129,6 @@ function HeaderConnectionBadge({ onOpenQueue, onOpenSyncModal }) {
       .catch(() => setShift(null));
   }, [online]);
 
-  // Polling WhatsApp Evolution API status every 15 seconds
   useEffect(() => {
     let timer = null;
     const fetchWaStatus = async () => {
@@ -238,16 +153,14 @@ function HeaderConnectionBadge({ onOpenQueue, onOpenSyncModal }) {
 
   return (
     <div className="flex items-center gap-2">
-      {/* Real-time Visual Connectivity & Last Sync Status Component */}
       <VisualSyncBadge onClick={onOpenSyncModal} />
 
-      {/* WhatsApp Evolution API Status Indicator */}
       <NavLink
         to="/whatsapp"
         data-testid="header-wa-indicator"
         title={
           isWaActive
-            ? `WhatsApp Gateway Aktif (${waStatus.instance || "Evolution API Cloud Run"}) - Klik untuk kelola`
+            ? `WhatsApp Gateway Aktif (${waStatus.instance || "Hermes / wacloud.id"}) - Klik untuk kelola`
             : "WhatsApp Gateway Terputus / Perlu Scan QR - Klik untuk menghubungkan"
         }
         className={`tap h-9 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-colors ${
@@ -302,10 +215,25 @@ function HeaderConnectionBadge({ onOpenQueue, onOpenSyncModal }) {
   );
 }
 
-
-function OfflineStatus({ onOpenQueue }) {
+function OfflineStatus({ onOpenQueue, isCollapsed }) {
   const { online, pendingCount, syncing, syncNow, syncLog } = useOffline();
   const cacheAt = localStorage.getItem("gak_pos_cache_at");
+
+  if (isCollapsed) {
+    return (
+      <div data-testid="offline-status-collapsed" className="py-2.5 px-2 border-b border-white/10 flex flex-col items-center gap-1.5" title={online ? "Status: Online" : "Status: Offline"}>
+        <div className={`p-1.5 rounded-lg ${online ? "bg-emerald-500/20 text-[#22C55E]" : "bg-red-500/20 text-[#EF4444]"}`}>
+          {online ? <Wifi size={15} /> : <WifiOff size={15} />}
+        </div>
+        {pendingCount > 0 && (
+          <button onClick={onOpenQueue} className="h-6 w-6 rounded-full bg-amber-500 text-slate-900 font-extrabold text-[10px] grid place-items-center" title={`${pendingCount} transaksi belum sinkron`}>
+            {pendingCount}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div data-testid="offline-status" className={`px-3 py-2.5 border-b border-white/10 ${online ? "" : "bg-[#EF4444]/20"}`}>
       <div className="flex items-center gap-2 text-sm font-bold">
@@ -489,23 +417,35 @@ export default function Layout({ children }) {
   const [pwOpen, setPwOpen] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("gak_sidebar_collapsed") === "true";
+    } catch (_) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("gak_sidebar_collapsed", String(isCollapsed));
+    } catch (_) {}
+  }, [isCollapsed]);
+
   const { feat } = useFeatures();
   const ui = useUI();
-  // Muat feature flag dari server (menu AI dll ikut disembunyikan bila dimatikan).
   useEffect(() => { loadFeatures(); }, []);
   const aiVisible = feat("ai.enabled") && feat("ai.assistant");
-  // Menu mengikuti MODUL (RBAC) — termasuk role `admin` yang boleh dibatasi Super Admin.
-  // Item tanpa modul (mis. Perangkat) tetap memakai daftar role.
   const canNav = (n) => {
     if (isSuperAdmin(user)) return true;
     const mods = n.mods || (n.mod ? [n.mod] : []);
     if (mods.length) return canAny(user, mods);
     return (n.roles || []).includes(user?.role) || user?.role === "superadmin";
   };
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#F4F5F7]">
-      {/* Top Header for Mobile & Desktop */}
-      <header className="fixed top-0 left-0 lg:left-[240px] right-0 h-14 bg-white border-b border-[#E4E4E7] z-30 flex items-center justify-between px-3 lg:px-6 shadow-xs">
+      {/* Top Header */}
+      <header className={`fixed top-0 left-0 ${isCollapsed ? "lg:left-[72px]" : "lg:left-[240px]"} right-0 h-14 bg-white border-b border-[#E4E4E7] z-30 flex items-center justify-between px-3 lg:px-6 shadow-xs transition-all duration-200`}>
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             data-testid="sidebar-toggle"
@@ -522,32 +462,69 @@ export default function Layout({ children }) {
       </header>
 
       {sidebarOpen && <div data-testid="sidebar-backdrop" onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-40" />}
-      <aside className={`fixed lg:static z-50 h-full w-[240px] shrink-0 text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+
+      {/* SIDEBAR NAVIGATION (EXPANDABLE & COLLAPSIBLE) */}
+      <aside className={`fixed lg:static z-50 h-full ${isCollapsed ? "lg:w-[72px]" : "lg:w-[240px]"} w-[240px] shrink-0 text-white flex flex-col transition-all duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         style={{ backgroundImage: "linear-gradient(180deg, var(--gak-side1), var(--gak-side2) 55%, var(--gak-side3))" }}>
-        <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            {platform?.logo_url ? (
-              <img src={logoUrl(platform)} alt="logo" className="h-9 w-9 rounded-lg object-contain bg-white/95 p-0.5 shrink-0" />
-            ) : (
-              <div className="h-9 w-9 rounded-lg grid place-items-center font-heading font-extrabold shrink-0" style={{ backgroundColor: "var(--gak-p)" }}>
-                {(platform?.app_name || "G").trim().charAt(0).toUpperCase()}
+        
+        {/* BRAND & COLLAPSE TOGGLE HEADER */}
+        <div className={`px-4 py-4 border-b border-white/10 flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}>
+          {!isCollapsed && (
+            <div className="flex items-center gap-2.5 min-w-0">
+              {platform?.logo_url ? (
+                <img src={logoUrl(platform)} alt="logo" className="h-9 w-9 rounded-lg object-contain bg-white/95 p-0.5 shrink-0" />
+              ) : (
+                <div className="h-9 w-9 rounded-lg grid place-items-center font-heading font-extrabold shrink-0" style={{ backgroundColor: "var(--gak-p)" }}>
+                  {(platform?.app_name || "G").trim().charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="leading-tight overflow-hidden">
+                <div className="font-heading font-extrabold text-[15px] truncate">{platform?.app_name || "Grand Aceh Kuliner"}</div>
+                <div className="text-[11px] text-white/50 tracking-wide">{platform?.tagline || "KULINER POS"}</div>
               </div>
-            )}
-            <div className="leading-tight overflow-hidden">
-              <div className="font-heading font-extrabold text-[15px] truncate">{platform?.app_name || "Grand Aceh Kuliner"}</div>
-              <div className="text-[11px] text-white/50 tracking-wide">{platform?.tagline || "KULINER POS"}</div>
             </div>
-          </div>
-          <button data-testid="sidebar-close" onClick={() => setSidebarOpen(false)} className="lg:hidden h-9 w-9 rounded-lg bg-white/10 grid place-items-center"><X size={18} /></button>
+          )}
+
+          {isCollapsed && (
+            <button
+              data-testid="sidebar-logo-collapsed"
+              onClick={() => setIsCollapsed(false)}
+              title="Buka Menu"
+              className="h-9 w-9 rounded-lg grid place-items-center font-heading font-extrabold shrink-0 hover:bg-white/10 transition-colors"
+              style={{ backgroundColor: "var(--gak-p)" }}
+            >
+              {(platform?.app_name || "G").trim().charAt(0).toUpperCase()}
+            </button>
+          )}
+
+          {/* DESKTOP COLLAPSE BUTTON */}
+          <button
+            data-testid="collapse-toggle"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            title={isCollapsed ? "Buka Menu (Expand)" : "Sembunyikan Menu (Collapse)"}
+            className="hidden lg:grid h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 place-items-center text-white/80 hover:text-white transition-colors"
+          >
+            {isCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+
+          {/* MOBILE CLOSE BUTTON */}
+          <button
+            data-testid="sidebar-close"
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden h-9 w-9 rounded-lg bg-white/10 grid place-items-center"
+          >
+            <X size={18} />
+          </button>
         </div>
-        <OfflineStatus onOpenQueue={() => setQueueOpen(true)} />
-        <nav className="flex-1 overflow-y-auto no-scrollbar py-2.5 px-2.5 space-y-3">
+
+        <OfflineStatus onOpenQueue={() => setQueueOpen(true)} isCollapsed={isCollapsed} />
+
+        <nav className="flex-1 overflow-y-auto no-scrollbar py-2.5 px-2 space-y-3">
           {(() => {
             const filteredNav = orderNav(
               NAV_ITEMS.filter((n) => canNav(n) && !(n.to === "/asisten-ai" && !aiVisible)),
               ui
             );
-            // Group by section
             const sections = [];
             filteredNav.forEach((item) => {
               const secName = item.section || "Menu Utama";
@@ -561,17 +538,22 @@ export default function Layout({ children }) {
 
             return sections.map((sec, sIdx) => (
               <div key={sec.title || sIdx} className="space-y-1">
-                <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-white/40">
-                  {sec.title}
-                </div>
+                {!isCollapsed ? (
+                  <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-white/40">
+                    {sec.title}
+                  </div>
+                ) : (
+                  <div className="my-2 border-t border-white/10" />
+                )}
                 {sec.items.map((n) => (
                   <NavLink
                     key={n.to}
                     to={n.to}
                     data-testid={`nav-${n.to.slice(1)}`}
                     onClick={() => setSidebarOpen(false)}
+                    title={navLabel(n, ui)}
                     className={({ isActive }) =>
-                      `tap flex items-center gap-2.5 px-3 h-10 rounded-xl font-medium text-xs sm:text-sm transition-all ${
+                      `tap flex items-center ${isCollapsed ? "justify-center h-10 w-10 mx-auto" : "gap-2.5 px-3 h-10"} rounded-xl font-medium text-xs sm:text-sm transition-all ${
                         isActive
                           ? "text-white font-bold shadow-md shadow-black/25 ring-1 ring-white/20"
                           : "text-white/75 hover:bg-white/10 hover:text-white"
@@ -583,47 +565,80 @@ export default function Layout({ children }) {
                         : undefined
                     }
                   >
-                    <n.icon size={16} className="shrink-0" />
-                    <span className="truncate">{navLabel(n, ui)}</span>
+                    <n.icon size={18} className="shrink-0" />
+                    {!isCollapsed && <span className="truncate">{navLabel(n, ui)}</span>}
                   </NavLink>
                 ))}
               </div>
             ));
           })()}
         </nav>
+
+        {/* USER PROFILE & FOOTER */}
         <div className="p-3 border-t border-white/10">
-          <div className="flex items-center gap-2 px-2 py-2 mb-2">
-            <div className="h-8 w-8 rounded-full bg-white/10 grid place-items-center text-xs font-bold">
-              {user?.name?.[0]?.toUpperCase()}
-            </div>
-            <div className="leading-tight overflow-hidden">
-              <div className="text-sm font-semibold truncate">{user?.name}</div>
-              <div className="text-[11px] text-white/50 flex items-center gap-1">
-                {user?.role_base === "admin" && <ShieldCheck size={11} />}
-                {roleNameOf(user)}
+          {!isCollapsed ? (
+            <>
+              <div className="flex items-center gap-2 px-2 py-2 mb-2">
+                <div className="h-8 w-8 rounded-full bg-white/10 grid place-items-center text-xs font-bold shrink-0">
+                  {user?.name?.[0]?.toUpperCase()}
+                </div>
+                <div className="leading-tight overflow-hidden">
+                  <div className="text-sm font-semibold truncate">{user?.name}</div>
+                  <div className="text-[11px] text-white/50 flex items-center gap-1">
+                    {user?.role_base === "admin" && <ShieldCheck size={11} />}
+                    {roleNameOf(user)}
+                  </div>
+                </div>
               </div>
+              <button
+                data-testid="change-password-btn"
+                onClick={() => setPwOpen(true)}
+                className="tap w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold mb-2 transition-colors"
+              >
+                <KeyRound size={15} /> Ganti Password
+              </button>
+              <button
+                data-testid="logout-btn"
+                onClick={logout}
+                className="tap w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold transition-colors"
+              >
+                <LogOut size={15} /> Keluar
+              </button>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-1">
+              <div
+                className="h-9 w-9 rounded-full bg-white/10 grid place-items-center text-xs font-bold shrink-0"
+                title={`${user?.name} (${roleNameOf(user)})`}
+              >
+                {user?.name?.[0]?.toUpperCase()}
+              </div>
+              <button
+                data-testid="change-password-btn-collapsed"
+                onClick={() => setPwOpen(true)}
+                title="Ganti Password"
+                className="tap h-9 w-9 rounded-lg bg-white/10 hover:bg-white/20 grid place-items-center text-white/80 hover:text-white transition-colors"
+              >
+                <KeyRound size={15} />
+              </button>
+              <button
+                data-testid="logout-btn-collapsed"
+                onClick={logout}
+                title="Keluar / Logout"
+                className="tap h-9 w-9 rounded-lg bg-white/10 hover:bg-white/20 grid place-items-center text-white/80 hover:text-white transition-colors"
+              >
+                <LogOut size={15} />
+              </button>
             </div>
-          </div>
-          <button
-            data-testid="change-password-btn"
-            onClick={() => setPwOpen(true)}
-            className="tap w-full flex items-center justify-center gap-2 h-11 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-semibold mb-2"
-          >
-            <KeyRound size={16} /> Ganti Password
-          </button>
-          <button
-            data-testid="logout-btn"
-            onClick={logout}
-            className="tap w-full flex items-center justify-center gap-2 h-11 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-semibold"
-          >
-            <LogOut size={16} /> Keluar
-          </button>
+          )}
         </div>
       </aside>
+
       <main className="flex-1 overflow-hidden flex flex-col pt-14">
         <HeaderConnectionBanner onOpenQueue={() => setQueueOpen(true)} />
         <div className="flex-1 overflow-hidden">{children}</div>
       </main>
+
       <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
       <SyncQueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
       <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>

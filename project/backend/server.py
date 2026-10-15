@@ -5373,6 +5373,18 @@ async def _ai_cfg(feature="description"):
         "model": feat.get("model") or doc.get("openai_model") or OPENAI_COMPAT_MODEL,
     }
 
+def _normalize_openai_base_url(url: str) -> str:
+    """Normalize OpenAI-compatible / Hermes Gateway base URL to ensure clean /v1 endpoint without duplication."""
+    raw = (url or "").strip().rstrip("/")
+    if not raw:
+        return CHENZK_BASE_URL
+    while raw.endswith("/v1/v1"):
+        raw = raw[:-3]
+    if raw.endswith("/v1"):
+        return raw
+    return f"{raw}/v1"
+
+
 async def _ai_provider_cfg(feature="description"):
     """Resolve which provider ('gemini' | 'chenzk') to use for a feature and its creds."""
     doc = await db.settings.find_one({"_id": "ai"}) or {}
@@ -5386,19 +5398,18 @@ async def _ai_provider_cfg(feature="description"):
             provider = "gemini"
     if provider == "gemini":
         # Jangan biarkan base_url/model chenzk lama "bocor" ke jalur Gemini:
-        # model Gemini memakai default (GEMINI_TEXT_MODEL) bila field tidak diisi
-        # model Gemini; base_url chenzk TIDAK pernah dipakai utk Gemini.
         return {"provider": "gemini",
                 "api_key": feat.get("api_key") or GEMINI_API_KEY,
                 "model": (feat.get("model") if (feat.get("model") or "").lower().startswith(("gemini", "learnlm", "models/")) else "") or GEMINI_TEXT_MODEL}
+    raw_base = (feat.get("base_url") or doc.get("openai_base_url") or OPENAI_COMPAT_BASE_URL or CHENZK_BASE_URL)
     return {"provider": "chenzk",
-            "base_url": (feat.get("base_url") or doc.get("openai_base_url") or OPENAI_COMPAT_BASE_URL or CHENZK_BASE_URL),
+            "base_url": _normalize_openai_base_url(raw_base),
             "api_key": feat.get("api_key") or doc.get("openai_api_key") or OPENAI_COMPAT_API_KEY,
-            "model": feat.get("model") or doc.get("openai_model") or OPENAI_COMPAT_MODEL}
+            "model": feat.get("model") or doc.get("openai_model") or OPENAI_COMPAT_MODEL or "business-analyst"}
 
 async def _ai_chat(messages, system="", feature="description", temperature=0.5, max_tokens=4000, model=None):
     """Unified text chat across providers. `messages`=[{role:'user'|'assistant',content:str}].
-    Routes to Gemini REST (X-goog-api-key) or chenzk (OpenAI-compatible), else Emergent fallback."""
+    Routes to Gemini REST (X-goog-api-key) or chenzk/Hermes (OpenAI-compatible), else Emergent fallback."""
     if not await _ai_allowed(feature):
         label = FEATURE_LABELS.get(f"ai.{feature}") or feature
         raise HTTPException(400, f"Fitur '{label}' dimatikan. Nyalakan di Pengaturan → Fitur & Integrasi.")
@@ -5453,8 +5464,10 @@ async def _ai_chat(messages, system="", feature="description", temperature=0.5, 
                [{"role": ("assistant" if m.get("role") == "assistant" else "user"), "content": str(m.get("content", ""))} for m in messages]
 
         def run():
-            client = OpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"])
-            r = client.chat.completions.create(model=cfg["model"], messages=msgs,
+            base_url = _normalize_openai_base_url(cfg["base_url"])
+            model_id = cfg.get("model") or "business-analyst"
+            client = OpenAI(api_key=cfg["api_key"], base_url=base_url)
+            r = client.chat.completions.create(model=model_id, messages=msgs,
                                                temperature=temperature, max_tokens=max_tokens)
             msg = r.choices[0].message
             content = (msg.content or "").strip()
@@ -5737,19 +5750,59 @@ async def get_upload(fname: str):
         raise HTTPException(404, "File tidak ditemukan")
     return FileResponse(str(fp))
 
+def _get_latest_apk_info():
+    apk_dir = PROJECT_ROOT.parent / "apk"
+    if apk_dir.exists() and apk_dir.is_dir():
+        files = [f for f in apk_dir.iterdir() if f.name.endswith(".apk")]
+        if files:
+            files.sort(key=lambda x: x.name, reverse=True)
+            best = files[0]
+            v_match = re.search(r"v?(\d+\.\d+(?:\.\d+)?)", best.name, re.I)
+            ver = v_match.group(1) if v_match else "2.10"
+            return {
+                "path": best,
+                "filename": best.name,
+                "version": ver,
+                "download_url": f"/apk/{best.name}",
+                "size": best.stat().st_size
+            }
+    alt_path = PROJECT_ROOT / "frontend" / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+    if alt_path.exists():
+        return {
+            "path": alt_path,
+            "filename": "Grand-Aceh-Kuliner-POS-v2.10.apk",
+            "version": "2.10",
+            "download_url": "/apk/Grand-Aceh-Kuliner-POS-v2.10.apk",
+            "size": alt_path.stat().st_size
+        }
+    return {
+        "path": None,
+        "filename": "Grand-Aceh-Kuliner-POS-v2.10.apk",
+        "version": "2.10",
+        "download_url": "/apk/Grand-Aceh-Kuliner-POS-v2.10.apk",
+        "size": 0
+    }
+
+@api.get("/apk/latest")
+@api.get("/apk/info")
+async def get_latest_apk_endpoint():
+    info = _get_latest_apk_info()
+    return {
+        "version": info["version"],
+        "filename": info["filename"],
+        "download_url": info["download_url"],
+        "size": info["size"]
+    }
+
 @api.get("/installers/download")
 async def download_installer(key: str = Query(...)):
     if key == "apk_sunmi_t2":
-        apk_path = PROJECT_ROOT.parent / "apk" / "Grand-Aceh-Kuliner-POS-v2.10.apk"
-        if not apk_path.exists():
-            alt_path = PROJECT_ROOT / "frontend" / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
-            if alt_path.exists():
-                apk_path = alt_path
-            else:
-                raise HTTPException(status_code=404, detail="File APK tidak ditemukan di server.")
+        info = _get_latest_apk_info()
+        if not info["path"] or not info["path"].exists():
+            raise HTTPException(status_code=404, detail="File APK tidak ditemukan di server.")
         return FileResponse(
-            path=str(apk_path),
-            filename="Grand-Aceh-Kuliner-POS-v2.10.apk",
+            path=str(info["path"]),
+            filename=info["filename"],
             media_type="application/vnd.android.package-archive"
         )
     else:
@@ -6887,55 +6940,22 @@ async def _wacloud_request(method, path, **kw):
 
 async def _wa_send_text(to, text):
     cfg = await _wa_config()
-    prov = _wa_effective_provider(cfg)
 
-    if prov == "hermes":
-        # Bridge Baileys Hermes (khusus 644, localhost). Mengembalikan objek kecil
-        # yang meniru respons HTTP agar pemanggil lama tidak perlu diubah.
-        if not hermes_bridge:
-            raise HTTPException(503, "Integrasi WhatsApp Hermes tidak tersedia di node ini")
-        ok, info = await hermes_bridge.send_text(to, text)
-        if not ok:
-            raise HTTPException(502, str(info.get("error") or "bridge Hermes gagal"))
-        return _HermesResult(info)
+    if hermes_bridge:
+        h_cfg = hermes_bridge.bridge_config()
+        w_cfg = hermes_bridge.wacloud_config(cfg)
+        ok, info = await hermes_bridge.send_text_with_failover(to, text, hermes_cfg=h_cfg, wacloud_cfg=w_cfg)
+        if ok:
+            return _HermesResult(info)
+        raise HTTPException(502, str(info.get("error") or "Pengiriman WhatsApp gagal di semua gateway"))
 
-    if prov == "evolution":
-        import httpx
-        url = cfg.get("evolution_url") or "http://localhost:8080"
-        instance = cfg.get("evolution_instance") or "grand-aceh-pos"
-        api_key = cfg.get("evolution_api_key") or ""
-        
-        if not url:
-            raise HTTPException(400, "URL Evolution API belum diisi di Pengaturan")
-        
-        url = url.rstrip("/")
-        endpoint = f"{url}/message/sendText/{instance}"
-        headers = {
-            "apikey": api_key,
-            "Content-Type": "application/json"
-        }
-        normalized_num = _wa_normalize(to)
-        payload = {
-            "number": normalized_num,
-            "options": {
-                "delay": 500,
-                "presence": "composing"
-            },
-            "textMessage": {
-                "text": text
-            }
-        }
-        async with httpx.AsyncClient(timeout=30) as c:
-            r = await c.post(endpoint, headers=headers, json=payload)
-        return r
-    else:
-        device_id = cfg.get("device_id")
-        if not device_id:
-            raise HTTPException(400, "Device WhatsApp belum dipilih di Pengaturan")
-        return await _wacloud_request("POST", "/messages", json={
-            "device_id": device_id, "to": _wa_normalize(to),
-            "message_type": "text", "text": text,
-        })
+    device_id = cfg.get("device_id")
+    if not device_id:
+        raise HTTPException(400, "Device WhatsApp wacloud.id belum dipilih di Pengaturan")
+    return await _wacloud_request("POST", "/messages", json={
+        "device_id": device_id, "to": _wa_normalize(to),
+        "message_type": "text", "text": text,
+    })
 
 # ================================================================== TEMPLATE WHATSAPP (bisa diedit admin)
 # Semua pesan WA (laporan harian, laporan shift, bagi hasil vendor, belanja harian,
@@ -8181,10 +8201,142 @@ async def whatsapp_outbox(admin: dict = Depends(require_admin)):
     }
 
 
+# ================================================================== WHATSAPP LIVE CHAT & FAILOVER GATEWAY
+class WAChatSendIn(BaseModel):
+    text: str
+
+
+@api.get("/whatsapp/failover/status")
+async def whatsapp_failover_status(user: dict = Depends(get_current_user)):
+    """Status dua gateway: Hermes Primary dan wacloud.id Failover."""
+    cfg = await _wa_config()
+    h_status = await _hermes_status(include_secret_hint=False) if hermes_bridge else {}
+    w_cfg = hermes_bridge.wacloud_config(cfg) if hermes_bridge else {}
+    return {
+        "primary": {
+            "name": "Hermes Baileys (Store Server)",
+            "configured": h_status.get("state") != "unconfigured",
+            "status": h_status.get("status", "disconnected"),
+            "state": h_status.get("state", "unconfigured"),
+            "url": h_status.get("api_url", ""),
+            "bot": (h_status.get("details") or {}).get("bot", ""),
+        },
+        "failover": {
+            "name": "wacloud.id REST API",
+            "base_url": w_cfg.get("base_url") or WACLOUD_DEFAULT_BASE,
+            "configured": w_cfg.get("configured", False),
+            "auto_failover": w_cfg.get("auto_failover", True),
+            "has_api_key": bool(w_cfg.get("api_key")),
+            "device_id": w_cfg.get("device_id", ""),
+        },
+        "mode": "hermes_primary_wacloud_failover",
+    }
+
+
+@api.get("/whatsapp/chats")
+async def whatsapp_get_chats(
+    search: Optional[str] = None,
+    limit: int = 50,
+    user: dict = Depends(get_current_user)
+):
+    """Daftar percakapan WhatsApp untuk antarmuka Live Chat (WhatsApp Web style)."""
+    q = {}
+    if search:
+        s = search.strip()
+        q["$or"] = [
+            {"name": {"$regex": s, "$options": "i"}},
+            {"phone": {"$regex": s, "$options": "i"}},
+            {"last_message": {"$regex": s, "$options": "i"}},
+        ]
+    chats = await db.wa_chats.find(q, {"_id": 0}).sort("updated_at", -1).limit(limit).to_list(limit)
+    return {"chats": chats}
+
+
+@api.get("/whatsapp/chats/{phone}/messages")
+async def whatsapp_get_chat_messages(
+    phone: str,
+    limit: int = 100,
+    user: dict = Depends(get_current_user)
+):
+    """Pesan dalam 1 ruang percakapan WhatsApp. Tandai unread = 0."""
+    normalized = _wa_normalize(phone)
+    messages = await db.wa_messages.find({"chat_id": normalized}, {"_id": 0}).sort("created_at", 1).limit(limit).to_list(limit)
+    await db.wa_chats.update_one({"phone": normalized}, {"$set": {"unread_count": 0}})
+    return {"phone": normalized, "messages": messages}
+
+
+@api.post("/whatsapp/chats/{phone}/send")
+async def whatsapp_send_chat_message(
+    phone: str,
+    body: WAChatSendIn,
+    user: dict = Depends(get_current_user)
+):
+    """Kirim pesan langsung dari antarmuka Live Chat POS."""
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(400, "Isi pesan tidak boleh kosong")
+
+    normalized = _wa_normalize(phone)
+    now = wib_now().isoformat()
+
+    try:
+        res = await _wa_send_text(normalized, text)
+        msg_id = getattr(res, "_body", {}).get("key", {}).get("id") or f"msg_{int(time.time()*1000)}"
+        provider_used = "hermes"
+    except Exception as e:
+        logger.warning(f"Gagal mengirim pesan live chat ke {normalized}: {e}")
+        msg_id = f"out_{int(time.time()*1000)}"
+        await hermes_bridge.enqueue(db, normalized, text, kind="live_chat", wa_id=msg_id) if hermes_bridge else None
+        provider_used = "outbox_queued"
+
+    msg_obj = {
+        "id": msg_id,
+        "chat_id": normalized,
+        "sender": "kasir",
+        "sender_name": user.get("name") or user.get("username") or "Kasir",
+        "direction": "outbound",
+        "text": text,
+        "status": "sent" if provider_used != "outbox_queued" else "queued",
+        "provider": provider_used,
+        "created_at": now,
+    }
+
+    await db.wa_messages.update_one({"id": msg_id}, {"$set": msg_obj}, upsert=True)
+    await db.wa_chats.update_one(
+        {"phone": normalized},
+        {
+            "$set": {
+                "phone": normalized,
+                "name": normalized,
+                "last_message": text,
+                "updated_at": now,
+            },
+            "$setOnInsert": {"unread_count": 0, "created_at": now},
+        },
+        upsert=True,
+    )
+
+    return {"ok": True, "message": msg_obj}
+
+
 @api.post("/whatsapp/outbox/dispatch")
 async def whatsapp_outbox_dispatch(admin: dict = Depends(require_admin)):
     """Kirim ulang outbox. Di node tanpa bridge (Pi) hasilnya nol — memang begitu."""
     return await dispatch_wa_outbox()
+
+
+@api.post("/whatsapp/outbox/sync-upstream")
+async def whatsapp_outbox_sync_upstream(admin: dict = Depends(require_admin)):
+    """Paksa jalankan sinkronisasi outbox beda server (Pi -> Google Cloud) secara manual."""
+    if not hermes_bridge:
+        raise HTTPException(503, "Modul integrasi WA tidak tersedia")
+    upstream_url = os.environ.get("WA_OUTBOX_UPSTREAM_URL") or ""
+    sync_token = os.environ.get("WA_OUTBOX_SYNC_TOKEN") or ""
+    if not upstream_url or not sync_token:
+        stats = await dispatch_wa_outbox()
+        return {"ok": True, "mode": "local_dispatch", **stats}
+    stats = await hermes_bridge.push_outbox_upstream(db, upstream_url, sync_token, limit=50)
+    return {"ok": True, "mode": "upstream_sync", "upstream_url": upstream_url, **stats}
 
 @api.post("/whatsapp/test")
 async def whatsapp_test(body: WATestIn, admin: dict = Depends(require_admin)):
@@ -8393,6 +8545,39 @@ async def _process_whatsapp_webhook(payload: dict):
     if any(bk in body_lower for bk in bot_keywords):
         logger.info("Mengabaikan pesan yang mengandung tanda/balasan bot.")
         return
+
+    # Catat pesan masuk untuk antarmuka Live Chat (WhatsApp Web style)
+    try:
+        normalized_sender = _wa_normalize(sender)
+        now_iso = wib_now().isoformat()
+        import hashlib as _hl
+        msg_id = f"in_{int(time.time()*1000)}_{_hl.sha256(f'{sender}|{body_str}|{now_iso}'.encode()).hexdigest()[:8]}"
+        msg_doc = {
+            "id": msg_id,
+            "chat_id": normalized_sender,
+            "sender": "pelanggan",
+            "sender_name": normalized_sender,
+            "direction": "inbound",
+            "text": body_str,
+            "status": "delivered",
+            "created_at": now_iso,
+        }
+        await db.wa_messages.update_one({"id": msg_id}, {"$set": msg_doc}, upsert=True)
+        await db.wa_chats.update_one(
+            {"phone": normalized_sender},
+            {
+                "$set": {
+                    "phone": normalized_sender,
+                    "name": normalized_sender,
+                    "last_message": body_str,
+                    "updated_at": now_iso,
+                },
+                "$inc": {"unread_count": 1},
+            },
+            upsert=True,
+        )
+    except Exception as e:
+        logger.warning("gagal menyimpan pesan masuk ke wa_chats/wa_messages: %s", type(e).__name__)
 
     # ---- Perintah dua arah (allowlist per-role) ------------------------------
     # Dijalankan SEBELUM alur reservasi supaya perintah seperti /stok tidak

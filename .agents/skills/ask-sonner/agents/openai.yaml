@@ -1,0 +1,6 @@
+interface:
+  display_name: "Sonner Toasts"
+  short_description: "Implement and debug Sonner notifications"
+  default_prompt: "Use $ask-sonner to implement or troubleshoot this toast behavior."
+policy:
+  allow_implicit_invocation: true

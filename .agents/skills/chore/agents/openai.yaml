@@ -1,0 +1,8 @@
+interface:
+  display_name: "Chore"
+  short_description: "Perform scoped behavior-preserving maintenance."
+  default_prompt: "Use $chore to plan, perform, and verify this maintenance change."
+
+policy:
+  allow_implicit_invocation: false
+

@@ -1,0 +1,88 @@
+{
+  "formatVersion": "1.0",
+  "packageDirectory": ".planora",
+  "project": {
+    "id": "grand-aceh-kuliner-pos",
+    "name": "Grand Aceh Kuliner POS",
+    "locale": "id-ID"
+  },
+  "generatedDate": "2026-10-13",
+  "guideType": "hybrid",
+  "status": "ready",
+  "sourceVersions": {
+    "prd": "1.0",
+    "uiGuide": "1.0",
+    "dxGuide": "1.0",
+    "executionPlan": "1.0"
+  },
+  "artifacts": {
+    "prd": {
+      "directory": "PRD",
+      "entry": "PRD/README.md",
+      "sourceVersion": "1.0",
+      "status": "ready"
+    },
+    "uiGuide": {
+      "directory": "UI",
+      "entry": "UI/README.md",
+      "sourceVersion": "1.0",
+      "status": "ready"
+    },
+    "dxGuide": {
+      "directory": "DX",
+      "entry": "DX/README.md",
+      "sourceVersion": "1.0",
+      "status": "ready"
+    },
+    "executionPlan": {
+      "directory": "EXECUTION",
+      "entry": "EXECUTION/README.md",
+      "sourceVersion": "1.0",
+      "status": "ready"
+    }
+  },
+  "files": [
+    "manifest.json",
+    "DX/README.md",
+    "DX/api-ergonomics.md",
+    "DX/authentication-experience.md",
+    "DX/compatibility-and-versioning.md",
+    "DX/documentation-standards.md",
+    "DX/errors-and-recovery.md",
+    "DX/experience-principles.md",
+    "DX/observability-and-support.md",
+    "DX/quickstart.md",
+    "DX/sandbox-and-testing.md",
+    "DX/sdk-and-cli-guidelines.md",
+    "EXECUTION/README.md",
+    "EXECUTION/TODO.md",
+    "EXECUTION/feature-order.md",
+    "EXECUTION/phases/phase-00-decisions.md",
+    "EXECUTION/phases/phase-01-core-pos.md",
+    "EXECUTION/release-readiness.md",
+    "PRD/PRD.md",
+    "PRD/README.md",
+    "PRD/asumsi-dan-pertanyaan.md",
+    "PRD/fitur/hardware-sunmi.md",
+    "PRD/fitur/pos-kasir.md",
+    "PRD/fitur/titipan-vendor.md",
+    "PRD/metrik-keberhasilan.md",
+    "PRD/model-data.md",
+    "PRD/non-functional-requirements.md",
+    "PRD/roadmap.md",
+    "README.md",
+    "UI/README.md",
+    "UI/accessibility.md",
+    "UI/components/README.md",
+    "UI/components/tombol-input.md",
+    "UI/content-guidelines.md",
+    "UI/design-direction.md",
+    "UI/foundations/README.md",
+    "UI/foundations/warna-tipografi.md",
+    "UI/patterns/README.md",
+    "UI/patterns/dialog-bayar.md",
+    "UI/screens/pos-kasir.md",
+    "UI/screens/screen-inventory.md"
+  ],
+  "openBlockers": []
+}

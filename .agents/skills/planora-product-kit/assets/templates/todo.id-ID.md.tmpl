@@ -1,0 +1,40 @@
+# TODO Eksekusi — {{PROJECT_NAME}}
+
+Dokumen ini adalah ledger hidup untuk pelaksanaan bertahap. Perbarui pada saat pekerjaan dimulai, diblokir, dan selesai.
+
+## Legenda status
+
+- `pending` — belum dimulai
+- `in_progress` — sedang dikerjakan
+- `blocked` — tidak dapat dilanjutkan sampai blocker terselesaikan
+- `done` — selesai dan telah diverifikasi
+- `skipped` — sengaja tidak dikerjakan dengan alasan tercatat
+
+## Checklist eksekusi
+
+__PLANORA_REQUIRED__
+
+Gunakan format berikut untuk setiap item:
+
+```text
+- [ ] `<TASK-ID>` — Nama pekerjaan
+  - Status: `pending`
+  - Workflow: `feature`, `bug`, atau `chore`
+  - Skill pendukung: none atau nama skill seperti `e2e-tester`
+  - Fase: `phase-01`
+  - Requirements: `<REQUIREMENT-ID>`
+  - Pengalaman: `UI/screens/example.md` atau `DX/quickstart.md`
+  - Dependensi: none atau ID tugas
+  - Validasi: pemeriksaan yang wajib lulus
+  - Bukti: pending
+```
+
+Gunakan awalan `TASK-`, `BUG-`, atau `CHG-`. Checkbox hanya `[x]` ketika status `done`. Setiap item wajib mencantumkan workflow eksekusi, referensi requirement PRD, fase, dependensi, status, validasi, dan bukti.
+
+## Blocker aktif
+
+__PLANORA_REQUIRED__
+
+## Catatan keputusan
+
+__PLANORA_REQUIRED__

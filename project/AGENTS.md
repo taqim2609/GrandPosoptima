@@ -181,6 +181,12 @@ Salin berkas APK hasil rakitan tersebut ke direktori unduhan static aplikasi aga
 ```bash
 cp android/app/build/outputs/apk/debug/app-debug.apk public/apk/Grand-Aceh-Kuliner-POS-v2.10.apk
 ```
-Sesuaikan penomoran versi di `version.json` agar pembaruan terdeteksi secara otomatis.
-
 ---
+
+### 5. PEMELIHARAAN INDEKS KATALOG BERKAS (INDEX-BERKAS.md)
+
+Setiap kali ada penambahan atau perubahan berkas pada proyek:
+```bash
+python3 scripts/update_file_index.py
+```
+Perintah ini otomatis memperbarui berkas `INDEX-BERKAS.md` agar seluruh berkas terindeks lengkap menurut modul dan fungsinya.

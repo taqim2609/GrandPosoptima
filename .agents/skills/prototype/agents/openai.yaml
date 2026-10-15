@@ -1,0 +1,6 @@
+interface:
+  display_name: "UI Prototype"
+  short_description: "Compare UI directions before implementation"
+  default_prompt: "Use $prototype to create alternatives for this unresolved UI decision."
+policy:
+  allow_implicit_invocation: false

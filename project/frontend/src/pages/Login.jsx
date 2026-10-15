@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import api, { apiError, getServerUrl, setServerUrl, discoverServer } from "@/lib/api";
 import { toast } from "sonner";
 import { Loader2, Lock, Mail, Server, Radar, Download, Globe, Smartphone, Bug, KeyRound, Shield, Delete, UserCheck, Sparkles } from "lucide-react";
-import { collectVersions } from "@/lib/versions";
+import { collectVersions, APK_VERSION, APK_FILENAME, APK_DOWNLOAD_URL } from "@/lib/versions";
 import { usePlatform, logoUrl, brandTitle } from "@/lib/platform";
 import { isSuperAdmin } from "@/lib/rbac";
 import LoginServerSelector from "@/components/LoginServerSelector";
@@ -655,12 +655,13 @@ export default function Login() {
             {/* Baris 2: Unduh Aplikasi | Koneksi via Tailscale */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               <a
-                href="/apk/Grand-Aceh-Kuliner-POS-v2.9.apk"
-                download
+                href={version?.latestApk?.url || APK_DOWNLOAD_URL}
+                download={version?.latestApk?.filename || APK_FILENAME}
                 target="_blank" rel="noopener noreferrer" data-testid="download-app-btn"
                 className="tap h-11 rounded-xl border-2 border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight hover:bg-[#0A0A0A] hover:text-white transition-colors"
+                title={`Unduh file instalasi APK Android versi ${version?.latestApk?.version || APK_VERSION}`}
               >
-                <Download size={15} /> Unduh APK Android
+                <Download size={15} /> Unduh APK v{version?.latestApk?.version || APK_VERSION}
               </a>
               <button
                 type="button" data-testid="tailscale-toggle" onClick={() => setShowTs((v) => !v)}

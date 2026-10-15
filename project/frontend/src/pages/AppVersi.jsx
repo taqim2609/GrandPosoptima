@@ -57,11 +57,11 @@ export default function AppVersi() {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <a href="/api/installers/download?key=apk_sunmi_t2" download="Grand-Aceh-Kuliner-POS-v2.10.apk" className="block">
+            <a href="/api/installers/download?key=apk_sunmi_t2" download={v?.latestApk?.filename || `Grand-Aceh-Kuliner-POS-v${APK_VERSION}.apk`} className="block">
               <div className="p-3.5 rounded-xl border border-[#E63946]/30 bg-[#FEF2F2] hover:bg-[#FEE2E2] transition flex items-center justify-between">
                 <div>
                   <div className="font-bold text-sm text-[#0A0A0A]">APK Native Sunmi T2</div>
-                  <div className="text-xs text-[#52525B]">Versi {APK_VERSION} (Android 7.0+)</div>
+                  <div className="text-xs text-[#52525B]">Versi {v?.latestApk?.version || APK_VERSION} (Android 7.0+)</div>
                 </div>
                 <Download size={18} className="text-[#E63946]" />
               </div>

@@ -3,6 +3,8 @@ import { getServerUrl } from "./api";
 
 // Wajib sinkron dengan android/app/build.gradle (versionName) setiap kali rebuild APK.
 export const APK_VERSION = "2.10";
+export const APK_FILENAME = `Grand-Aceh-Kuliner-POS-v${APK_VERSION}.apk`;
+export const APK_DOWNLOAD_URL = `/apk/${APK_FILENAME}`;
 
 export function isNativeApp() {
   try {
@@ -48,9 +50,33 @@ export async function collectVersions() {
       latestVersion = j.latest || "";
     }
   } catch (_) {}
+
+  // Deteksi rilis installer APK Android terbaru dari server
+  let latestApk = {
+    version: APK_VERSION,
+    filename: APK_FILENAME,
+    url: APK_DOWNLOAD_URL,
+  };
+  try {
+    const srv = getServerUrl();
+    const u = srv ? `${srv}/api/apk/latest` : "/api/apk/latest";
+    const r = await fetch(u, { cache: "no-store" });
+    if (r.ok) {
+      const j = await r.json();
+      if (j && j.version) {
+        latestApk = {
+          version: j.version,
+          filename: j.filename || `Grand-Aceh-Kuliner-POS-v${j.version}.apk`,
+          url: j.download_url || `/apk/${j.filename}`,
+        };
+      }
+    }
+  } catch (_) {}
+
   return {
     native,
     apk: native ? APK_VERSION : null,
+    latestApk,
     bundle: getBundleVersion(),
     otaInstalled,
     otaServer,

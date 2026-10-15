@@ -1,0 +1,8 @@
+interface:
+  display_name: "Bug"
+  short_description: "Diagnose, repair, and verify an application defect."
+  default_prompt: "Use $bug to reproduce, repair, and verify this defect."
+
+policy:
+  allow_implicit_invocation: false
+

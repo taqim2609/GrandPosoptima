@@ -1,10 +1,8 @@
-import { lazy } from "react";
 import SubTabs from "@/components/SubTabs";
 import { MessageSquare, Clock, FileText } from "lucide-react";
-
-const WhatsApp = lazy(() => import("@/pages/WhatsApp"));
-const SettingsReport = lazy(() => import("@/pages/SettingsReport"));
-const SettingsWATemplates = lazy(() => import("@/pages/SettingsWATemplates"));
+import WhatsApp from "@/pages/WhatsApp";
+import SettingsReport from "@/pages/SettingsReport";
+import SettingsWATemplates from "@/pages/SettingsWATemplates";
 
 export default function WhatsAppReport() {
   return (

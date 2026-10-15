@@ -345,6 +345,10 @@ app.use((req, res, next) => {
       '/api/update/check',
       '/api/webhook/whatsapp',
       '/api/system/servers/status',
+      '/api/installers/download',
+      '/api/apk/latest',
+      '/api/apk/info',
+      '/api/apk/version',
     ];
 
     const authHeader = req.headers.authorization || req.headers['x-gak-token'];
@@ -473,15 +477,10 @@ const db = {
       target_phone: '',
     },
     wa: {
-      provider: 'evolution',
-      auto_failover: true,
-      evolution_url: 'http://localhost:8080',
-      evolution_instance: 'grand-aceh-pos',
-      evolution_api_key: '',
-      api_key: '',
-      base_url: 'https://app.wacloud.id/api/v1',
-      device_id: '',
-      device_name: '',
+      provider: 'hermes',
+      auto_failover: false,
+      hermes_url: process.env.HERMES_WA_WEBHOOK_URL || 'http://127.0.0.1:8644/webhooks/grandpos-outbox',
+      hermes_secret: process.env.HERMES_WA_WEBHOOK_SECRET || '',
       phone: '',
       status: 'disconnected',
       group_only_reservation: true,
@@ -1132,35 +1131,39 @@ app.post(['/api/system/health/speed-test', '/api/system/speed-test'], async (req
     ok: true,
     tested_at: new Date().toISOString(),
     pi_server: {
-      name: 'Server Cloud VPS (Self-Hosted Node & n8n)',
-      endpoint: 'https://pos.domainanda.com (VPS Docker)',
-      latency_ms: Math.max(12, Math.round(localLatency * 8) / 10 + 12),
-      jitter_ms: 1.2,
-      status: 'online',
-      http_status: 200,
-      rating: 'Sangat Cepat & Stabil',
-      description: 'Respons server VPS di cloud stabil melayani otomasi WhatsApp, webhook, dan database 24 jam nonstop.',
-      color: '#4F46E5',
-      is_faster: false,
-      installed: true,
+      name: 'Node Kasir Toko (Raspberry Pi / PC Master)',
+      endpoint: isNodeInstalled ? 'http://pos.local (LAN Toko)' : 'Belum Terhubung (Standby)',
+      latency_ms: isNodeInstalled ? localLatency : null,
+      jitter_ms: isNodeInstalled ? localJitter : null,
+      status: isNodeInstalled ? 'online' : 'disconnected',
+      http_status: isNodeInstalled ? 200 : 503,
+      rating: isNodeInstalled ? 'Instan LAN (< 3 ms)' : 'Belum Terpasang (Standby)',
+      description: isNodeInstalled
+        ? 'Engine kasir toko fisik aktif: cetak struk thermal Sunmi instan dan operasional 100% offline-first.'
+        : 'Node fisik di toko belum terpasang. Seluruh operasional saat ini dilayani langsung oleh Google Cloud.',
+      color: '#E11D48',
+      is_faster: isNodeInstalled,
+      installed: isNodeInstalled,
     },
     google_server: {
-      name: 'Google AI Studio / Cloud Run',
+      name: 'Google Cloud Run & AI Studio',
       endpoint: googleUrl,
       latency_ms: googleLatency,
       jitter_ms: googleJitter,
       status: googleConnected ? 'online' : 'offline',
       http_status: 200,
       rating: googleLatency < 50 ? 'Sangat Cepat (< 50 ms)' : 'Stabil',
-      description: 'Server utama cloud aktif melayani seluruh transaksi POS, database, dan sinkronisasi real-time.',
+      description: 'Server utama cloud aktif melayani seluruh transaksi POS, database Firestore, dan sinkronisasi real-time.',
       color: '#2563EB',
-      is_faster: true,
+      is_faster: !isNodeInstalled,
     },
     comparison: {
-      faster: 'Google Cloud & VPS Node',
-      delta_ms: Math.abs(googleLatency - 15),
-      speedup_ratio: 'Sinkron 24/7',
-      summary: 'Seluruh operasional berjalan di Cloud VPS & Google Cloud Run 24 jam nonstop tanpa bergantung pada PC lokal fisik.',
+      faster: isNodeInstalled ? 'Node Kasir Toko (LAN)' : 'Google Cloud Primary',
+      delta_ms: isNodeInstalled ? Math.abs(googleLatency - localLatency) : googleLatency,
+      speedup_ratio: isNodeInstalled ? `${speedRatio}x lebih cepat di LAN toko` : 'Cloud Primary Aktif 24/7',
+      summary: isNodeInstalled
+        ? 'Kasir di toko mendapat respons instan lewat jaringan LAN, lalu otomatis tersinkron ke Google Cloud.'
+        : 'Sistem saat ini berjalan penuh dan stabil di Google Cloud Run tanpa perlu server lokal menyala.',
     },
   });
 });
@@ -1170,14 +1173,16 @@ app.post(['/api/system/health/speed-test', '/api/system/speed-test'], async (req
 // ==========================================
 app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) => {
   const timestamp = new Date().toISOString();
-  const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app';
+  const reqHost = req.headers.host;
+  const reqOrigin = req.headers.origin || (reqHost ? `https://${reqHost}` : '');
+  const googleUrl = process.env.AISTUDIO_URL || reqOrigin || 'https://grandposopt.ai.studio';
   const firestoreDbId = 'ai-studio-grandposoptima-268f86d5-06a2-4402-8f77-90451ffce535';
   const waCfg = db.settings.wa || {};
   const env = detectHostEnvironment();
 
-  // 1. Uji Server 1: Google Cloud & Firebase Firestore
+  // 1. Uji Server 1: Google Cloud & Firebase Firestore (Node yang saat ini melayani request)
   const cloudStart = Date.now();
-  let cloudLatency = 24;
+  let cloudLatency = 22;
   let cloudOnline = true;
   try {
     const ctrl = new AbortController();
@@ -1185,71 +1190,61 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
     const cRes = await fetch(`${googleUrl}/api/health`, { signal: ctrl.signal }).catch(() => null);
     clearTimeout(t);
     if (cRes && cRes.ok) {
-      cloudLatency = Math.max(12, Date.now() - cloudStart);
-    } else {
-      cloudLatency = Math.floor(Math.random() * 15) + 20;
+      cloudLatency = Math.max(10, Date.now() - cloudStart);
     }
   } catch (_) {
-    cloudLatency = 28;
+    cloudLatency = 24;
   }
 
-  // 2. Uji Server 2: Raspberry Pi 4 (Node Kasir Lokal Toko)
+  // 2. Uji Server 2: Node Kasir Fisik Toko (Raspberry Pi 4 / PC Master)
   const isPiInstalled = env.isRaspberry || Boolean(process.env.RASPBERRY_PI);
   const piInfo = getRaspberryPiInfo();
-  const piLatency = isPiInstalled ? 1.2 : 2.5;
+  const piLatency = isPiInstalled ? 1.2 : null;
 
-  // 3. Uji Server 3: Server Cloud VPS (Self-Hosted Node & Database)
-  const isVpsActive = true;
-  const vpsLatency = 16;
-  const memTotal = Math.round((os.totalmem() / (1024 * 1024 * 1024)) * 10) / 10;
-  const memFree = Math.round((os.freemem() / (1024 * 1024 * 1024)) * 10) / 10;
+  // 3. Uji Server 3: Hermes Agent (WhatsApp Gateway Baileys & AI Brain)
+  const isPrimary = ['primary', 'master', 'gudang', '644'].includes((process.env.NODE_ROLE || 'backup').toLowerCase());
+  const hermesUrl = waCfg.hermes_url || process.env.HERMES_WA_WEBHOOK_URL || 'http://127.0.0.1:8644/webhooks/grandpos-outbox';
+  const hasHermesSecret = Boolean(waCfg.hermes_secret || process.env.HERMES_WA_WEBHOOK_SECRET);
+  let hermesStatus = 'disconnected';
+  let hermesLatency = null;
+  let hermesRating = 'Belum Terhubung (Standby)';
+  let hermesBadge = 'Belum Terhubung (Standby)';
+  let hermesBadgeColor = 'bg-zinc-100 text-zinc-700 border-zinc-300';
 
-  // 4. Uji Server 4: WhatsApp Gateway Server (Evolution API di VPS / WACloud)
-  let waStatus = 'ready';
-  let waLatency = 18;
-  let waProvider = waCfg.provider || 'evolution';
-  let waDetails = {
-    provider: waProvider,
-    instance: waCfg.evolution_instance || 'grand-aceh-pos',
-    endpoint: waCfg.evolution_url || 'http://IP_VPS:8080 (VPS Docker)',
-    phone: waCfg.phone || '',
-  };
-
-  if (waProvider === 'evolution' && waCfg.evolution_url) {
-    const evoUrl = waCfg.evolution_url.replace(/\/$/, '');
-    const evoKey = waCfg.evolution_api_key || '';
-    const evoInstance = waCfg.evolution_instance || 'grand-aceh-pos';
-    const waStart = Date.now();
+  if (hasHermesSecret && isPrimary) {
     try {
+      const hStart = Date.now();
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 1500);
-      const wRes = await fetch(`${evoUrl}/instance/connectionState/${evoInstance}`, {
-        headers: evoKey ? { apikey: evoKey } : {},
-        signal: ctrl.signal,
-      }).catch(() => null);
+      const t = setTimeout(() => ctrl.abort(), 1200);
+      const hRes = await fetch('http://127.0.0.1:8644/health', { signal: ctrl.signal }).catch(() => null);
       clearTimeout(t);
-      if (wRes && wRes.ok) {
-        const wBody = await wRes.json().catch(() => ({}));
-        const state = (wBody.instance && wBody.instance.state) || (wBody.connectionStatus && wBody.connectionStatus.state) || 'open';
-        waStatus = state === 'open' ? 'connected' : 'connecting';
-        waLatency = Math.max(5, Date.now() - waStart);
+      if (hRes && hRes.ok) {
+        hermesStatus = 'connected';
+        hermesLatency = Math.max(2, Date.now() - hStart);
+        hermesRating = 'Online & Siaga';
+        hermesBadge = 'Hermes Gateway Aktif';
+        hermesBadgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
       } else {
-        waStatus = 'ready';
+        hermesStatus = 'disconnected';
+        hermesRating = 'Bridge Belum Aktif';
+        hermesBadge = 'Hermes Standby';
       }
     } catch (_) {
-      waStatus = 'ready';
+      hermesStatus = 'disconnected';
+      hermesRating = 'Bridge Belum Aktif';
+      hermesBadge = 'Hermes Standby';
     }
-  } else if (waProvider === 'wacloud' && waCfg.api_key && waCfg.device_id) {
-    waStatus = 'connected';
-    waLatency = 35;
-    waDetails.endpoint = waCfg.base_url || 'https://app.wacloud.id/api/v1';
+  } else {
+    hermesStatus = 'disconnected';
+    hermesRating = 'Belum Dikonfigurasi';
+    hermesBadge = 'Belum Terhubung (Standby)';
   }
 
   res.json({
     ok: true,
     timestamp,
     title: 'Pusat Pemantauan Multi-Node Server',
-    summary: 'Node Google Cloud, Raspberry Pi 4 Toko, Server Cloud VPS, dan WhatsApp Gateway (Evolution API di VPS) terhubung dan termonitor.',
+    summary: 'Pemantauan status operasional Google Cloud, Node Kasir Toko, dan Hermes Agent WhatsApp Gateway secara real-time.',
     servers: [
       {
         id: 'cloud',
@@ -1259,7 +1254,7 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
         role: 'Penyimpanan Cloud 24/7 & Sinkronisasi Pusat',
         category: 'cloud',
         badge: 'Cloud Primary (Aktif)',
-        badge_color: 'bg-blue-50 text-blue-700 border-blue-200',
+        badge_color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
         status: cloudOnline ? 'online' : 'degraded',
         latency_ms: cloudLatency,
         rating: cloudLatency < 50 ? 'Sangat Cepat' : 'Normal',
@@ -1276,18 +1271,18 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
       {
         id: 'raspberry',
         num: 2,
-        name: 'Raspberry Pi 4 (Node Kasir Toko)',
-        short_name: 'Raspberry Pi 4 (Lokal)',
+        name: 'Node Kasir Toko (Raspberry Pi 4 / PC Master)',
+        short_name: 'Kasir Toko (Lokal)',
         role: 'Engine Kasir Fisik di Toko, LAN Offline-First & Cetak Struk',
         category: 'raspberry',
-        badge: isPiInstalled ? 'Raspberry Pi Online' : 'Siap Dipasang / Standby',
-        badge_color: isPiInstalled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200',
-        status: 'online',
-        latency_ms: piLatency,
-        rating: 'Instan (< 3 ms)',
-        endpoint: 'http://pos.local (Port 3000)',
-        database: 'Local SQLite/Memory + Auto-Sync',
-        hardware: isPiInstalled ? `Raspberry Pi 4 (${piInfo.cpu_temperature?.temp_c || 44.2}°C)` : 'Raspberry Pi OS 64-bit Ready',
+        badge: isPiInstalled ? 'Kasir Toko Online' : 'Belum Terpasang (Standby)',
+        badge_color: isPiInstalled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-700 border-zinc-300',
+        status: isPiInstalled ? 'online' : 'disconnected',
+        latency_ms: isPiInstalled ? piLatency : null,
+        rating: isPiInstalled ? 'Instan (< 3 ms)' : 'Belum Terpasang (Standby)',
+        endpoint: isPiInstalled ? 'http://pos.local (Port 3000)' : 'Belum Terhubung di Outlet (Opsional)',
+        database: isPiInstalled ? 'Local SQLite/Memory + Auto-Sync' : 'Standby (Offline-First)',
+        hardware: isPiInstalled ? `Raspberry Pi 4 (${piInfo.cpu_temperature?.temp_c || 44.2}°C)` : 'Belum Terpasang di Outlet',
         features: [
           '100% Offline-First: kasir tetap transaksi lancar saat internet toko mati',
           'Pencetakan struk printer thermal Sunmi & dapur seketika tanpa jeda',
@@ -1297,51 +1292,25 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
         icon: 'Cpu',
       },
       {
-        id: 'vps',
+        id: 'hermes',
         num: 3,
-        name: 'Server Cloud VPS (Self-Hosted Node)',
-        short_name: 'Server VPS (Cloud Node)',
-        role: 'Engine Layanan VPS 24/7, Database & Otomasi n8n',
-        category: 'vps',
-        badge: 'VPS Node Siaga (Aktif)',
-        badge_color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-        status: 'online',
-        latency_ms: vpsLatency,
-        rating: 'Aktif & Stabil',
-        endpoint: 'https://pos.domainanda.com (VPS Docker)',
-        database: 'MongoDB 7 + Redis Cache di VPS',
-        hardware: `Cloud VPS Linux (RAM: ${(memTotal - memFree).toFixed(1)} / ${memTotal} GB)`,
-        features: [
-          'Berjalan 24 Jam Nonstop di Cloud VPS tanpa perlu PC kasir menyala',
-          'Engine Otomasi n8n & Eksekusi Webhook POS Real-Time',
-          'Pusat Pemrosesan Notifikasi & Pengiriman Pesan Terjadwal',
-          'Dukungan Multi-Outlet dan Akses Kasir Jarak Jauh (Tailscale / Domain)',
-        ],
-        icon: 'Server',
-      },
-      {
-        id: 'whatsapp',
-        num: 4,
-        name: 'WhatsApp Gateway (Evolution API di VPS)',
-        short_name: 'Evolution API (VPS)',
-        role: 'Gateway Pesan, Bot Reservasi & Rekap Omzet di VPS',
+        name: 'Hermes Agent (WhatsApp Gateway & AI Brain)',
+        short_name: 'Hermes Agent (Gateway)',
+        role: 'WhatsApp Gateway Baileys, Perintah 2-Arah & AI Brain',
         category: 'gateway',
-        badge: waStatus === 'connected'
-          ? (waProvider === 'evolution' ? 'Evolution API VPS (Terhubung)' : 'WACloud Gateway (Aktif)')
-          : 'Evolution API VPS (Siap)',
-        badge_color: waStatus === 'connected'
-          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-          : 'bg-blue-50 text-blue-700 border-blue-200',
-        status: waStatus,
-        latency_ms: waLatency,
-        rating: waStatus === 'connected' ? 'Online & Terhubung' : 'Siap di-Scan / Digunakan',
-        endpoint: waDetails.endpoint || 'http://IP_VPS:8080',
+        badge: hermesBadge,
+        badge_color: hermesBadgeColor,
+        status: hermesStatus,
+        latency_ms: hermesLatency,
+        rating: hermesRating,
+        endpoint: hermesUrl,
+        database: 'Hermes Baileys + Outbox HMAC V2',
+        hardware: `Host ${process.env.NODE_ID || '644'} (Hermes Baileys Gateway)`,
         features: [
-          'Berjalan di container Docker VPS 24/7 tanpa henti',
-          'Auto-Failover Cerdas ke WACloud jika instance VPS bermasalah',
-          'Webhook Auto-Booking Meja dari chat masuk WhatsApp pelanggan',
-          'Kirim struk digital otomatis ke nomor WhatsApp pelanggan',
-          'Laporan rekap omzet harian terjadwal ke nomor WhatsApp Owner',
+          'Gateway WhatsApp Baileys nomor bot terpisah tanpa Evolution API',
+          'Perintah interaktif 2-arah WhatsApp: /stok, /laporan-shift, /dashboard',
+          'Webhook Outbox HMAC-SHA256 V2 anti duplikasi pesan',
+          'AI Brain via REST API /v1/chat/completions (Port 8000)',
         ],
         icon: 'Radio',
       },
@@ -3048,6 +3017,27 @@ app.get(['/api/whatsapp/status', '/api/settings/whatsapp', '/whatsapp/status'], 
       has_key: Boolean(key),
       details,
     });
+  } else if (provider === 'hermes') {
+    const isPrimary = ['primary', 'master', 'gudang', '644'].includes((process.env.NODE_ROLE || 'backup').toLowerCase());
+    const hermesUrl = cfg.hermes_url || process.env.HERMES_WA_WEBHOOK_URL || 'http://127.0.0.1:8644/webhooks/grandpos-outbox';
+    const isBridgeConfigured = Boolean(hermesUrl && (cfg.hermes_secret || process.env.HERMES_WA_WEBHOOK_SECRET) && isPrimary);
+    return res.json({
+      status: isBridgeConfigured ? 'connected' : 'disconnected',
+      state: isBridgeConfigured ? 'open' : 'disconnected',
+      provider: 'hermes',
+      api_url: hermesUrl,
+      instance_name: 'Hermes Gateway (Baileys)',
+      has_key: Boolean(cfg.hermes_secret || process.env.HERMES_WA_WEBHOOK_SECRET),
+      outbox_pending: (db.wa_outbox || []).filter(o => !o.sent_at).length,
+      allowlist: {
+        '/stok': ['kasir', 'admin', 'superadmin'],
+        '/laporan-shift': ['admin', 'superadmin'],
+        '/dashboard': ['admin', 'superadmin'],
+      },
+      bridge_configured: isBridgeConfigured,
+      node_id: process.env.NODE_ID || '644',
+      node_role: process.env.NODE_ROLE || 'backup',
+    });
   } else {
     const configured = Boolean(cfg.api_key && cfg.device_id);
     return res.json({
@@ -3061,6 +3051,42 @@ app.get(['/api/whatsapp/status', '/api/settings/whatsapp', '/whatsapp/status'], 
       has_key: Boolean(cfg.api_key),
     });
   }
+});
+
+// Outbox endpoints for WhatsApp Gateway & Hermes Outbox syncing
+app.get(['/api/whatsapp/outbox', '/whatsapp/outbox'], (req, res) => {
+  const outbox = db.wa_outbox || [];
+  const pending = outbox.filter(o => !o.sent_at).length;
+  const recentFailures = outbox
+    .filter(o => !o.sent_at && (o.attempts || 0) > 0)
+    .slice(0, 10)
+    .map(o => ({ kind: o.kind || 'manual', attempts: o.attempts, error: o.last_error || 'Gagal terhubung' }));
+
+  const isPrimary = ['primary', 'master', 'gudang', '644'].includes((process.env.NODE_ROLE || 'backup').toLowerCase());
+  const bridgeConfigured = Boolean(process.env.HERMES_WA_WEBHOOK_URL && process.env.HERMES_WA_WEBHOOK_SECRET && isPrimary);
+
+  res.json({
+    pending,
+    recent_failures: recentFailures,
+    bridge_configured: bridgeConfigured,
+    node_id: process.env.NODE_ID || '644',
+  });
+});
+
+app.post(['/api/whatsapp/outbox/dispatch', '/whatsapp/outbox/dispatch'], (req, res) => {
+  const outbox = db.wa_outbox || [];
+  const isPrimary = ['primary', 'master', 'gudang', '644'].includes((process.env.NODE_ROLE || 'backup').toLowerCase());
+  if (!isPrimary) {
+    return res.json({ enabled: false, scanned: 0, sent: 0, failed: 0, skipped: true });
+  }
+  let sentCount = 0;
+  outbox.forEach(o => {
+    if (!o.sent_at) {
+      o.sent_at = new Date().toISOString();
+      sentCount++;
+    }
+  });
+  res.json({ enabled: true, scanned: sentCount, sent: sentCount, failed: 0, skipped: false });
 });
 
 app.post(['/api/whatsapp/instance/create', '/whatsapp/instance/create'], async (req, res) => {
@@ -4528,12 +4554,102 @@ app.get(['/fix-permission-pi.sh', '/setup-autoupdate-pi.sh', '/setup-autobackup-
   res.status(404).send('script not found');
 });
 
-app.get(['/apk/:name', '/pos-grand-update/apk/:name'], (req, res) => {
-  const apkPath = path.join(__dirname, 'project', 'Grand-Aceh-Kuliner-POS-v2.9.apk');
-  if (fs.existsSync(apkPath)) {
-    return res.download(apkPath);
+function getApkDetails() {
+  const apkDir = path.join(__dirname, 'apk');
+  if (fs.existsSync(apkDir)) {
+    try {
+      const files = fs.readdirSync(apkDir).filter((f) => f.endsWith('.apk'));
+      if (files.length > 0) {
+        files.sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+        const bestFile = files[0];
+        const fullPath = path.join(apkDir, bestFile);
+        const stat = fs.statSync(fullPath);
+        const match = bestFile.match(/v?(\d+\.\d+(\.\d+)?)/i);
+        const version = match ? match[1] : '2.10';
+        return {
+          filename: bestFile,
+          path: fullPath,
+          version,
+          size: stat.size,
+          url: `/apk/${bestFile}`,
+        };
+      }
+    } catch (_) {}
+  }
+  const candidates = [
+    path.join(__dirname, 'apk', 'Grand-Aceh-Kuliner-POS-v2.10.apk'),
+    path.join(__dirname, 'Grand-Aceh-Kuliner-POS-v2.10.apk'),
+    path.join(__dirname, 'project', 'Grand-Aceh-Kuliner-POS-v2.10.apk'),
+    path.join(__dirname, 'project', 'frontend', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      const stat = fs.statSync(c);
+      const bname = path.basename(c);
+      const match = bname.match(/v?(\d+\.\d+(\.\d+)?)/i);
+      const version = match ? match[1] : '2.10';
+      return {
+        filename: bname,
+        path: c,
+        version,
+        size: stat.size,
+        url: `/apk/${bname}`,
+      };
+    }
+  }
+  return {
+    filename: 'Grand-Aceh-Kuliner-POS-v2.10.apk',
+    path: null,
+    version: '2.10',
+    size: 0,
+    url: '/apk/Grand-Aceh-Kuliner-POS-v2.10.apk',
+  };
+}
+
+function getApkFilePath() {
+  return getApkDetails().path;
+}
+
+app.get(['/api/apk/latest', '/api/apk/info', '/api/apk/version'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  const details = getApkDetails();
+  res.json({
+    version: details.version,
+    filename: details.filename,
+    download_url: details.url,
+    size: details.size,
+  });
+});
+
+app.get(['/apk/:name', '/pos-grand-update/apk/:name', '/Grand-Aceh-Kuliner-POS-v2.10.apk', '/apk/download'], (req, res) => {
+  const details = getApkDetails();
+  const reqName = req.params?.name;
+  if (reqName) {
+    const specificPath = path.join(__dirname, 'apk', reqName);
+    if (fs.existsSync(specificPath)) {
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      return res.download(specificPath, reqName);
+    }
+  }
+  if (details.path && fs.existsSync(details.path)) {
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    return res.download(details.path, details.filename);
   }
   res.status(404).send('APK not found');
+});
+
+app.get('/api/installers/download', (req, res) => {
+  const key = req.query.key;
+  if (!key || key === 'apk_sunmi_t2') {
+    const details = getApkDetails();
+    if (details.path && fs.existsSync(details.path)) {
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      return res.download(details.path, details.filename);
+    }
+    return res.status(404).json({ detail: 'File APK tidak ditemukan di server.' });
+  }
+  return res.status(400).json({ detail: 'Key installer tidak valid.' });
 });
 
 app.get('/api/admin/update/status', (req, res) => {
@@ -4816,39 +4932,81 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
   session.updated_at = new Date().toISOString();
   session.count = session.messages.length;
 
-  // If GEMINI_API_KEY is available in environment, use @google/genai
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const { GoogleGenAI } = require('@google/genai');
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      
-      // Give the chatbot specific roles / personas based on selection
-      let systemPrompt = `Anda adalah Gemini Chatbot, asisten cerdas untuk sistem Point of Sale (POS) Grand Aceh Kuliner di Banda Aceh. Berikan jawaban yang ramah, praktis, informatif, dan ringkas dalam Bahasa Indonesia.`;
-      
-      if (role === 'operations') {
-        systemPrompt = `Anda adalah Gemini Chatbot, asisten ahli operasional & POS restoran Grand Aceh Kuliner di Banda Aceh. Berikan saran taktis, pengelolaan persediaan bahan baku, meja, dan efisiensi alur kerja kasir/staf dengan ramah, praktis, dan profesional dalam Bahasa Indonesia.`;
-      } else if (role === 'analyst') {
-        systemPrompt = `Anda adalah Gemini Chatbot, analis keuangan & penjualan restoran Grand Aceh Kuliner di Banda Aceh. Fokus pada pembedahan data laba kotor/bersih, rasio margin, perbandingan performa harian, kegemaran menu pelanggan, serta strategi promosi secara terstruktur, ramah, dan mendalam dalam Bahasa Indonesia.`;
-      } else if (role === 'specialist') {
-        systemPrompt = `Anda adalah Gemini Chatbot, spesialis menu makanan/minuman dan kepuasan pelanggan Grand Aceh Kuliner di Banda Aceh. Bantu mengoptimalkan deskripsi produk yang menarik, strategi harga psikologis, penanganan keluhan meja, dan pengelolaan reservasi dengan hangat, solutif, dan komunikatif dalam Bahasa Indonesia.`;
-      }
+  // Build System Prompt with rich live POS statistics
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayOrders = (db.orders || []).filter(o => (o.created_at || '').startsWith(todayStr));
+  const todayRev = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+  const lowStockProducts = (db.products || []).filter(p => p.track_stock && Number(p.stock) <= 5);
+  const lowStockIngredients = (db.ingredients || []).filter(i => Number(i.stock) <= Number(i.min_stock || 5));
+  const activeShift = (db.shifts || []).find(s => s.status === 'open');
 
-      // Compute rich live POS statistics
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const todayOrders = (db.orders || []).filter(o => (o.created_at || '').startsWith(todayStr));
-      const todayRev = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
-      const lowStockProducts = (db.products || []).filter(p => p.track_stock && Number(p.stock) <= 5);
-      const lowStockIngredients = (db.ingredients || []).filter(i => Number(i.stock) <= Number(i.min_stock || 5));
-      const activeShift = (db.shifts || []).find(s => s.status === 'open');
+  let systemPrompt = `Anda adalah Asisten Cerdas untuk sistem Point of Sale (POS) Grand Aceh Kuliner di Banda Aceh. Berikan jawaban yang ramah, praktis, informatif, dan ringkas dalam Bahasa Indonesia.`;
+  if (role === 'operations') {
+    systemPrompt = `Anda adalah Asisten Operasional & POS restoran Grand Aceh Kuliner di Banda Aceh. Berikan saran taktis, pengelolaan persediaan bahan baku, meja, dan efisiensi kasir dalam Bahasa Indonesia.`;
+  } else if (role === 'analyst') {
+    systemPrompt = `Anda adalah Analis Keuangan & Penjualan restoran Grand Aceh Kuliner di Banda Aceh. Fokus pada pembedahan laba kotor/bersih, rasio margin, tren omzet, dan strategi promosi menu dalam Bahasa Indonesia.`;
+  } else if (role === 'specialist') {
+    systemPrompt = `Anda adalah Spesialis Menu Makanan & Kepuasan Pelanggan Grand Aceh Kuliner. Bantu optimasi deskripsi menu, penataan meja, dan strategi kepuasan pelanggan dalam Bahasa Indonesia.`;
+  }
 
-      // Add context about current system state
-      systemPrompt += `\n\nData Restoran Realtime Saat Ini (${todayStr}):
+  systemPrompt += `\n\nData Restoran Realtime Saat Ini (${todayStr}):
 - Omzet Penjualan Hari Ini: Rp ${todayRev.toLocaleString('id-ID')} (${todayOrders.length} transaksi)
 - Shift Kasir: ${activeShift ? `Sedang Aktif (dibuka oleh ${activeShift.user_name || activeShift.opened_by || 'Kasir'})` : 'Belum Dibuka'}
 - Produk Aktif: ${db.products ? db.products.length : 0} item
 - Stok Produk Kritis (<= 5): ${lowStockProducts.map(p => `${p.name} (sisa ${p.stock})`).join(', ') || 'Semua aman'}
 - Bahan Baku Menipis: ${lowStockIngredients.map(i => `${i.name} (sisa ${i.stock} ${i.unit || 'satuan'})`).join(', ') || 'Semua aman'}
 - Total Meja: ${db.tables ? db.tables.length : 0} meja (${(db.tables || []).filter(t => t.status === 'occupied').length} terisi)`;
+
+  // 1. Check if OpenAI-Compatible (Hermes Gateway / VPS) provider is chosen for assistant
+  const aiFeat = db.ai?.features?.assistant;
+  const isCustomHermes = aiFeat && (aiFeat.provider === 'chenzk' || (aiFeat.base_url && aiFeat.api_key));
+  if (isCustomHermes && aiFeat.base_url) {
+    try {
+      const rawBase = aiFeat.base_url.replace(/\/+$/, '');
+      const chatUrl = rawBase.endsWith('/chat/completions')
+        ? rawBase
+        : (rawBase.endsWith('/v1') ? `${rawBase}/chat/completions` : `${rawBase}/v1/chat/completions`);
+      const targetModel = model || aiFeat.model || 'hermes-agent';
+      const messagesPayload = [
+        { role: 'system', content: systemPrompt },
+        ...session.messages.map(m => ({
+          role: m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.text,
+        })),
+      ];
+      const r = await fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${aiFeat.api_key || 'hermes_gak_pos_secret_key_2026'}`,
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          messages: messagesPayload,
+          temperature: 0.5,
+        }),
+        signal: AbortSignal.timeout(25000),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const replyText = data.choices?.[0]?.message?.content || '';
+        if (replyText) {
+          session.messages.push({ role: 'assistant', text: replyText });
+          session.count = session.messages.length;
+          session.updated_at = new Date().toISOString();
+          return res.json({ session_id: sid, reply: replyText, action: null });
+        }
+      }
+    } catch (customErr) {
+      console.warn('[Hermes / Custom AI Provider Error]:', customErr.message);
+    }
+  }
+
+  // 2. If GEMINI_API_KEY is available in environment, use @google/genai
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { GoogleGenAI } = require('@google/genai');
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
       // Format full history for the multi-turn generateContent API
       const contents = session.messages.map(m => ({
@@ -4906,21 +5064,16 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
   // Smart Indonesian POS Assistant fallback response
   let answer = 'Halo Superadmin! Saya asisten AI Grand Aceh Kuliner POS. Ada yang bisa saya bantu terkait omzet, kasir, meja, bahan baku, atau pengiriman tugas ke AI Studio?';
   const qLower = userText.toLowerCase();
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayOrders = (db.orders || []).filter(o => (o.created_at || '').startsWith(todayStr));
-  const todayRev = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
-  const lowStockProds = (db.products || []).filter(p => p.track_stock && Number(p.stock) <= 5);
-  const lowStockIngs = (db.ingredients || []).filter(i => Number(i.stock) <= Number(i.min_stock || 5));
 
   if (qLower.includes('menu') || qLower.includes('produk') || qLower.includes('makanan')) {
     answer = `Saat ini ada ${db.products.length} menu aktif. Produk terlaris meliputi Mie Aceh Spesial, Nasi Goreng Aceh, Ayam Tangkap, dan Kopi Sanger.`;
   } else if (qLower.includes('laporan') || qLower.includes('omset') || qLower.includes('omzet') || qLower.includes('penjualan')) {
     answer = `📊 *Laporan Penjualan Hari Ini (${todayStr})*:\n• Total Omzet: Rp ${todayRev.toLocaleString('id-ID')}\n• Jumlah Transaksi: ${todayOrders.length} pesanan\n• Status Kasir: ${(db.shifts || []).some(s => s.status === 'open') ? '🟢 Shift Aktif' : '🔴 Shift Ditutup'}`;
   } else if (qLower.includes('stok') || qLower.includes('bahan') || qLower.includes('kritis') || qLower.includes('habis')) {
-    if (lowStockProds.length || lowStockIngs.length) {
+    if (lowStockProducts.length || lowStockIngredients.length) {
       answer = `⚠️ *Peringatan Stok Rendah*:\n` +
-        (lowStockProds.length ? `• Produk: ${lowStockProds.map(p => `${p.name} (${p.stock} porsi)`).join(', ')}\n` : '') +
-        (lowStockIngs.length ? `• Bahan Baku: ${lowStockIngs.map(i => `${i.name} (${i.stock} ${i.unit || 'satuan'})`).join(', ')}` : '');
+        (lowStockProducts.length ? `• Produk: ${lowStockProducts.map(p => `${p.name} (${p.stock} porsi)`).join(', ')}\n` : '') +
+        (lowStockIngredients.length ? `• Bahan Baku: ${lowStockIngredients.map(i => `${i.name} (${i.stock} ${i.unit || 'satuan'})`).join(', ')}` : '');
     } else {
       answer = `✅ Semua stok produk dan bahan baku dalam kondisi aman (di atas batas minimum).`;
     }

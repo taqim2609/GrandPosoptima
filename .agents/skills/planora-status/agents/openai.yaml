@@ -1,0 +1,7 @@
+interface:
+  display_name: "Planora Status"
+  short_description: "Check progress, blockers, and the next ready task."
+  default_prompt: "Use $planora-status to inspect the product TODO and tell me the current status and next ready task."
+
+policy:
+  allow_implicit_invocation: false

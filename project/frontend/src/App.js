@@ -1,5 +1,5 @@
 import "@/App.css";
-import { useEffect, Suspense, lazy } from "react";
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { checkOtaUpdate } from "@/lib/ota";
@@ -13,53 +13,31 @@ import Layout from "@/components/Layout";
 import OtaIndicator from "@/components/OtaIndicator";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
-// Safe lazy import that retries or reloads on ChunkLoadError when a new build changes asset hashes
-function lazyWithRetry(componentImport) {
-  return lazy(async () => {
-    const pageHasAlreadyBeenReloaded = JSON.parse(
-      window.sessionStorage.getItem("retry-lazy-refreshed") || "false"
-    );
-    try {
-      const component = await componentImport();
-      window.sessionStorage.setItem("retry-lazy-refreshed", "false");
-      return component;
-    } catch (error) {
-      if (!pageHasAlreadyBeenReloaded) {
-        window.sessionStorage.setItem("retry-lazy-refreshed", "true");
-        window.location.reload();
-        return { default: () => null };
-      }
-      window.sessionStorage.setItem("retry-lazy-refreshed", "false");
-      throw error;
-    }
-  });
-}
-
-const Login = lazyWithRetry(() => import("@/pages/Login"));
-const POS = lazyWithRetry(() => import("@/pages/POS"));
-const Shift = lazyWithRetry(() => import("@/pages/Shift"));
-const Dashboard = lazyWithRetry(() => import("@/pages/Dashboard"));
-const Products = lazyWithRetry(() => import("@/pages/Products"));
-const Categories = lazyWithRetry(() => import("@/pages/Categories"));
-const Tables = lazyWithRetry(() => import("@/pages/Tables"));
-const Orders = lazyWithRetry(() => import("@/pages/Orders"));
-const VoidRefund = lazyWithRetry(() => import("@/pages/VoidRefund"));
-const UsersPage = lazyWithRetry(() => import("@/pages/Users"));
-const Inventory = lazyWithRetry(() => import("@/pages/Inventory"));
-const Cash = lazyWithRetry(() => import("@/pages/Cash"));
-const SettingsAI = lazyWithRetry(() => import("@/pages/SettingsAI"));
-const SettingsData = lazyWithRetry(() => import("@/pages/SettingsData"));
-const Settings = lazyWithRetry(() => import("@/pages/Settings"));
-const WhatsApp = lazyWithRetry(() => import("@/pages/WhatsApp"));
-const DeviceSettings = lazyWithRetry(() => import("@/pages/DeviceSettings"));
-const Catalog = lazyWithRetry(() => import("@/pages/Catalog"));
-const Ingredients = lazyWithRetry(() => import("@/pages/Ingredients"));
-const AssistantAI = lazyWithRetry(() => import("@/pages/AssistantAI"));
-const Reports = lazyWithRetry(() => import("@/pages/Reports"));
-const Members = lazyWithRetry(() => import("@/pages/Members"));
-const Reservations = lazyWithRetry(() => import("@/pages/Reservations"));
-const VendorSettlement = lazyWithRetry(() => import("@/pages/VendorSettlement"));
-const PromosCoupons = lazyWithRetry(() => import("@/pages/PromosCoupons"));
+import Login from "@/pages/Login";
+import POS from "@/pages/POS";
+import Shift from "@/pages/Shift";
+import Dashboard from "@/pages/Dashboard";
+import Products from "@/pages/Products";
+import Categories from "@/pages/Categories";
+import Tables from "@/pages/Tables";
+import Orders from "@/pages/Orders";
+import VoidRefund from "@/pages/VoidRefund";
+import UsersPage from "@/pages/Users";
+import Inventory from "@/pages/Inventory";
+import Cash from "@/pages/Cash";
+import SettingsAI from "@/pages/SettingsAI";
+import SettingsData from "@/pages/SettingsData";
+import Settings from "@/pages/Settings";
+import WhatsApp from "@/pages/WhatsApp";
+import DeviceSettings from "@/pages/DeviceSettings";
+import Catalog from "@/pages/Catalog";
+import Ingredients from "@/pages/Ingredients";
+import AssistantAI from "@/pages/AssistantAI";
+import Reports from "@/pages/Reports";
+import Members from "@/pages/Members";
+import Reservations from "@/pages/Reservations";
+import VendorSettlement from "@/pages/VendorSettlement";
+import PromosCoupons from "@/pages/PromosCoupons";
 
 const LoadingFallback = () => (
   <div className="flex h-full w-full items-center justify-center p-8 bg-[#F4F5F7] lg:bg-transparent">
@@ -72,9 +50,7 @@ const wrap = (el, roles, mod) => (
   <ProtectedRoute roles={roles} mod={mod}>
     <Layout>
       <ErrorBoundary>
-        <Suspense fallback={<LoadingFallback />}>
-          {el}
-        </Suspense>
+        {el}
       </ErrorBoundary>
     </Layout>
   </ProtectedRoute>
@@ -114,7 +90,7 @@ function App() {
           <OtaIndicator />
           <BrowserRouter>
             <Routes>
-              <Route path="/login" element={<Suspense fallback={<LoadingFallback />}><Login /></Suspense>} />
+              <Route path="/login" element={<Login />} />
               <Route path="/pos" element={wrap(<POS />, ["admin", "kasir"], "pos")} />
               <Route path="/shift" element={wrap(<Shift />, ["admin", "kasir"], "shift")} />
               <Route path="/cash" element={wrap(<Cash />, ["admin", "kasir"], "pengeluaran")} />
@@ -140,7 +116,7 @@ function App() {
               <Route path="/users" element={wrap(<UsersPage />, ["admin"], "pengguna")} />
               <Route path="/settings-ai" element={wrap(<SettingsAI />, ["admin"], "pengaturan")} />
               <Route path="/settings-data" element={wrap(<SettingsData />, ["admin"], "pengaturan")} />
-              <Route path="/settings" element={wrap(<Settings />, ["admin"], ["pengaturan", "pengguna", "role_izin"])} />
+              <Route path="/settings" element={wrap(<Settings />, ["admin", "superadmin", "kasir"])} />
               <Route path="/whatsapp" element={wrap(<WhatsApp />, ["admin"], "whatsapp")} />
               <Route path="/device" element={wrap(<DeviceSettings />)} />
               <Route path="/" element={<Navigate to="/pos" replace />} />

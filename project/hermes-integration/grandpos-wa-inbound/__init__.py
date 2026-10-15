@@ -18,6 +18,7 @@ Catatan keamanan:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -102,13 +103,23 @@ def _httpx():
         return None
 
 
+def _urllib_post(url: str, body: bytes, headers: dict, timeout: float) -> int:
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url, data=body, headers=headers or {}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return int(resp.status)
+    except urllib.error.HTTPError as exc:
+        return int(exc.code)
+
+
 async def forward(payload: dict, url: str = "", secret: str = "", timeout: float = 0) -> tuple:
     """POST payload ke POS **secara async**. Mengembalikan ``(ok, keterangan)``
     tanpa pernah melempar exception dan tanpa menulis nomor/isi pesan ke log.
 
-    Memakai ``httpx.AsyncClient`` (bukan ``urlopen``) supaya hook yang memanggil
-    tidak memblokir event loop gateway — dulu ``urlopen`` sinkron di dalam hook
-    sinkron bisa menahan seluruh gateway sampai timeout habis.
+    Mendukung httpx jika terpasang, atau fallback ke urllib standard library
+    via asyncio.to_thread agar tetap non-blocking dan zero-dependency.
     """
     url = url or _pos_url()
     secret = secret or _secret()
@@ -116,29 +127,28 @@ async def forward(payload: dict, url: str = "", secret: str = "", timeout: float
     if not secret:
         logger.error("WA_WEBHOOK_SECRET belum diset — pesan WA tidak diteruskan")
         return False, "secret kosong"
-    httpx = _httpx()
-    if httpx is None:
-        logger.error("httpx tidak tersedia di host Hermes — pesan WA tidak diteruskan")
-        return False, "httpx tidak tersedia"
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "X-Hermes-Secret": secret,
+    }
+    httpx = _httpx()
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                url,
-                content=body,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Hermes-Secret": secret,
-                },
-            )
-        ok = 200 <= int(resp.status_code) < 300
-        if not ok:
-            # Hanya statusnya yang dicatat — bukan body, yang bisa memuat nomor.
-            logger.warning("POS menolak pesan WA masuk: HTTP %s", resp.status_code)
-        return ok, f"HTTP {resp.status_code}"
+        if httpx is not None:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(url, content=body, headers=headers)
+            status_code = resp.status_code
+        else:
+            status_code = await asyncio.to_thread(_urllib_post, url, body, headers, timeout)
     except Exception as e:
         logger.warning("POS tidak dapat dihubungi: %s", type(e).__name__)
         return False, type(e).__name__
+
+    ok = 200 <= int(status_code) < 300
+    if not ok:
+        # Hanya statusnya yang dicatat — bukan body, yang bisa memuat nomor.
+        logger.warning("POS menolak pesan WA masuk: HTTP %s", status_code)
+    return ok, f"HTTP {status_code}"
 
 
 async def on_pre_gateway_dispatch(event, **kwargs):

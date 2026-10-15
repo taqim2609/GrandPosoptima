@@ -169,6 +169,52 @@
         "timestamp": { "type": "string" }
       },
       "required": ["id", "type", "message", "timestamp"]
+    },
+    "waOutbox": {
+      "title": "WAOutbox",
+      "description": "WhatsApp outbound message queue for cross-node idempotency & retry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "to": { "type": "string" },
+        "text": { "type": "string" },
+        "kind": { "type": "string" },
+        "status": { "type": "string" },
+        "provider": { "type": "string" },
+        "created_at": { "type": "string" },
+        "sent_at": { "type": "string" }
+      },
+      "required": ["id", "to", "text"]
+    },
+    "waChat": {
+      "title": "WAChat",
+      "description": "WhatsApp 2-way conversation thread metadata for Live Chat UI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "phone": { "type": "string" },
+        "name": { "type": "string" },
+        "last_message": { "type": "string" },
+        "unread_count": { "type": "number" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id", "phone"]
+    },
+    "waMessage": {
+      "title": "WAMessage",
+      "description": "Individual WhatsApp message in a conversation thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "chat_id": { "type": "string" },
+        "sender": { "type": "string" },
+        "direction": { "type": "string" },
+        "text": { "type": "string" },
+        "status": { "type": "string" },
+        "provider": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "chat_id", "text", "direction"]
     }
   },
   "firestore": {
@@ -219,6 +265,18 @@
     "/error_logs/{errorId}": {
       "schema": "errorLog",
       "description": "Collection of remote runtime errors and debugging logs"
+    },
+    "/wa_outbox/{outboxId}": {
+      "schema": "waOutbox",
+      "description": "Collection of WhatsApp outbox items"
+    },
+    "/wa_chats/{chatId}": {
+      "schema": "waChat",
+      "description": "Collection of WhatsApp conversation threads"
+    },
+    "/wa_chats/{chatId}/messages/{messageId}": {
+      "schema": "waMessage",
+      "description": "Subcollection of WhatsApp messages per chat thread"
     }
   }
 }

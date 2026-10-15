@@ -258,7 +258,7 @@ export default function AssistantAI() {
       await api.put("/settings/ai", { feature: "assistant", provider: p });
       setProvider(p);
       await loadCfg();
-      toast.success(`Provider asisten: ${p === "gemini" ? "Gemini AI" : "chenzk"}`);
+      toast.success(`Provider asisten: ${p === "gemini" ? "Gemini AI" : "OpenAI / Hermes (VPS)"}`);
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); } finally { setSavingProvider(false); }
   };
 
@@ -418,7 +418,7 @@ export default function AssistantAI() {
       {provider === "chenzk" && !keySet && (
         <div className="bg-[#FEF3C7] border-b border-[#F59E0B] text-[#92400E] text-sm px-4 lg:px-6 py-2.5 flex items-center gap-2" data-testid="assistant-key-warning">
           <SettingsIcon size={16} className="shrink-0" />
-          Provider chenzk belum ada API Key/model. Atur di{" "}
+          Provider OpenAI / Hermes belum dikonfigurasi API Key atau Base URL. Atur di{" "}
           <Link to="/settings-ai" className="font-extrabold underline">Pengaturan AI</Link>.
         </div>
       )}

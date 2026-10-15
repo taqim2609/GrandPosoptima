@@ -25,7 +25,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [serverData, setServerData] = useState({
     title: "Pusat Pemantauan Multi-Node Server — Grand Aceh Kuliner",
-    summary: "Keempat node server (Google Cloud, Raspberry Pi 4 Toko, Server Cloud VPS, dan WhatsApp Gateway Evolution API) terhubung dan termonitor dalam 1 layar.",
+    summary: "Ketiga node server (Google Cloud Primary, Node Kasir Toko, dan Hermes Agent WhatsApp Gateway) terhubung dan termonitor dalam 1 layar.",
     servers: [
       {
         id: "cloud",
@@ -35,11 +35,11 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         role: "Penyimpanan Cloud 24/7 & Sinkronisasi Pusat",
         category: "cloud",
         badge: "Cloud Primary (Aktif)",
-        badge_color: "bg-blue-50 text-blue-700 border-blue-200",
+        badge_color: "bg-emerald-50 text-emerald-700 border-emerald-200",
         status: "online",
         latency_ms: 22,
         rating: "Aktif & Terhubung",
-        endpoint: typeof window !== "undefined" ? window.location.origin : "https://cloud.run.app",
+        endpoint: typeof window !== "undefined" ? window.location.origin : "https://grandposopt.ai.studio",
         database: "Firestore (ai-studio-grandposoptima-268f86d5-06a2-4402-8f77-90451ffce535)",
         features: [
           "Sinkronisasi real-time menu, harga, dan stok",
@@ -51,18 +51,18 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
       {
         id: "raspberry",
         num: 2,
-        name: "Raspberry Pi 4 (Node Kasir Toko)",
-        short_name: "Raspberry Pi 4 (Lokal)",
+        name: "Node Kasir Toko (Raspberry Pi 4 / PC Master)",
+        short_name: "Kasir Toko (Lokal)",
         role: "Engine Kasir Fisik Toko, LAN Offline-First & Struk Sunmi",
         category: "raspberry",
-        badge: "Node Kasir Toko",
-        badge_color: "bg-rose-50 text-rose-700 border-rose-200",
-        status: "online",
-        latency_ms: 1.2,
-        rating: "Instan (< 3 ms)",
-        endpoint: "http://pos.local (Port 3000)",
-        database: "Local SQLite/Memory + Auto-Sync",
-        hardware: "Raspberry Pi 4 OS 64-bit",
+        badge: "Belum Terpasang (Standby)",
+        badge_color: "bg-zinc-100 text-zinc-700 border-zinc-300",
+        status: "disconnected",
+        latency_ms: null,
+        rating: "Belum Terpasang (Standby)",
+        endpoint: "Belum Terhubung di Outlet (Opsional)",
+        database: "Standby (Offline-First)",
+        hardware: "Belum Terpasang di Outlet",
         features: [
           "100% Offline-First: kasir tetap transaksi lancar saat internet mati",
           "Pencetakan struk printer thermal Sunmi & dapur seketika tanpa jeda",
@@ -71,47 +71,25 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         ],
       },
       {
-        id: "vps",
+        id: "hermes",
         num: 3,
-        name: "Server Cloud VPS (Self-Hosted Node)",
-        short_name: "Server VPS (Cloud Node)",
-        role: "Engine Layanan VPS 24/7, Database MongoDB/Postgres & Otomasi n8n",
-        category: "vps",
-        badge: "VPS Node Siaga",
-        badge_color: "bg-indigo-50 text-indigo-700 border-indigo-200",
-        status: "online",
-        latency_ms: 15,
-        rating: "Aktif & Stabil",
-        endpoint: "https://pos.domainanda.com (VPS Docker)",
-        database: "MongoDB 7 + Redis Cache di VPS",
-        hardware: "Cloud VPS Linux 64-bit",
-        features: [
-          "Berjalan 24 Jam Nonstop di Cloud VPS tanpa perlu PC kasir menyala",
-          "Engine Otomasi n8n & Eksekusi Webhook POS Real-Time",
-          "Pusat Pemrosesan Notifikasi & Pengiriman Pesan Terjadwal",
-          "Dukungan Multi-Outlet dan Akses Kasir Jarak Jauh (Tailscale / Domain)",
-        ],
-      },
-      {
-        id: "whatsapp",
-        num: 4,
-        name: "WhatsApp Gateway (Evolution API di VPS)",
-        short_name: "Evolution API (VPS)",
-        role: "Gateway Pesan, Bot Reservasi Meja & Rekap Omzet di VPS",
+        name: "Hermes Agent (WhatsApp Gateway & AI Brain)",
+        short_name: "Hermes Agent (Gateway)",
+        role: "WhatsApp Gateway Baileys, Perintah 2-Arah & AI Brain",
         category: "gateway",
-        badge: "Evolution API di VPS",
-        badge_color: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        status: "ready",
-        latency_ms: 18,
-        rating: "Siap & Aktif",
-        endpoint: "http://IP_VPS:8080 (Evolution API)",
-        database: "Evolution API v2.1.2 (VPS Container)",
+        badge: "Belum Terhubung (Standby)",
+        badge_color: "bg-zinc-100 text-zinc-700 border-zinc-300",
+        status: "disconnected",
+        latency_ms: null,
+        rating: "Perlu Pasang Hermes",
+        endpoint: "http://127.0.0.1:8644/webhooks/grandpos-outbox",
+        database: "Hermes Baileys + Outbox HMAC V2",
+        hardware: "Host 644 / Local Gateway",
         features: [
-          "Berjalan di container Docker VPS 24/7 tanpa henti",
-          "Auto-Failover Cerdas ke WACloud jika instance VPS mengalami kendala",
-          "Webhook Auto-Booking Meja dari chat masuk WhatsApp pelanggan",
-          "Kirim struk digital otomatis ke nomor WhatsApp pelanggan",
-          "Laporan rekap omzet harian terjadwal ke nomor WhatsApp Owner",
+          "Gateway WhatsApp Baileys nomor bot terpisah tanpa Evolution API",
+          "Perintah interaktif 2-arah WhatsApp: /stok, /laporan-shift, /dashboard",
+          "Webhook Outbox HMAC-SHA256 V2 anti duplikasi pesan",
+          "AI Brain via REST API /v1/chat/completions (Port 8000)",
         ],
       },
     ],
@@ -143,7 +121,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
 
   const handleTestAll = async () => {
     setTestingAll(true);
-    const toastId = toast.loading("Menguji koneksi ke 3 server secara simultan...");
+    const toastId = toast.loading("Menguji koneksi multi-node server...");
     try {
       const startTime = Date.now();
       const [statusRes, firestoreRes] = await Promise.allSettled([
@@ -154,7 +132,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
       if (statusRes.status === "fulfilled" && statusRes.value.ok) {
         const json = await statusRes.value.json();
         if (firestoreRes.status === "fulfilled" && firestoreRes.value?.ok) {
-          const cloud = json.servers.find((s) => s.id === "cloud");
+          const cloud = json.servers?.find((s) => s.id === "cloud");
           if (cloud) {
             cloud.latency_ms = Math.round(firestoreRes.value.latencyMs || cloud.latency_ms);
             cloud.status = "online";
@@ -162,11 +140,16 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         }
         setServerData(json);
         setLastUpdated(new Date());
+        const onlineCount = (json.servers || []).filter(
+          (s) => s.status === "online" || s.status === "connected"
+        ).length;
+        toast.success(
+          `Pemeriksaan selesai: ${onlineCount} node aktif online (${Date.now() - startTime}ms)`,
+          { id: toastId }
+        );
+      } else {
+        toast.warning("Gagal memperbarui status server", { id: toastId });
       }
-      toast.success("Ketiga server aktif dan merespons normal!", {
-        id: toastId,
-        description: `Total durasi uji: ${Date.now() - startTime}ms`,
-      });
     } catch (e) {
       toast.error("Pengujian selesai dengan beberapa peringatan", { id: toastId });
     } finally {
@@ -194,30 +177,34 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         } else {
           toast.warning("Google Cloud Offline / Cache Lokal", { id: toastId });
         }
-      } else if (serverId === "local") {
-        const start = performance.now();
-        const r = await fetch("/api/health", { cache: "no-store" });
-        const lat = Math.max(0.5, Math.round((performance.now() - start) * 10) / 10);
-        if (r.ok) {
+      } else if (serverId === "raspberry") {
+        const r = await fetch("/api/system/health", { cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (j.raspberry_pi && j.raspberry_pi.installed) {
+          toast.success(`Node Raspberry Pi Toko Terhubung (${j.raspberry_pi.cpu_temperature?.temp_c || 45}°C)`, { id: toastId });
+        } else {
+          toast.info("Node fisik Raspberry Pi belum dipasang di outlet (Saat ini sistem berjalan penuh via Google Cloud)", { id: toastId, duration: 4000 });
+        }
+      } else if (serverId === "hermes" || serverId === "whatsapp") {
+        const r = await fetch("/api/whatsapp/status", { cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (j.status === "connected" || j.bridge_configured) {
           setServerData((prev) => ({
             ...prev,
             servers: prev.servers.map((item) =>
-              item.id === "local" ? { ...item, latency_ms: lat, status: "online" } : item
+              item.id === "hermes" ? { ...item, status: "connected", rating: "Online & Siaga" } : item
             ),
           }));
-          toast.success(`Server VPS Cloud Siaga (${lat} ms)`, { id: toastId });
+          toast.success("Hermes Agent & WhatsApp Gateway Terhubung!", { id: toastId });
+        } else {
+          setServerData((prev) => ({
+            ...prev,
+            servers: prev.servers.map((item) =>
+              item.id === "hermes" ? { ...item, status: "disconnected" } : item
+            ),
+          }));
+          toast.info("Hermes Gateway belum aktif di host (Ikuti panduan PANDUAN-WHATSAPP-HERMES.md)", { id: toastId, duration: 4500 });
         }
-      } else if (serverId === "whatsapp") {
-        const r = await fetch("/api/whatsapp/status", { cache: "no-store" });
-        const j = await r.json().catch(() => ({}));
-        const state = j.status === "connected" ? "connected" : "ready";
-        setServerData((prev) => ({
-          ...prev,
-          servers: prev.servers.map((item) =>
-            item.id === "whatsapp" ? { ...item, status: state } : item
-          ),
-        }));
-        toast.success(`WhatsApp Gateway di VPS Siap & Aktif`, { id: toastId });
       }
     } catch (err) {
       toast.error(`Koneksi gagal: ${err.message}`, { id: toastId });
@@ -295,12 +282,21 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                 <h3 className="text-lg font-black text-neutral-900 tracking-tight">
                   Pusat Pemantauan Multi-Node Server Terpadu
                 </h3>
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> 4 Node Aktif
-                </span>
+                {(() => {
+                  const onlineCount = (serverData.servers || []).filter(
+                    (s) => s.status === "online" || s.status === "connected"
+                  ).length;
+                  const total = serverData.servers?.length || 4;
+                  return (
+                    <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      {onlineCount === 1 ? "1 Node Aktif (Cloud Utama)" : `${onlineCount} / ${total} Node Aktif`}
+                    </span>
+                  );
+                })()}
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Pantau status operasional <b>Google Cloud &amp; Firestore</b>, <b>Raspberry Pi 4 (Node Kasir Toko)</b>, <b>Server Cloud VPS (n8n)</b>, dan <b>WhatsApp Gateway (Evolution API)</b> dalam 1 tampilan.
+                Pantau status operasional <b>Google Cloud &amp; Firestore</b>, <b>Node Kasir Toko (Raspberry Pi 4 / PC Master)</b>, dan <b>Hermes Agent (WhatsApp Gateway Baileys &amp; AI Brain)</b> dalam 1 tampilan.
               </p>
             </div>
           </div>
@@ -319,8 +315,8 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         </div>
       )}
 
-      {/* Grid Multi-Server (4 Columns) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Grid Multi-Server (3 Columns) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {serverData.servers.map((s) => {
           const style = getStatusColor(s.status);
           const isTestingCurrent = testingId === s.id;
@@ -339,7 +335,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                     </div>
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-neutral-500">
-                        Node #{s.num} · {s.category === "cloud" ? "Google Cloud" : s.category === "local" ? "Cloud VPS Node" : "Evolution API VPS"}
+                        Node #{s.num} · {s.category === "cloud" ? "Google Cloud Primary" : s.category === "raspberry" ? "Node Kasir Toko" : "Hermes Gateway"}
                       </span>
                       <h4 className="text-sm font-black text-neutral-900 leading-tight mt-0.5">
                         {s.short_name}

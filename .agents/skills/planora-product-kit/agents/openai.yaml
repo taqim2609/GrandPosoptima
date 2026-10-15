@@ -1,0 +1,7 @@
+interface:
+  display_name: "Planora Product Kit"
+  short_description: "Generate PRD, experience guide, and execution plan."
+  default_prompt: "Use $planora-product-kit to turn my product idea into a complete PRD, UI or DX guide, and execution package."
+
+policy:
+  allow_implicit_invocation: false

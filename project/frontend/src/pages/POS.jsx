@@ -16,7 +16,6 @@ import {
 import VoidDialog from "@/components/VoidDialog";
 import LazyProductImage from "@/components/LazyProductImage";
 import ReceiptModal from "@/components/ReceiptModal";
-import PosAiChatWidget from "@/components/PosAiChatWidget";
 import {
   Utensils, ShoppingBag, Store, Plus, Minus, Trash2, Armchair,
   Search, Receipt, X, CheckCircle2, Layers, Database, ScanLine, Clock, Play, Printer, Wifi, WifiOff, RefreshCw, CloudOff,
@@ -46,34 +45,34 @@ const ProductCard = memo(function ProductCard({ product, onAdd, priority = false
       data-testid={`product-card-${product.id}`}
       onClick={handleClick}
       disabled={out}
-      className={`tap relative text-left rounded-xl border bg-white overflow-hidden hover:border-[#E63946] ${
-        out ? "opacity-50 cursor-not-allowed" : ""
+      className={`tap relative text-left rounded-2xl border border-zinc-200/80 bg-white overflow-hidden shadow-2xs transition-all duration-150 hover:shadow-md hover:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-600/30 ${
+        out ? "opacity-50 cursor-not-allowed bg-zinc-50" : "active:scale-[0.98]"
       }`}
     >
-      <div className="h-24 bg-[#F4F5F7] overflow-hidden">
+      <div className="h-24 bg-zinc-100/70 overflow-hidden flex items-center justify-center">
         <LazyProductImage
           src={product.image}
           alt={product.name}
           className="h-full w-full object-cover"
           placeholderIcon={Store}
-          iconSize={28}
+          iconSize={26}
           priority={priority}
         />
       </div>
       {out && (
-        <span className="absolute top-2 left-2 bg-[#EF4444] text-white text-[10px] font-bold px-2 py-0.5 rounded">
-          SOLD OUT
+        <span className="absolute top-2 left-2 bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs">
+          Habis
         </span>
       )}
       <div className="p-3">
-        <div className="font-bold text-sm leading-tight line-clamp-2 min-h-[2.3em]">{product.name}</div>
-        <div className="font-num text-[#E63946] font-bold mt-1">
+        <div className="font-bold text-sm text-zinc-900 leading-snug line-clamp-2 min-h-[2.4em]">{product.name}</div>
+        <div className="font-num text-emerald-700 font-extrabold text-sm mt-1">
           {rupiah(product.price)}
           {product.weight_sale ? (
-            <span className="text-[10px] text-[#52525B] font-bold ml-1">/{product.weight_unit || "satuan"}</span>
+            <span className="text-[10px] text-zinc-500 font-semibold ml-1">/{product.weight_unit || "satuan"}</span>
           ) : null}
         </div>
-        {product.track_stock && <div className="text-[11px] text-[#52525B]">Stok: {product.stock}</div>}
+        {product.track_stock && <div className="text-[11px] text-zinc-500 font-medium mt-0.5">Stok: {product.stock}</div>}
       </div>
     </button>
   );
@@ -82,7 +81,7 @@ const ProductCard = memo(function ProductCard({ product, onAdd, priority = false
 const ProductGrid = memo(function ProductGrid({ products = [], onAdd }) {
   const safeProducts = Array.isArray(products) ? products : [];
   if (safeProducts.length === 0) {
-    return <div className="text-center text-[#a1a1aa] mt-20">Tidak ada produk</div>;
+    return <div className="text-center text-zinc-400 font-medium mt-20">Tidak ada produk dalam kategori ini</div>;
   }
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
@@ -95,39 +94,45 @@ const ProductGrid = memo(function ProductGrid({ products = [], onAdd }) {
 
 const CartItemRow = memo(function CartItemRow({ item, onMinus, onPlus, onRemove }) {
   return (
-    <div data-testid={`cart-item-${item.product_id}`} className="rounded-xl border p-2.5 bg-white shadow-xs">
+    <div data-testid={`cart-item-${item.product_id}`} className="rounded-xl border border-zinc-200/80 p-3 bg-white shadow-2xs hover:border-zinc-300 transition-colors">
       <div className="flex justify-between gap-2">
-        <div className="font-bold text-sm leading-tight">
+        <div className="font-bold text-sm text-zinc-900 leading-tight">
           {item.name}
           {item.weight ? (
-            <span className="block text-[11px] text-[#52525B] font-normal">
+            <span className="block text-[11px] text-zinc-500 font-normal mt-0.5">
               {Number(item.weight).toFixed(2)} {item.weight_unit} × {rupiah(item.base_price || item.price)}
             </span>
           ) : null}
         </div>
-        <button onClick={() => onRemove(item.product_id)} className="text-[#a1a1aa] hover:text-[#EF4444] p-1">
+        <button
+          onClick={() => onRemove(item.product_id)}
+          className="text-zinc-400 hover:text-rose-600 p-1.5 -mr-1 -mt-1 rounded-lg hover:bg-rose-50 transition-colors"
+          title="Hapus item"
+        >
           <X size={16} />
         </button>
       </div>
-      <div className="flex items-center justify-between mt-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mt-2.5 pt-1 border-t border-zinc-100">
+        <div className="flex items-center gap-1.5">
           <button
             data-testid={`qty-minus-${item.product_id}`}
             onClick={() => onMinus(item.product_id)}
-            className="tap h-8 w-8 rounded-lg bg-[#F4F5F7] hover:bg-[#e4e4e7] grid place-items-center"
+            className="tap h-9 w-9 rounded-lg bg-zinc-100 hover:bg-zinc-200 active:scale-95 text-zinc-800 grid place-items-center transition-all"
+            title="Kurangi kuantitas"
           >
             <Minus size={15} />
           </button>
-          <span className="font-num font-bold min-w-6 text-center">{item.qty}</span>
+          <span className="font-num font-extrabold text-sm min-w-7 text-center text-zinc-900">{item.qty}</span>
           <button
             data-testid={`qty-plus-${item.product_id}`}
             onClick={() => onPlus(item.product_id)}
-            className="tap h-8 w-8 rounded-lg bg-[#F4F5F7] hover:bg-[#e4e4e7] grid place-items-center"
+            className="tap h-9 w-9 rounded-lg bg-zinc-100 hover:bg-zinc-200 active:scale-95 text-zinc-800 grid place-items-center transition-all"
+            title="Tambah kuantitas"
           >
             <Plus size={15} />
           </button>
         </div>
-        <div className="font-num font-bold">{rupiah(item.price * item.qty)}</div>
+        <div className="font-num font-extrabold text-sm text-zinc-900">{rupiah(item.price * item.qty)}</div>
       </div>
     </div>
   );
@@ -138,11 +143,13 @@ const CategorySidebar = memo(function CategorySidebar({ categories = [], activeC
   return (
     <>
       {/* Desktop / Landscape: Sidebar Vertikal Kiri */}
-      <div className="hidden lg:block w-[190px] shrink-0 bg-white border-r overflow-y-auto no-scrollbar p-3 space-y-1.5">
+      <div className="hidden lg:block w-[190px] shrink-0 bg-white border-r border-zinc-200 overflow-y-auto no-scrollbar p-3 space-y-1.5">
         <button
           onClick={() => onSelectCat("all")}
-          className={`tap w-full h-12 rounded-xl px-3 text-left font-bold text-sm flex items-center gap-2 transition-colors ${
-            activeCat === "all" ? "bg-[#E63946] text-white" : "bg-[#F4F5F7] hover:bg-[#e9eaee] text-[#18181B]"
+          className={`tap w-full h-11 rounded-xl px-3 text-left font-bold text-sm flex items-center gap-2.5 transition-all ${
+            activeCat === "all"
+              ? "bg-emerald-600 text-white shadow-xs"
+              : "bg-zinc-100/80 hover:bg-zinc-200/80 text-zinc-800"
           }`}
         >
           <Layers size={16} /> Semua
@@ -152,8 +159,10 @@ const CategorySidebar = memo(function CategorySidebar({ categories = [], activeC
             key={c.id}
             data-testid={`cat-${c.id}`}
             onClick={() => onSelectCat(c.id)}
-            className={`tap w-full min-h-12 rounded-xl px-3 py-2 text-left font-bold text-sm transition-colors ${
-              activeCat === c.id ? "bg-[#E63946] text-white" : "bg-[#F4F5F7] hover:bg-[#e9eaee] text-[#18181B]"
+            className={`tap w-full min-h-[44px] rounded-xl px-3 py-2 text-left font-bold text-sm transition-all ${
+              activeCat === c.id
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "bg-zinc-100/80 hover:bg-zinc-200/80 text-zinc-800"
             }`}
           >
             {c.name}
@@ -162,13 +171,13 @@ const CategorySidebar = memo(function CategorySidebar({ categories = [], activeC
       </div>
 
       {/* Mobile / Android Portrait: Horizontal Category Scroll Bar */}
-      <div className="lg:hidden flex items-center gap-2 overflow-x-auto no-scrollbar px-3 py-2 bg-white border-b shrink-0">
+      <div className="lg:hidden flex items-center gap-2 overflow-x-auto no-scrollbar px-3 py-2 bg-white border-b border-zinc-200 shrink-0">
         <button
           onClick={() => onSelectCat("all")}
-          className={`tap shrink-0 h-9 px-4 rounded-full font-bold text-xs flex items-center gap-1.5 border transition-all ${
+          className={`tap shrink-0 h-9 px-4 rounded-xl font-bold text-xs flex items-center gap-1.5 border transition-all ${
             activeCat === "all"
-              ? "bg-[#E63946] text-white border-[#E63946] shadow-xs"
-              : "bg-[#F4F5F7] text-[#52525B] border-transparent hover:bg-[#e9eaee]"
+              ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+              : "bg-zinc-100 text-zinc-700 border-zinc-200/60 hover:bg-zinc-200"
           }`}
         >
           <Layers size={14} /> Semua
@@ -178,10 +187,10 @@ const CategorySidebar = memo(function CategorySidebar({ categories = [], activeC
             key={c.id}
             data-testid={`cat-chip-${c.id}`}
             onClick={() => onSelectCat(c.id)}
-            className={`tap shrink-0 h-9 px-4 rounded-full font-bold text-xs border whitespace-nowrap transition-all ${
+            className={`tap shrink-0 h-9 px-4 rounded-xl font-bold text-xs border whitespace-nowrap transition-all ${
               activeCat === c.id
-                ? "bg-[#E63946] text-white border-[#E63946] shadow-xs"
-                : "bg-[#F4F5F7] text-[#52525B] border-transparent hover:bg-[#e9eaee]"
+                ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                : "bg-zinc-100 text-zinc-700 border-zinc-200/60 hover:bg-zinc-200"
             }`}
           >
             {c.name}
@@ -896,15 +905,17 @@ export default function POS() {
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
       {/* top bar: order type & status (responsive scroll on portrait/mobile) */}
-      <div className="h-14 sm:h-16 shrink-0 bg-white border-b flex items-center px-3 sm:px-4 gap-2 overflow-x-auto no-scrollbar">
-        <div className="flex items-center gap-1.5 shrink-0">
+      <div className="h-16 shrink-0 bg-white border-b border-zinc-200 flex items-center px-3 sm:px-4 gap-2.5 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 shrink-0">
           {ORDER_TYPES.map((t) => (
             <button
               key={t.key}
               data-testid={`ordertype-${t.key}`}
               onClick={() => switchType(t.key)}
-              className={`tap h-10 sm:h-11 px-3 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-2 whitespace-nowrap transition-all ${
-                orderType === t.key ? `${t.cls}` : "bg-white text-[#52525B] border-transparent hover:bg-[#F4F5F7]"
+              className={`tap h-11 px-4 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 border transition-all ${
+                orderType === t.key
+                  ? "bg-zinc-900 text-white border-zinc-900 shadow-xs"
+                  : "bg-zinc-100/80 text-zinc-700 border-zinc-200/60 hover:bg-zinc-200/80"
               }`}
             >
               <t.icon size={16} /> {t.label}
@@ -915,26 +926,26 @@ export default function POS() {
         {/* Indikator Status Koneksi & Sinkronisasi */}
         <div
           data-testid="pos-connection-status"
-          className={`h-9 sm:h-10 px-2.5 sm:px-3.5 rounded-xl flex items-center gap-1.5 sm:gap-2 text-xs font-bold border-2 shrink-0 transition-all ${
+          className={`h-10 px-3 rounded-xl flex items-center gap-2 text-xs font-bold border shrink-0 transition-all ${
             !online
-              ? "bg-[#FEF2F2] text-[#991B1B] border-[#EF4444] shadow-xs"
+              ? "bg-rose-50 text-rose-800 border-rose-200/80 shadow-xs"
               : pendingCount > 0
-              ? "bg-[#FFFBEB] text-[#92400E] border-[#F59E0B] shadow-xs"
-              : "bg-[#F0FDF4] text-[#166534] border-[#22C55E]/50"
+              ? "bg-amber-50 text-amber-800 border-amber-200/80 shadow-xs"
+              : "bg-emerald-50 text-emerald-800 border-emerald-200/80"
           }`}
         >
           {online ? (
-            <Wifi size={15} className={pendingCount > 0 ? "text-[#D97706]" : "text-[#16A34A]"} />
+            <Wifi size={15} className={pendingCount > 0 ? "text-amber-600" : "text-emerald-600"} />
           ) : (
-            <WifiOff size={15} className="text-[#DC2626] animate-pulse" />
+            <WifiOff size={15} className="text-rose-600 animate-pulse" />
           )}
-          <span className="font-extrabold">{online ? "Online" : "Offline"}</span>
+          <span className="font-bold">{online ? "Online" : "Offline"}</span>
           {pendingCount > 0 && (
             <button
               onClick={() => { if (online) syncNow(); }}
               disabled={syncing || !online}
               title={online ? "Klik untuk sinkronkan data transaksi lokal ke server" : "Menunggu koneksi internet untuk sinkron"}
-              className="tap ml-1 px-2 py-0.5 rounded-lg bg-[#D97706] hover:bg-[#B45309] text-white text-[10px] font-black flex items-center gap-1 shadow-xs disabled:opacity-80"
+              className="tap ml-1 px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black flex items-center gap-1 shadow-xs disabled:opacity-80"
             >
               <RefreshCw size={10} className={syncing ? "animate-spin" : ""} />
               <span>{pendingCount}</span>
@@ -943,21 +954,21 @@ export default function POS() {
         </div>
         {shift?.opened_by && (
           <div data-testid="pos-shift-chip" title="Shift hari ini dipakai bersama semua akun — tidak perlu buka shift baru"
-            className="hidden md:flex h-9 px-3 rounded-lg items-center gap-1.5 text-xs font-bold bg-[#EEF2FF] text-[#3730A3] shrink-0 whitespace-nowrap">
-            <Clock size={13} /> {shift.opened_by}
+            className="hidden md:flex h-10 px-3.5 rounded-xl items-center gap-1.5 text-xs font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200/60 shrink-0 whitespace-nowrap">
+            <Clock size={14} className="text-zinc-500" /> {shift.opened_by}
           </div>
         )}
         {cacheAt && (
           <div data-testid="cache-indicator" title="Waktu data produk/harga terakhir diperbarui dari server"
-            className={`hidden xl:flex h-9 px-3 rounded-lg items-center gap-1.5 text-xs font-bold shrink-0 whitespace-nowrap ${online ? "bg-[#F4F5F7] text-[#52525B]" : "bg-[#FEF3C7] text-[#B45309]"}`}>
-            <Database size={13} /> {new Date(cacheAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+            className={`hidden xl:flex h-10 px-3 rounded-xl items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap ${online ? "bg-zinc-100 text-zinc-600 border border-zinc-200/60" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>
+            <Database size={13} className="text-zinc-500" /> {new Date(cacheAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
           </div>
         )}
         {orderType === "dine_in" && (
           <button
             data-testid="pick-table-btn"
             onClick={openTablePicker}
-            className="tap h-10 sm:h-11 px-3 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 bg-[#0A0A0A] text-white shrink-0 whitespace-nowrap"
+            className="tap h-11 px-4 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white shrink-0 whitespace-nowrap shadow-xs transition-colors"
           >
             <Armchair size={16} /> {table ? table.name : "Pilih Meja"}
           </button>
@@ -1071,44 +1082,44 @@ export default function POS() {
         <div
           className={`
             fixed lg:static inset-x-0 bottom-0 z-50 lg:z-auto
-            w-full lg:w-[320px] xl:w-[350px] shrink-0 bg-white
-            border-t-2 lg:border-t-0 lg:border-l-2 border-[#E63946]
+            w-full lg:w-[320px] xl:w-[360px] shrink-0 bg-white
+            border-t lg:border-t-0 lg:border-l border-zinc-200
             flex flex-col shadow-2xl lg:shadow-none
             transition-transform duration-300 ease-in-out
             ${mobileCartOpen ? "translate-y-0 max-h-[85vh] h-[85vh]" : "translate-y-full lg:translate-y-0"}
             lg:max-h-full lg:h-full
           `}
         >
-          <div className="p-3 sm:p-4 border-b flex items-center justify-between bg-white shrink-0">
-            <div className="font-extrabold flex items-center gap-2 text-sm sm:text-base">
-              <Receipt size={18} className="text-[#E63946]" /> Keranjang ({cart.reduce((s, i) => s + i.qty, 0)})
+          <div className="p-3.5 sm:p-4 border-b border-zinc-200 flex items-center justify-between bg-white shrink-0">
+            <div className="font-bold flex items-center gap-2 text-sm sm:text-base text-zinc-900">
+              <Receipt size={18} className="text-emerald-600" /> Keranjang ({cart.reduce((s, i) => s + i.qty, 0)})
             </div>
             <div className="flex items-center gap-2">
               {cart.length > 0 && (
-                <button data-testid="clear-cart" onClick={resetSale} className="text-xs text-[#EF4444] font-bold flex items-center gap-1 hover:underline">
+                <button data-testid="clear-cart" onClick={resetSale} className="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 hover:underline">
                   <Trash2 size={13} /> Kosongkan
                 </button>
               )}
               <button
                 onClick={() => setMobileCartOpen(false)}
-                className="lg:hidden p-1.5 rounded-lg text-[#71717A] hover:bg-[#F4F5F7]"
+                className="lg:hidden p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100"
               >
                 <ChevronDown size={20} />
               </button>
             </div>
           </div>
           {orderType === "dine_in" && table && (
-            <div className="px-3 py-2 text-xs sm:text-sm font-bold ot-dine_in border-y shrink-0 flex items-center justify-between gap-2">
+            <div className="px-3.5 py-2 text-xs font-bold ot-dine_in border-b border-zinc-200 shrink-0 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 truncate">
-                <Armchair size={15} className="shrink-0" />
-                <span className="truncate">Meja: {table.name} {currentOrderId ? "· Open Bill" : ""}</span>
+                <Armchair size={15} className="shrink-0 text-zinc-700" />
+                <span className="truncate text-zinc-900">Meja: {table.name} {currentOrderId ? "· Open Bill" : ""}</span>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   data-testid="pos-move-table-btn"
                   onClick={() => handleOpenMoveTable(table)}
                   title="Pindah Meja ini ke meja lain"
-                  className="px-2 py-1 rounded-lg bg-white text-[#0A0A0A] hover:bg-[#F4F5F7] text-[11px] font-bold flex items-center gap-1 shadow-xs border"
+                  className="px-2.5 py-1 rounded-lg bg-white text-zinc-800 hover:bg-zinc-50 text-[11px] font-bold flex items-center gap-1 shadow-2xs border border-zinc-200"
                 >
                   <ArrowRightLeft size={11} /> Pindah
                 </button>
@@ -1116,16 +1127,16 @@ export default function POS() {
                   data-testid="pos-remove-table-btn"
                   onClick={removeTableFromCart}
                   title="Hapus / lepas pilihan meja dari transaksi ini"
-                  className="p-1 rounded-lg bg-[#FEE2E2] text-[#EF4444] hover:bg-[#FCA5A5] text-[11px] font-bold flex items-center gap-1"
+                  className="p-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-[11px] font-bold flex items-center gap-1"
                 >
                   <X size={13} />
                 </button>
               </div>
             </div>
           )}
-          <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2 min-h-0 bg-[#FAFAFA]">
+          <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2 min-h-0 bg-zinc-50/50">
             {cart.length === 0 && (
-              <div className="text-center text-[#a1a1aa] py-12 text-sm">Belum ada item di keranjang</div>
+              <div className="text-center text-zinc-400 py-14 text-sm font-medium">Belum ada item di keranjang</div>
             )}
             {cart.map((i) => (
               <CartItemRow
@@ -1138,12 +1149,12 @@ export default function POS() {
             ))}
           </div>
 
-          <div className="border-t p-3 sm:p-4 space-y-2.5 sm:space-y-3 bg-white shrink-0">
+          <div className="border-t border-zinc-200 p-3 sm:p-4 space-y-3 bg-white shrink-0">
             <div className="flex gap-2">
               <select
                 data-testid="discount-type" value={discType}
                 onChange={(e) => { setDiscType(e.target.value); setDiscVal(0); }}
-                className="h-10 rounded-lg border px-2 text-xs sm:text-sm bg-white"
+                className="h-10 rounded-xl border border-zinc-200 px-2.5 text-xs sm:text-sm bg-white font-medium text-zinc-800 outline-none focus:border-emerald-600"
               >
                 <option value="none">Tanpa Diskon</option>
                 <option value="percent">Diskon %</option>
@@ -1154,34 +1165,36 @@ export default function POS() {
                   data-testid="discount-value" type="number" min="0" max={discType === "percent" ? 100 : undefined} value={discVal}
                   onChange={(e) => {
                     const v = Number(e.target.value);
-                    // Diskon % boleh sampai 100% (gratis); diskon Rp maks = subtotal (dipotong di perhitungan).
                     setDiscVal(discType === "percent" ? Math.min(100, Math.max(0, v)) : Math.max(0, v));
                   }}
-                  className="h-10 rounded-lg border px-2 text-xs sm:text-sm flex-1 font-num"
+                  className="h-10 rounded-xl border border-zinc-200 px-3 text-xs sm:text-sm flex-1 font-num outline-none focus:border-emerald-600"
                 />
               )}
             </div>
             {discType === "percent" && discVal >= 100 && (
-              <div className="text-[10px] sm:text-[11px] font-bold text-[#E63946] -mt-1">Diskon 100% = gratis. HPP &amp; bagian vendor tetap dihitung penuh.</div>
+              <div className="text-[10px] sm:text-[11px] font-bold text-rose-600 -mt-1">Diskon 100% = gratis. HPP &amp; bagian vendor tetap dihitung penuh.</div>
             )}
-            <div className="space-y-1 text-xs sm:text-sm">
-              <div className="flex justify-between text-[#52525B]"><span>Subtotal</span><span className="font-num">{rupiah(subtotal)}</span></div>
-              {discount > 0 && <div className="flex justify-between text-[#EF4444]"><span>Diskon</span><span className="font-num">-{rupiah(discount)}</span></div>}
-              {service > 0 && <div className="flex justify-between text-[#52525B]"><span>Pajak Layanan {svcRate}%</span><span className="font-num">+{rupiah(service)}</span></div>}
-              <div className="flex justify-between font-extrabold text-base sm:text-lg"><span>Total</span><span className="font-num" data-testid="cart-total">{rupiah(total)}</span></div>
+            <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-200/70 space-y-1.5">
+              <div className="flex justify-between text-xs text-zinc-500 font-medium"><span>Subtotal</span><span className="font-num font-semibold text-zinc-800">{rupiah(subtotal)}</span></div>
+              {discount > 0 && <div className="flex justify-between text-xs text-rose-600 font-semibold"><span>Diskon</span><span className="font-num">-{rupiah(discount)}</span></div>}
+              {service > 0 && <div className="flex justify-between text-xs text-zinc-500 font-medium"><span>Pajak Layanan {svcRate}%</span><span className="font-num font-semibold text-zinc-800">+{rupiah(service)}</span></div>}
+              <div className="flex justify-between items-baseline pt-1.5 border-t border-zinc-200/80">
+                <span className="text-xs uppercase font-extrabold text-zinc-600 tracking-wider">Total</span>
+                <span className="font-num text-xl font-black text-emerald-700" data-testid="cart-total">{rupiah(total)}</span>
+              </div>
             </div>
             <div className="flex gap-2">
               {orderType === "dine_in" && (
                 <>
                   <button
                     data-testid="save-openbill-btn" onClick={saveOpenBill} disabled={!cart.length || !table}
-                    className="tap flex-1 h-12 py-2.5 rounded-xl bg-[#0A0A0A] text-white font-bold text-xs sm:text-sm disabled:opacity-40"
+                    className="tap flex-1 h-13 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs sm:text-sm disabled:opacity-40 transition-colors"
                   >
                     {posLabel(ui, "open_bill", "Simpan Bill")}
                   </button>
                   <button
                     data-testid="interim-bill-btn" onClick={printInterimBill} disabled={!cart.length}
-                    className="tap h-12 px-3 rounded-xl bg-white border-2 border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs disabled:opacity-40"
+                    className="tap h-13 px-3 rounded-xl bg-white border border-zinc-300 hover:bg-zinc-50 text-zinc-800 font-bold text-xs disabled:opacity-40 transition-colors flex items-center gap-1.5"
                   >
                     <Receipt size={14} /> {posLabel(ui, "bill", "Bill")}
                   </button>
@@ -1195,38 +1208,47 @@ export default function POS() {
                   setPayOpen(true);
                 }}
                 disabled={!cart.length}
-                className="tap flex-1 h-12 py-2.5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold text-sm sm:text-base disabled:opacity-40"
+                className="tap flex-1 h-13 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-base shadow-sm disabled:opacity-40 transition-all flex items-center justify-center gap-2"
               >
-                {posLabel(ui, "pay", "Bayar")}
+                <Wallet size={18} />
+                <span>{posLabel(ui, "pay", "Bayar")}</span>
               </button>
             </div>
-            <div data-testid="pos-printer-status" className={`mt-1 text-[10px] sm:text-[11px] font-bold flex items-center gap-1 ${printerStatus.level === "error" ? "text-[#B91C1C]" : printerStatus.level === "warn" ? "text-[#B45309]" : "text-[#047857]"}`}>
-              <Printer size={12} /> Printer: {printerStatus.label}
-            </div>
+            <button
+              type="button"
+              onClick={() => nav("/settings?tab=device")}
+              title="Klik untuk membuka pengaturan printer"
+              data-testid="pos-printer-status"
+              className={`tap mt-1.5 text-[10px] sm:text-[11px] font-bold flex items-center gap-1.5 hover:underline cursor-pointer ${printerStatus.level === "error" ? "text-[#B91C1C]" : printerStatus.level === "warn" ? "text-[#B45309]" : "text-[#047857]"}`}
+            >
+              <Printer size={13} />
+              <span>Printer: {printerStatus.label}</span>
+              <span className="text-[10px] font-normal text-zinc-400">· Atur</span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Floating Bottom Quick-Action Bar for Android Portrait */}
-      <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-white border-t px-3 py-2.5 flex items-center justify-between gap-3 shadow-lg">
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-white border-t border-zinc-200 px-4 py-2.5 flex items-center justify-between gap-3 shadow-lg">
         <button
           onClick={() => setMobileCartOpen(true)}
-          className="flex-1 flex items-center gap-2.5 text-left tap"
+          className="flex-1 flex items-center gap-3 text-left tap"
         >
-          <div className="relative bg-[#F4F5F7] p-2 rounded-xl text-[#E63946]">
+          <div className="relative bg-emerald-50 p-2.5 rounded-xl text-emerald-700 border border-emerald-100">
             <ShoppingCart size={20} />
             {cart.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#E63946] text-white text-[10px] font-extrabold h-4.5 min-w-4.5 px-1 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-emerald-600 text-white text-[10px] font-extrabold h-4.5 min-w-4.5 px-1 rounded-full flex items-center justify-center shadow-xs">
                 {cart.reduce((s, i) => s + i.qty, 0)}
               </span>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[11px] text-[#71717A] font-bold flex items-center gap-1">
+            <div className="text-[11px] text-zinc-500 font-bold flex items-center gap-1">
               <span>Keranjang</span>
               <ChevronUp size={13} />
             </div>
-            <div className="font-num font-extrabold text-sm text-[#0A0A0A] truncate">
+            <div className="font-num font-black text-base text-zinc-950 truncate">
               {rupiah(total)}
             </div>
           </div>
@@ -1239,8 +1261,9 @@ export default function POS() {
             setPayOpen(true);
           }}
           disabled={!cart.length}
-          className="tap h-11 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold text-sm shadow-sm disabled:opacity-40 flex items-center gap-1.5"
+          className="tap h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-sm disabled:opacity-40 flex items-center gap-2 transition-colors"
         >
+          <Wallet size={16} />
           <span>{posLabel(ui, "pay", "Bayar")}</span>
         </button>
       </div>
@@ -1254,6 +1277,7 @@ export default function POS() {
         onClearTable={clearTable}
         onDeleteTable={deleteTable}
         onCancelBill={(t) => { setTableOpen(false); setVoidBill({ id: t.open_order_id, order_number: t.name, status: "open", order_type: "dine_in", items: [], total: 0 }); }}
+        onManageTables={() => { setTableOpen(false); nav("/settings?tab=tables"); }}
       />
       <MoveTableDialog
         open={moveTableOpen}
@@ -1302,8 +1326,6 @@ export default function POS() {
         onOpenChange={(o) => { if (!o) setVoidBill(null); }}
         onDone={() => { load(); setCart([]); setTable(null); }}
       />
-      {/* Kolom Chat Gemini AI & Kirim Tugas AI Studio (Khusus Superadmin, Dapat Diaktifkan/Dinonaktifkan di Fitur) */}
-      <PosAiChatWidget />
     </div>
   );
 }
@@ -1317,6 +1339,7 @@ function TableDialog({
   onMoveTable,
   onClearTable,
   onDeleteTable,
+  onManageTables,
 }) {
   const safeTables = Array.isArray(tables) ? tables : [];
   const areas = [...new Set(safeTables.filter((t) => t?.active).map((t) => t.area).filter(Boolean))];
@@ -1324,11 +1347,19 @@ function TableDialog({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
           <DialogTitle className="flex items-center gap-2">
             <Armchair size={20} />
-            Pilih &amp; Kelola Meja (Dine-In)
+            <span>Pilih &amp; Kelola Meja (Dine-In)</span>
           </DialogTitle>
+          {onManageTables && (
+            <button
+              onClick={onManageTables}
+              className="tap text-xs font-bold text-[#E63946] hover:underline px-2.5 py-1 rounded-lg hover:bg-rose-50 flex items-center gap-1"
+            >
+              Atur Meja di Pengaturan →
+            </button>
+          )}
         </DialogHeader>
         <div className="max-h-[65vh] overflow-y-auto space-y-5 pr-1">
           {safeTables.filter((t) => t?.active).length === 0 && (
@@ -1658,70 +1689,72 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-h-[88vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Pembayaran</DialogTitle></DialogHeader>
-        <div className="text-center py-2">
-          <div className="text-xs uppercase tracking-wider text-[#52525B] font-bold">Total Tagihan</div>
-          <div className="font-num text-4xl font-extrabold text-[#E63946]">{rupiah(total)}</div>
+        <DialogHeader><DialogTitle className="text-base font-bold text-zinc-900">Pembayaran Kasir</DialogTitle></DialogHeader>
+        <div className="text-center py-2.5 bg-zinc-50 rounded-2xl border border-zinc-200/60 mb-2">
+          <div className="text-xs uppercase tracking-wider text-zinc-500 font-extrabold">Total Tagihan</div>
+          <div className="font-num text-4xl sm:text-5xl font-black text-emerald-600 tracking-tight mt-0.5">{rupiah(total)}</div>
         </div>
 
         {/* Member & poin */}
-        <div className="rounded-xl border border-[#E4E4E7] p-3 space-y-2">
-          <div className="text-xs font-bold text-[#52525B] uppercase tracking-wider">Member (poin loyalitas)</div>
+        <div className="rounded-xl border border-zinc-200 p-3 space-y-2 bg-white">
+          <div className="text-xs font-bold text-zinc-600 uppercase tracking-wider">Member &amp; Loyalitas</div>
           <div className="flex gap-2">
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="No. WA member"
-              className="flex-1 h-10 rounded-lg border px-3 text-sm" />
-            <button onClick={findMember} disabled={searching} className="tap h-10 px-3 rounded-lg bg-[#0A0A0A] text-white text-sm font-bold disabled:opacity-50">
+              className="flex-1 h-10 rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-emerald-600" />
+            <button onClick={findMember} disabled={searching} className="tap h-10 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold disabled:opacity-50 transition-colors">
               {searching ? "..." : "Cari"}
             </button>
           </div>
           {member && (
-            <div className="text-sm bg-[#F4F5F7] rounded-lg p-2 flex flex-wrap items-center gap-2">
-              <span className="font-bold">{member.name}</span>
-              <span className="text-[#047857] font-bold">Poin {(member.points || 0).toLocaleString("id-ID")}</span>
+            <div className="text-sm bg-zinc-50 border border-zinc-200/80 rounded-xl p-2.5 flex flex-wrap items-center gap-2">
+              <span className="font-bold text-zinc-900">{member.name}</span>
+              <span className="text-emerald-700 font-bold text-xs">Poin {(member.points || 0).toLocaleString("id-ID")}</span>
               <input type="number" min="0" max={member.points} value={redeemPts} onChange={(e) => setRedeemPts(e.target.value)}
-                placeholder={`Tukar poin (1pt=Rp${pointRate.toLocaleString("id-ID")})`} className="ml-auto w-40 h-9 rounded-lg border px-2 font-num text-sm" />
+                placeholder={`Tukar poin (1pt=Rp${pointRate.toLocaleString("id-ID")})`} className="ml-auto w-44 h-9 rounded-lg border border-zinc-200 px-2.5 font-num text-xs outline-none focus:border-emerald-600" />
             </div>
           )}
           {redeemVal > 0 && (
-            <div className="flex justify-between text-sm font-bold"><span>Potongan poin</span><span className="text-[#E63946] font-num">-{rupiah(redeemVal)}</span></div>
+            <div className="flex justify-between text-xs font-bold pt-1"><span>Potongan poin</span><span className="text-rose-600 font-num">-{rupiah(redeemVal)}</span></div>
           )}
         </div>
 
         {/* Alasan diskon besar */}
         {needReason && (
           <div>
-            <label className="text-xs uppercase tracking-wider font-bold text-[#52525B]">Alasan diskon (wajib)</label>
+            <label className="text-xs uppercase tracking-wider font-bold text-zinc-600">Alasan Diskon (Wajib Diisi)</label>
             <textarea value={discReason} onChange={(e) => setDiscReason(e.target.value)} rows={2}
               placeholder="Contoh: diskon member, promo perayaan, komplain pelanggan…"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#E63946]" />
+              className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-emerald-600" />
           </div>
         )}
 
         {/* Kupon diskon */}
-        <div className="rounded-xl border border-[#E4E4E7] p-3 space-y-2">
-          <div className="text-xs font-bold text-[#52525B] uppercase tracking-wider">Kupon Diskon</div>
+        <div className="rounded-xl border border-zinc-200 p-3 space-y-2 bg-white">
+          <div className="text-xs font-bold text-zinc-600 uppercase tracking-wider">Kupon Diskon</div>
           <div className="flex gap-2">
             <input data-testid="coupon-input" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-              placeholder="Kode kupon (mis. HEMAT10)" className="flex-1 h-10 rounded-lg border px-3 text-sm font-mono uppercase" />
+              placeholder="Kode kupon (mis. HEMAT10)" className="flex-1 h-10 rounded-xl border border-zinc-200 px-3 text-sm font-mono uppercase outline-none focus:border-emerald-600" />
             <button data-testid="coupon-clear" onClick={() => setCouponCode("")} disabled={!couponCode}
-              className="tap h-10 px-3 rounded-lg bg-[#F4F5F7] text-xs font-bold disabled:opacity-40">Batal</button>
+              className="tap h-10 px-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-xs font-bold disabled:opacity-40 transition-colors">Batal</button>
           </div>
         </div>
 
         {/* Metode pembayaran — bisa 1 atau 2 sekaligus */}
         <div>
-          <div className="text-xs uppercase tracking-wider font-bold text-[#52525B] mb-2">
-            Metode Pembayaran {isSplit && <span className="text-[#7C3AED]">· 2 metode dipilih</span>}
+          <div className="text-xs uppercase tracking-wider font-bold text-zinc-600 mb-2">
+            Pilih Metode Pembayaran {isSplit && <span className="text-purple-700">· 2 metode dipilih</span>}
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2.5">
             {pms.map((pm) => (
               <button
                 key={pm.id} data-testid={`pm-${pm.type}`} onClick={() => toggleMethod(pm)}
-                className={`tap h-14 rounded-xl border-2 font-bold text-sm ${
-                  isSelected(pm.id) ? "bg-[#E63946] text-white border-[#E63946]" : "bg-white border-[#E4E4E7]"
+                className={`tap h-14 rounded-xl border-2 font-bold text-sm transition-all flex flex-col items-center justify-center ${
+                  isSelected(pm.id)
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                    : "bg-white border-zinc-200 hover:border-zinc-300 text-zinc-800"
                 }`}
               >
-                {pm.name}
+                <span>{pm.name}</span>
               </button>
             ))}
           </div>
@@ -1845,7 +1878,7 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
                 <div className="rounded-xl bg-emerald-100 border border-emerald-300 p-3 text-emerald-950 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-extrabold">
                     <CheckCircle2 size={18} className="text-emerald-600" />
-                    <span>✓ Uang Pas Diterima</span>
+                    <span>Uang Pas Diterima</span>
                   </div>
                   <span className="text-xs font-black text-emerald-800 font-num">Kembalian: Rp 0</span>
                 </div>
@@ -1853,7 +1886,7 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
                 <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-rose-950 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-extrabold">
                     <AlertTriangle size={18} className="text-rose-600" />
-                    <span>⚠️ Uang Masih Kurang</span>
+                    <span>Uang Masih Kurang</span>
                   </div>
                   <span className="text-xs font-black text-rose-600 font-num">
                     Kurang {rupiah(payable - amt1)}
@@ -1891,7 +1924,7 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
             ))}
             <div className={`text-xs font-bold flex items-center justify-between ${splitOk ? "text-[#047857]" : "text-[#EF4444]"}`}>
               <span>Total bagian: {rupiah(splitTotal)} / {rupiah(payable)}</span>
-              <span>{splitOk ? "✓ Pas — lanjutkan" : "Belum pas (jumlah harus sama dengan tagihan)"}</span>
+              <span>{splitOk ? "Pas — lanjutkan" : "Belum pas (jumlah harus sama dengan tagihan)"}</span>
             </div>
           </div>
         )}
@@ -1901,9 +1934,10 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
             data-testid="confirm-pay-btn"
             disabled={!canPay}
             onClick={submit}
-            className="tap w-full h-13 py-3 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+            className="tap w-full h-14 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-base disabled:opacity-40 flex items-center justify-center gap-2 shadow-sm transition-all"
           >
-            <CheckCircle2 size={18} /> Konfirmasi Bayar {payable !== total ? `· ${rupiah(payable)}` : ""} {isSplit ? `(${selected.map((m) => m.name).join(" + ")})` : ""}
+            <CheckCircle2 size={20} />
+            <span>Konfirmasi Bayar {payable !== total ? `· ${rupiah(payable)}` : ""} {isSplit ? `(${selected.map((m) => m.name).join(" + ")})` : ""}</span>
           </button>
         </DialogFooter>
       </DialogContent>

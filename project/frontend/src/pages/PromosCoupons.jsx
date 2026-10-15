@@ -1,9 +1,8 @@
-import { Suspense, lazy, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tag, Ticket } from "lucide-react";
-
-const Promos = lazy(() => import("@/pages/Promos"));
-const Coupons = lazy(() => import("@/pages/Coupons"));
+import Promos from "@/pages/Promos";
+import Coupons from "@/pages/Coupons";
 
 /* Promo & Kupon digabung dalam satu menu (sub-tab). */
 export default function PromosCoupons() {
@@ -29,9 +28,7 @@ export default function PromosCoupons() {
         ))}
       </div>
       <div className="flex-1 overflow-hidden">
-        <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin h-8 w-8 border-4 border-[#E63946] border-t-transparent rounded-full"></div></div>}>
-          <Active />
-        </Suspense>
+        <Active />
       </div>
     </div>
   );

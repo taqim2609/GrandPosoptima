@@ -93,5 +93,25 @@ service cloud.firestore {
       allow create: if isValidId(logId) && incoming().size() <= 10;
       allow read, update, delete: if isAdmin() && isValidId(logId);
     }
+
+    // WhatsApp outbox collection for cross-node sync
+    match /wa_outbox/{outboxId} {
+      allow read: if isSignedIn() && isValidId(outboxId);
+      allow create, update: if isSignedIn() && isValidId(outboxId);
+      allow delete: if isAdmin() && isValidId(outboxId);
+    }
+
+    // WhatsApp live chat threads and messages
+    match /wa_chats/{chatId} {
+      allow read: if isSignedIn() && isValidId(chatId);
+      allow create, update: if isSignedIn() && isValidId(chatId);
+      allow delete: if isAdmin() && isValidId(chatId);
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && isValidId(messageId);
+        allow create, update: if isSignedIn() && isValidId(messageId);
+        allow delete: if isAdmin() && isValidId(messageId);
+      }
+    }
   }
 }

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Planora Change"
+  short_description: "Synchronize a new product change across the kit."
+  default_prompt: "Use $planora-change to add this product change to the PRD, experience guide, execution phases, and TODO."
+
+policy:
+  allow_implicit_invocation: false

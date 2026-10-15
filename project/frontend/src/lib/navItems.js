@@ -25,6 +25,5 @@ export const NAV_ITEMS = [
   // Laporan & Sistem
   { to: "/laporan", label: "Laporan", icon: BarChart3, roles: ["admin", "kasir"], mod: "laporan", section: "Laporan & Sistem" },
   { to: "/asisten-ai", label: "Asisten AI", icon: Bot, roles: ["admin", "kasir"], mod: "ai", section: "Laporan & Sistem" },
-  { to: "/device", label: "Perangkat", icon: Printer, roles: ["kasir", "input"], section: "Laporan & Sistem" },
   { to: "/settings", label: "Pengaturan", icon: Settings, roles: ["admin"], mods: ["pengaturan", "pengguna", "role_izin"], section: "Laporan & Sistem" },
 ];

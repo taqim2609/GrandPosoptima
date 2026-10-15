@@ -53,25 +53,37 @@ if (typeof window !== "undefined") {
   }
 }
 
-// Service worker HANYA untuk versi web (PWA). Di APK Android (Capacitor) service worker
-// BERKONFLIK dengan update OTA (Capgo): SW menyajikan index/JS lama dari cache setelah
-// bundle diganti -> layar putih. Di APK, ketahanan offline sudah ditangani localStorage,
-// jadi SW dimatikan & cache lama dibersihkan agar OTA berjalan mulus.
-const IS_NATIVE = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
-
-if (IS_NATIVE) {
-  // Bersihkan sisa service worker / cache dari instalasi lama (pemulihan dari blank).
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistrations()
-      .then((regs) => regs.forEach((r) => r.unregister()))
-      .catch(() => {});
-  }
+// Unregister service worker completely (complying with Golden Rule #2: avoid cache conflicts with OTA and new builds)
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then((regs) => regs.forEach((r) => r.unregister()))
+    .catch(() => {});
   if (typeof caches !== "undefined") {
     caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
   }
-} else if ("serviceWorker" in navigator) {
-  // Web / PWA: tetap pakai service worker untuk ketahanan offline app-shell.
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+
+// Global auto-reload recovery for ChunkLoadError (stale JS chunk after new deployment)
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (event) => {
+    const msg = event?.message || event?.error?.message || "";
+    if (msg.includes("ChunkLoadError") || msg.includes("Loading chunk")) {
+      const reloaded = sessionStorage.getItem("gak_chunk_error_reloaded");
+      if (!reloaded) {
+        sessionStorage.setItem("gak_chunk_error_reloaded", "true");
+        window.location.reload();
+      }
+    }
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const msg = event?.reason?.message || String(event?.reason || "");
+    if (msg.includes("ChunkLoadError") || msg.includes("Loading chunk")) {
+      const reloaded = sessionStorage.getItem("gak_chunk_error_reloaded");
+      if (!reloaded) {
+        sessionStorage.setItem("gak_chunk_error_reloaded", "true");
+        window.location.reload();
+      }
+    }
   });
 }

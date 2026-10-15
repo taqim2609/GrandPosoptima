@@ -55,11 +55,14 @@ export default function ProtectedRoute({ children, roles, mod }) {
   // Wajib ganti password (akun baru / role Stok Opname, atau setelah direset admin):
   // semua halaman ditahan sampai password diganti.
   if (user.must_change_password) return <ForceChangePassword />;
+  // Super Admin (owner) selalu memiliki akses penuh ke seluruh halaman
+  if (isSuperAdmin(user)) return children;
+
   // Bila halaman ini punya modul RBAC: daftar izin dari server yang menentukan
   // (termasuk role `admin` yang boleh dibatasi Super Admin). Tanpa modul → cek role lama.
   const allowed = mod
     ? (Array.isArray(mod) ? canAny(user, mod) : can(user, mod))
-    : !roles || roles.includes(user.role);
+    : !roles || roles.includes(user.role) || roles.includes(roleBaseOf(user));
   if (allowed) return children;
   const land = landingFor(user);
   if (land && land !== location.pathname) return <Navigate to={land} replace />;

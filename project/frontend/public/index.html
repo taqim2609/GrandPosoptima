@@ -112,11 +112,26 @@
           if (sendBtn) sendBtn.onclick = sendError;
         }
         window.addEventListener("error", function (e) {
-          show((e && e.message) || "Unknown error", (e && e.filename) ? (e.filename + ":" + e.lineno) : "");
+          var msg = (e && e.message) || "";
+          if (/ChunkLoadError|Loading chunk/i.test(msg)) {
+            if (!sessionStorage.getItem("gak_chunk_reloaded")) {
+              sessionStorage.setItem("gak_chunk_reloaded", "1");
+              window.location.reload();
+              return;
+            }
+          }
+          show(msg || "Unknown error", (e && e.filename) ? (e.filename + ":" + e.lineno) : "");
         });
         window.addEventListener("unhandledrejection", function (e) {
           var r = e && e.reason; var m = "";
           try { m = (r && r.message) || String(r); } catch (x) {}
+          if (/ChunkLoadError|Loading chunk/i.test(m)) {
+            if (!sessionStorage.getItem("gak_chunk_reloaded")) {
+              sessionStorage.setItem("gak_chunk_reloaded", "1");
+              window.location.reload();
+              return;
+            }
+          }
           // Kegagalan HTTP/jaringan (mis. 502 server sesaat, timeout, offline) JANGAN
           // menampilkan overlay penuh — halaman tetap bisa dipakai & request lain jalan.
           if (!m || /Request failed with status code|Network Error|timeout of|Failed to fetch|Load failed|ERR_/i.test(m)) {

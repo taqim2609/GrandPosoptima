@@ -193,20 +193,32 @@ function FeatureCard({ featKey, data, onSaved }) {
         </button>
         <button type="button" data-testid={`provider-chenzk-${featKey}`} onClick={() => pickProvider("chenzk")}
           className={`tap h-11 rounded-xl border-2 font-bold flex items-center justify-center gap-2 transition-colors ${!isGemini ? "bg-[#0A0A0A] border-[#0A0A0A] text-white" : "border-[#D4D4D8] text-[#0A0A0A] hover:bg-[#FAFAFA]"}`}>
-          <Cpu size={16} /> chenzk
+          <Cpu size={16} /> OpenAI / Hermes (VPS)
         </button>
       </div>
 
       <div className="space-y-3">
         {!isGemini && (
-          <Field label="Base URL" icon={Link2}>
+          <Field label="Base URL (OpenAI-Compatible / Hermes Gateway)" icon={Link2}>
             <input data-testid={`ai-base-url-${featKey}`} value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })}
-              placeholder="https://chenzk.top/v1" className="w-full h-11 rounded-xl border px-3 font-num" />
-            <button type="button" data-testid={`preset-chenzk-${featKey}`}
-              onClick={() => setForm({ ...form, base_url: "https://chenzk.top/v1" })}
-              className="mt-1.5 text-[11px] font-bold text-[#E63946] hover:underline">
-              + Pakai endpoint chenzk (ezkielyna.store)
-            </button>
+              placeholder="http://100.x.y.z:8000/v1 atau https://chenzk.top/v1" className="w-full h-11 rounded-xl border px-3 font-num" />
+            <div className="flex gap-2 flex-wrap mt-1.5">
+              <button type="button" data-testid={`preset-hermes-funnel-${featKey}`}
+                onClick={() => setForm((f) => ({ ...f, base_url: "https://gudang-644.tailf3a839.ts.net:10000/p/business-analyst", model: "business-analyst" }))}
+                className="text-[11px] font-bold text-[#2563EB] hover:underline bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                + Hermes Funnel (https://gudang-644...:10000/p/business-analyst)
+              </button>
+              <button type="button" data-testid={`preset-hermes-tailscale-${featKey}`}
+                onClick={() => setForm((f) => ({ ...f, base_url: "http://100.117.186.13:8642/p/business-analyst", model: "business-analyst" }))}
+                className="text-[11px] font-bold text-[#0D9488] hover:underline bg-[#CCFBF1] px-2 py-0.5 rounded border border-[#99F6E4]">
+                + Hermes Tailscale (http://100.117.186.13:8642/p/business-analyst)
+              </button>
+              <button type="button" data-testid={`preset-chenzk-${featKey}`}
+                onClick={() => setForm((f) => ({ ...f, base_url: "https://chenzk.top/v1", model: f.model || "gpt-4o-mini" }))}
+                className="text-[11px] font-bold text-[#71717A] hover:underline bg-[#F4F4F5] px-2 py-0.5 rounded border border-[#E4E4E7]">
+                + Endpoint Chenzk (https://chenzk.top/v1)
+              </button>
+            </div>
           </Field>
         )}
         {isGemini && (

@@ -130,12 +130,13 @@ def _claim_filter(now_dt, _lease_seconds: int) -> dict:
 
 
 def is_local_bridge_url(url: str) -> bool:
-    """True hanya bila URL adapter menunjuk localhost.
+    """True bila URL adapter menunjuk localhost, atau remote/Tailscale yang diizinkan.
 
     Pagar keamanan: adapter Hermes memegang akses kirim ke sesi WhatsApp.
-    Bila URL-nya menunjuk host lain, konfigurasi dianggap salah dan pengiriman
-    ditolak — jangan sampai backend diarahkan ke endpoint publik.
+    Bila HERMES_WA_ALLOW_REMOTE=1 atau HERMES_WA_ALLOW_TAILSCALE=1 diaktifkan, URL remote/Tailscale diizinkan.
     """
+    if os.environ.get("HERMES_WA_ALLOW_REMOTE", "0") in ("1", "true", "True") or os.environ.get("HERMES_WA_ALLOW_TAILSCALE", "0") in ("1", "true", "True"):
+        return bool(re.match(r"^https?://", (url or "").strip()))
     m = re.match(r"^https?://([^/:]+)", (url or "").strip())
     if not m:
         return False
@@ -300,6 +301,105 @@ async def send_text(to: str, text: str, cfg: dict | None = None, request_id: str
     # Status HTTP ikut disertakan supaya diagnosa jelas, tanpa isi pesan/nomor.
     logger.warning("gateway Hermes menolak kirim: HTTP %s", r.status_code)
     return False, {"error": f"HTTP {r.status_code}: {str(err)[:160]}"}
+
+
+WACLOUD_DEFAULT_BASE = "https://app.wacloud.id/api/v1"
+
+
+def wacloud_config(db_cfg: dict | None = None) -> dict:
+    """Konfigurasi failover wacloud.id dari database atau environment."""
+    cfg = db_cfg or {}
+    base_url = (cfg.get("base_url") or os.environ.get("WACLOUD_BASE_URL") or WACLOUD_DEFAULT_BASE).strip().rstrip("/")
+    api_key = (cfg.get("api_key") or os.environ.get("WACLOUD_API_KEY") or "").strip()
+    device_id = (cfg.get("device_id") or os.environ.get("WACLOUD_DEVICE_ID") or "").strip()
+    auto_failover = cfg.get("auto_failover", True) if "auto_failover" in cfg else True
+    return {
+        "base_url": base_url,
+        "api_key": api_key,
+        "device_id": device_id,
+        "auto_failover": bool(auto_failover),
+        "configured": bool(api_key and device_id),
+    }
+
+
+async def send_wacloud_text(to: str, text: str, cfg: dict | None = None) -> tuple[bool, dict]:
+    """Kirim teks melalui REST API wacloud.id (https://app.wacloud.id/api/v1)."""
+    c = cfg or wacloud_config()
+    api_key = c.get("api_key")
+    device_id = c.get("device_id")
+    base = (c.get("base_url") or WACLOUD_DEFAULT_BASE).rstrip("/")
+    if not api_key:
+        return False, {"error": "API Key wacloud.id belum diisi di Pengaturan"}
+    if not device_id:
+        return False, {"error": "Device ID wacloud.id belum dipilih di Pengaturan"}
+
+    digits = "".join(ch for ch in str(to or "") if ch.isdigit())
+    if digits.startswith("0"):
+        digits = "62" + digits[1:]
+
+    import httpx
+    url = f"{base}/messages"
+    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+    payload = {
+        "device_id": device_id,
+        "to": digits,
+        "message_type": "text",
+        "text": text,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.post(url, headers=headers, json=payload)
+    except Exception as e:
+        logger.warning("gateway wacloud.id tidak dapat dihubungi: %s", type(e).__name__)
+        return False, {"error": f"wacloud.id gagal dihubungi ({type(e).__name__})", "provider": "wacloud"}
+
+    if r.status_code in (200, 201):
+        try:
+            data = r.json()
+            msg_id = data.get("id") or (data.get("data") or {}).get("id") or "wacloud_sent"
+            return True, {"id": msg_id, "provider": "wacloud"}
+        except Exception:
+            return True, {"id": "wacloud_sent", "provider": "wacloud"}
+
+    err = f"HTTP {r.status_code}"
+    try:
+        edata = r.json()
+        err += f": {edata.get('message') or edata.get('detail') or edata.get('error') or ''}"
+    except Exception:
+        pass
+    logger.warning("gateway wacloud.id menolak kirim: %s", err[:120])
+    return False, {"error": err[:160], "provider": "wacloud"}
+
+
+async def send_text_with_failover(
+    to: str,
+    text: str,
+    hermes_cfg: dict | None = None,
+    wacloud_cfg: dict | None = None,
+    request_id: str = "",
+) -> tuple[bool, dict]:
+    """Kirim teks dengan urutan prioritas: Hermes (Primary) -> wacloud.id (Failover)."""
+    # 1. Coba Hermes jika dikonfigurasi dan peran mengizinkan
+    h_ok, h_info = await send_text(to, text, cfg=hermes_cfg, request_id=request_id)
+    if h_ok:
+        h_info["provider"] = "hermes"
+        return True, h_info
+
+    # 2. Cek apakah failover ke wacloud.id tersedia
+    w_cfg = wacloud_config(wacloud_cfg)
+    if w_cfg.get("configured") and w_cfg.get("auto_failover", True):
+        logger.info("Hermes tidak dapat digunakan (%s), mencoba failover wacloud.id", h_info.get("error", "offline"))
+        w_ok, w_info = await send_wacloud_text(to, text, cfg=w_cfg)
+        if w_ok:
+            w_info["failover_used"] = True
+            return True, w_info
+        return False, {
+            "error": f"Hermes gagal ({h_info.get('error')}) & wacloud.id gagal ({w_info.get('error')})",
+            "hermes_error": h_info.get("error"),
+            "wacloud_error": w_info.get("error"),
+        }
+
+    return h_ok, h_info
 
 
 async def enqueue(db, to: str, text: str, kind: str = "manual", wa_id: str = "", attempts: int = 0):

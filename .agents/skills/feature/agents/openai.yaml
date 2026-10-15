@@ -1,0 +1,8 @@
+interface:
+  display_name: "Feature"
+  short_description: "Plan and implement a scoped product feature."
+  default_prompt: "Use $feature to plan, implement, and verify this feature."
+
+policy:
+  allow_implicit_invocation: false
+
