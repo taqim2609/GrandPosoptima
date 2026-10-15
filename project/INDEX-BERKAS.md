@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-15 10:48:21 WIB`
-> Total Berkas Terindeks: **467 berkas**
+> Terakhir diperbarui: `2026-10-15 14:38:31 WIB`
+> Total Berkas Terindeks: **471 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -18,14 +18,14 @@ python3 project/scripts/update_file_index.py
 | :--- | :---: | :--- |
 | **Cloud Run & Server Root** | `6` | Modul cloud run & server root sistem POS |
 | **Backend FastAPI & Data** | `8` | Modul backend fastapi & data sistem POS |
-| **Frontend — Halaman UI** | `44` | Modul frontend — halaman ui sistem POS |
+| **Frontend — Halaman UI** | `46` | Modul frontend — halaman ui sistem POS |
 | **Frontend — Komponen UI** | `71` | Modul frontend — komponen ui sistem POS |
 | **Frontend — State & Context** | `2` | Modul frontend — state & context sistem POS |
 | **Frontend — Utility & Library** | `22` | Modul frontend — utility & library sistem POS |
 | **Mobile Android & Sunmi Hardware** | `52` | Modul mobile android & sunmi hardware sistem POS |
 | **Integrasi Hermes Agent** | `2` | Modul integrasi hermes agent sistem POS |
 | **Testing & Verifikasi** | `8` | Modul testing & verifikasi sistem POS |
-| **Planora Framework** | `46` | Modul planora framework sistem POS |
+| **Planora Framework** | `48` | Modul planora framework sistem POS |
 | **Dokumentasi Teknis** | `13` | Modul dokumentasi teknis sistem POS |
 | **Automasi n8n & Workflow** | `3` | Modul automasi n8n & workflow sistem POS |
 | **Deployment & DevOps** | `61` | Modul deployment & devops sistem POS |
@@ -60,11 +60,12 @@ python3 project/scripts/update_file_index.py
 | `project/backend/requirements.txt` | Daftar pustaka Python backend (FastAPI, Motor, Uvicorn, bcrypt, jwt). |
 | `project/backend/server.py` | Backend FastAPI (Python/Motor) utama melayani semua endpoint POS (/api). |
 
-### 📁 Frontend — Halaman UI (44 berkas)
+### 📁 Frontend — Halaman UI (46 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
 | `project/frontend/src/pages/AppVersi.jsx` | Halaman antarmuka pengguna untuk modul AppVersi. |
+| `project/frontend/src/pages/ArticlesAdmin.jsx` | Halaman antarmuka pengguna untuk modul ArticlesAdmin. |
 | `project/frontend/src/pages/AssistantAI.jsx` | Antarmuka obrolan cerdas Asisten AI POS dengan dukungan multi-model. |
 | `project/frontend/src/pages/Cash.jsx` | Pencatatan mutasi kas masuk dan kas keluar operasional. |
 | `project/frontend/src/pages/Catalog.jsx` | Halaman antarmuka pengguna untuk modul Catalog. |
@@ -76,6 +77,7 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/src/pages/Ingredients.jsx` | Manajemen inventaris bahan baku dapur dan peringatan stok menipis. |
 | `project/frontend/src/pages/Integritas.jsx` | Halaman antarmuka pengguna untuk modul Integritas. |
 | `project/frontend/src/pages/Inventory.jsx` | Halaman antarmuka pengguna untuk modul Inventory. |
+| `project/frontend/src/pages/LandingPage.jsx` | Halaman antarmuka pengguna untuk modul LandingPage. |
 | `project/frontend/src/pages/Login.jsx` | Halaman antarmuka pengguna untuk modul Login. |
 | `project/frontend/src/pages/Members.jsx` | Manajemen data pelanggan setia, perolehan poin, dan riwayat belanja. |
 | `project/frontend/src/pages/Orders.jsx` | Daftar pesanan aktif, riwayat transaksi, dan cetak ulang struk. |
@@ -296,7 +298,7 @@ python3 project/scripts/update_file_index.py
 | `project/tests/test_wa_provider_migration.py` | Pengujian migrasi provider legacy (wacloud/evolution) ke hermes (3 tes). |
 | `project/tests/test_wa_status_security.py` | Skrip pengujian otomatis: test_wa_status_security.py. |
 
-### 📁 Planora Framework (46 berkas)
+### 📁 Planora Framework (48 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -323,6 +325,7 @@ python3 project/scripts/update_file_index.py
 | `.planora/PRD/asumsi-dan-pertanyaan.md` | Dokumen spesifikasi Planora (asumsi-dan-pertanyaan.md). |
 | `.planora/PRD/fitur/hardware-sunmi.md` | Dokumen spesifikasi Planora (hardware-sunmi.md). |
 | `.planora/PRD/fitur/keamanan-login.md` | Dokumen spesifikasi Planora (keamanan-login.md). |
+| `.planora/PRD/fitur/landing-page-dan-reservasi.md` | Dokumen spesifikasi Planora (landing-page-dan-reservasi.md). |
 | `.planora/PRD/fitur/manajemen-meja.md` | Dokumen spesifikasi Planora (manajemen-meja.md). |
 | `.planora/PRD/fitur/otomasi-ai-whatsapp.md` | Dokumen spesifikasi Planora (otomasi-ai-whatsapp.md). |
 | `.planora/PRD/fitur/pos-kasir.md` | Dokumen spesifikasi Planora (pos-kasir.md). |
@@ -343,6 +346,7 @@ python3 project/scripts/update_file_index.py
 | `.planora/UI/foundations/warna-tipografi.md` | Dokumen spesifikasi Planora (warna-tipografi.md). |
 | `.planora/UI/patterns/README.md` | Dokumen spesifikasi Planora (README.md). |
 | `.planora/UI/patterns/dialog-bayar.md` | Dokumen spesifikasi Planora (dialog-bayar.md). |
+| `.planora/UI/screens/landing-page.md` | Dokumen spesifikasi Planora (landing-page.md). |
 | `.planora/UI/screens/pos-kasir.md` | Dokumen spesifikasi Planora (pos-kasir.md). |
 | `.planora/UI/screens/screen-inventory.md` | Dokumen spesifikasi Planora (screen-inventory.md). |
 | `.planora/manifest.json` | Manifes status dan daftar berkas paket Planora. |

@@ -375,8 +375,8 @@ app.use((req, res, next) => {
       return next();
     }
 
-    // Serves uploads or static asset resources as public
-    if (cleanPath.startsWith('/api/uploads') || cleanPath.startsWith('/api/static')) {
+    // Serves public landing page endpoints, uploads, or static asset resources
+    if (cleanPath.startsWith('/api/public') || cleanPath.startsWith('/api/uploads') || cleanPath.startsWith('/api/static')) {
       return next();
     }
 
@@ -738,6 +738,64 @@ const db = {
   ],
   reservations: [
     { id: 'res-1', customer_name: 'Bpk. Faisal', phone: '081399887766', table_id: 't-5', guest_count: 8, date_time: new Date(Date.now() + 7200000).toISOString(), status: 'confirmed', notes: 'Makan malam keluarga' },
+  ],
+  articles: [
+    {
+      id: 'art-1',
+      title: 'Rahasia 16 Rempah Kuah Beulangong Aceh',
+      slug: 'rahasia-16-rempah-kuah-beulangong-aceh',
+      category: 'Filosofi Rempah',
+      excerpt: 'Kuah Beulangong bukan sekadar gulai kambing biasa. Di balik kawah belanga tembaga raksasa, tersimpan perpaduan 16 rempah nusantara dan nangka muda yang melambangkan kebersamaan masyarakat Aceh.',
+      content: 'Kuah Beulangong adalah salah satu warisan kuliner paling sakral di Tanah Rencong. Dimasak dalam kuali atau belanga besar berdiameter hingga satu meter, hidangan ini umumnya disajikan saat kenduri adat, peringatan Maulid Nabi, maupun pesta perkawinan.\n\nKeistimewaan Kuah Beulangong terletak pada harmoni rempah: ketumbar sangrai, jintan manis, kapulaga, kayu manis, pekak, kelapa gongseng (u neuheue), hingga cabai kering khas Aceh. Daging kambing atau sapi dipadukan dengan nangka muda (bak panah) atau pisang kepok muda, menghasilkan kuah merah pekat yang gurih, pedas aromatik, dan kaya tekstur tanpa menggunakan santan kental berlebih.\n\nDi Grand Aceh Kuliner, kami menjaga keaslian resep ini dengan memasak kuah beulangong secara perlahan di atas api kayu bakar terpilih untuk meresapkan aroma rempah ke setiap serat daging.',
+      cover_image: '',
+      author: 'Dapur Utama Grand Aceh',
+      read_time: '4 menit baca',
+      status: 'published',
+      created_at: '2026-10-10T10:00:00.000Z',
+      updated_at: '2026-10-10T10:00:00.000Z'
+    },
+    {
+      id: 'art-2',
+      title: 'Seni Menyeduh Kopi Khop & Filosofi Sanger',
+      slug: 'seni-menyeduh-kopi-khop-filosofi-sanger',
+      category: 'Tradisi Kopi',
+      excerpt: 'Menikmati kopi dengan cangkir terbalik di atas piring kecil adalah keunikan pesisir barat Aceh. Bersanding dengan Kopi Sanger dengan filosofi "sama-sama ngerti".',
+      content: 'Bagi masyarakat Aceh, warung kopi adalah ruang silaturahmi sekaligus panggung musyawarah rakyat. Salah satu tradisi seduh kopi yang paling legendaris adalah Kopi Khop, lahir dari kearifan nelayan pesisir Meulaboh, Aceh Barat.\n\nKopi disajikan dalam gelas kaca yang dibalik di atas piring tatakan. Tujuannya adalah menjaga suhu kopi tetap panas lebih lama sekaligus mencegah debu pantai atau pasir masuk saat nelayan melaut. Untuk meminumnya, Anda cukup menyelipkan sedotan atau meniup cairan kopi perlahan hingga merembes ke piring tatakan lalu diseruput.\n\nSementara itu, Kopi Sanger lahir dari mahasiswa di Banda Aceh pada era 1990-an. "Sanger" merupakan akronim dari "sama-sama ngerti" — racikan kopi saring pekat dengan sedikit susu kental manis dan gula yang dikocok hingga berbuih halus, memberikan kenikmatan kopi susu premium dengan harga yang bersahabat bagi semua kalangan.',
+      cover_image: '',
+      author: 'Barista Master Grand Aceh',
+      read_time: '3 menit baca',
+      status: 'published',
+      created_at: '2026-10-11T14:30:00.000Z',
+      updated_at: '2026-10-11T14:30:00.000Z'
+    },
+    {
+      id: 'art-3',
+      title: 'Ayam Tangkap: Gurih Renyah Harum Daun Temurui',
+      slug: 'ayam-tangkap-gurih-renyah-harum-daun-temurui',
+      category: 'Resep Warisan',
+      excerpt: 'Sensasi potongan ayam berbumbu ketumbar dan bawang putih yang diselimuti gunungan daun kari temurui dan cabai hijau goreng renyah khas Aceh Besar.',
+      content: 'Ayam Tangkap adalah mahakarya kuliner khas Aceh Besar. Dinamakan demikian karena potongan ayam kampung berukuran kecil "bersembunyi" di balik tumpukan dedaunan aromatik yang digoreng garing renyah.\n\nDedaunan yang digunakan bukan sekadar hiasan: daun temurui (daun kari khas Aceh), daun pandan wangi, dan cabai hijau besar diiris tipis lalu digoreng bersamaan dengan ayam hingga renyah keemasan. Daun temurui yang garing bisa dimakan bersama nasi hangat, memberikan sensasi herbal yang gurih, renyah, dan harum semerbak.\n\nDi Grand Aceh Kuliner, kami hanya memilih ayam pejantan/kampung muda agar daging tetap empuk lembut di dalam dengan kulit luar yang garing renyah.',
+      cover_image: '',
+      author: 'Chef Eksekutif Grand Aceh',
+      read_time: '5 menit baca',
+      status: 'published',
+      created_at: '2026-10-12T09:15:00.000Z',
+      updated_at: '2026-10-12T09:15:00.000Z'
+    },
+    {
+      id: 'art-4',
+      title: 'Karakteristik Mie Aceh: Kenyal Tebal Berbumbu Kari Pesisir',
+      slug: 'karakteristik-mie-aceh-kenyal-tebal-berbumbu-kari',
+      category: 'Kuliner Otentik',
+      excerpt: 'Mengenal perbedaan Mie Aceh Goreng Kering, Tumis Nyemek, dan Kuah Becek. Racikan rempah kapulaga, jintan, dan cabai merah yang kaya karakter.',
+      content: 'Mie Aceh memiliki tekstur mie kuning tebal kenyal menyerupai udon, namun berpadu dengan bumbu pasta kari merah yang kaya rempah pekat. Masakan ini mencerminkan pertemuan sejarah perdagangan maritim Aceh dengan para pedagang India, Timur Tengah, dan Tiongkok.\n\nPelanggan dapat memilih tiga gaya penyajian utama: Goreng Kering (kering bumbu kuat), Tumis Nyemek (kuah sedikit kental berkilau), atau Kuah Becek (berkuah kari segar). Disajikan dengan pelengkap wajib: emping melinjo renyah, irisan mentimun segar, bawang merah mentah asam cuka, dan perasan jeruk nipis yang menyegarkan lidah.',
+      cover_image: '',
+      author: 'Dapur Utama Grand Aceh',
+      read_time: '4 menit baca',
+      status: 'published',
+      created_at: '2026-10-13T16:00:00.000Z',
+      updated_at: '2026-10-13T16:00:00.000Z'
+    }
   ],
   vendors: [
     { id: 'v-1', name: 'Kue Tradisional Bu Salbiah', phone: '08129876543', share_percent: 80, active: true },
@@ -3388,6 +3446,179 @@ app.post('/api/reservations', async (req, res) => {
   }
 
   res.json(r);
+});
+
+// ==========================================
+// 10b. Public Landing Page & Article Endpoints
+// ==========================================
+app.get('/api/public/menu', (req, res) => {
+  const activeCategories = (db.categories || []).filter(c => c.active !== false);
+  const catMap = {};
+  activeCategories.forEach(c => { catMap[c.id] = c.name; });
+
+  const activeProducts = (db.products || [])
+    .filter(p => p.active !== false)
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      category_id: p.category_id,
+      category_name: catMap[p.category_id] || (p.type === 'makanan' ? 'Makanan Aceh' : p.type === 'minuman' ? 'Minuman & Kopi' : 'Oleh-oleh Retail'),
+      type: p.type,
+      price: p.price,
+      description: p.description || '',
+      image: p.image || '',
+      sold_out: Boolean(p.sold_out),
+      is_best_seller: ['prod-1', 'prod-2', 'prod-3', 'prod-6'].includes(p.id),
+      spicy_level: ['prod-1', 'prod-2'].includes(p.id) ? 'Sedang - Pedas' : ['prod-3'].includes(p.id) ? 'Gurih Harum' : 'Normal',
+    }));
+
+  res.json({
+    categories: activeCategories,
+    products: activeProducts,
+    total: activeProducts.length
+  });
+});
+
+app.get('/api/public/articles', (req, res) => {
+  const published = (db.articles || []).filter(a => a.status === 'published');
+  res.json(published);
+});
+
+app.get('/api/public/articles/:slugOrId', (req, res) => {
+  const param = req.params.slugOrId;
+  const article = (db.articles || []).find(a => a.slug === param || a.id === param);
+  if (!article) {
+    return res.status(404).json({ detail: 'Artikel tidak ditemukan' });
+  }
+  res.json(article);
+});
+
+app.get('/api/public/tables', (req, res) => {
+  const tables = (db.tables || [])
+    .filter(t => t.active !== false)
+    .map(t => ({
+      id: t.id,
+      name: t.name,
+      area: t.area || 'Indoor',
+      capacity: t.capacity || 4,
+      status: t.status || 'empty'
+    }));
+  res.json(tables);
+});
+
+app.post('/api/public/booking', async (req, res) => {
+  const { customer_name, phone, date, time, pax, table_id, seating_area, note } = req.body || {};
+  if (!customer_name || !String(customer_name).trim()) {
+    return res.status(400).json({ detail: 'Nama pemesan wajib diisi' });
+  }
+  if (!phone || !String(phone).trim()) {
+    return res.status(400).json({ detail: 'Nomor WhatsApp wajib diisi untuk konfirmasi' });
+  }
+
+  // Find table or auto-assign
+  let assignedTable = (db.tables || []).find(t => t.id === table_id);
+  if (!assignedTable && seating_area) {
+    assignedTable = (db.tables || []).find(t => (t.area || '').toLowerCase() === String(seating_area).toLowerCase() && (t.capacity || 4) >= (parseInt(pax, 10) || 2));
+  }
+  if (!assignedTable) {
+    assignedTable = (db.tables || []).find(t => (t.capacity || 4) >= (parseInt(pax, 10) || 2)) || (db.tables || [])[0];
+  }
+
+  const bookingCode = 'GAK-' + Math.floor(1000 + Math.random() * 9000);
+  const reservation = {
+    id: 'res-' + Date.now(),
+    booking_code: bookingCode,
+    customer_name: String(customer_name).trim(),
+    name: String(customer_name).trim(),
+    phone: String(phone).trim(),
+    date: date || new Date().toISOString().slice(0, 10),
+    time: time || '19:00',
+    pax: parseInt(pax, 10) || 2,
+    guest_count: parseInt(pax, 10) || 2,
+    table_id: assignedTable ? assignedTable.id : '',
+    table_name: assignedTable ? assignedTable.name : (seating_area || 'Meja Reguler'),
+    seating_area: seating_area || (assignedTable ? assignedTable.area : 'Indoor'),
+    note: note ? String(note).trim() : '',
+    notes: note ? String(note).trim() : '',
+    source: 'online_landing_page',
+    status: 'pending', // Pending kasir confirmation in POS
+    created_at: new Date().toISOString()
+  };
+
+  db.reservations = db.reservations || [];
+  db.reservations.unshift(reservation);
+
+  const resDate = reservation.date;
+  const resTime = reservation.time;
+  const resPax = reservation.pax;
+  const tName = reservation.table_name;
+  const outletPhone = (db.settings && db.settings.business && db.settings.business.phone) || '081269001234';
+
+  const confirmMsg = `*RESERVASI ONLINE GRAND ACEH KULINER*\n\nKode Booking: *${bookingCode}*\nNama: ${reservation.customer_name}\nWhatsApp: ${reservation.phone}\nTanggal: ${resDate}\nJam: ${resTime} WIB\nJumlah: ${resPax} Orang\nArea/Meja: ${tName}\nCatatan: ${reservation.note || '-'}\n\nMohon konfirmasi ketersediaan meja kami. Terima kasih! 🙏`;
+
+  if (typeof sendWhatsAppMessage === 'function') {
+    sendWhatsAppMessage(reservation.phone, `Halo Kak ${reservation.customer_name}! Permintaan reservasi Anda di Grand Aceh Kuliner (*${bookingCode}*) telah kami terima dan sedang diproses tim kasir kami. Sampai jumpa! 🌟`).catch(err => console.error('[Public Booking WA Error]:', err));
+  }
+
+  const cleanPhoneOutlet = outletPhone.replace(/\D/g, '').replace(/^0/, '62');
+  const waDirectUrl = `https://wa.me/${cleanPhoneOutlet}?text=${encodeURIComponent(confirmMsg)}`;
+
+  res.status(201).json({
+    ok: true,
+    message: 'Reservasi berhasil dikirim! Tim kasir kami akan memverifikasi meja Anda.',
+    booking_code: bookingCode,
+    reservation,
+    whatsapp_url: waDirectUrl
+  });
+});
+
+// Admin Articles CRUD
+app.get('/api/articles', (req, res) => {
+  res.json(db.articles || []);
+});
+
+app.post('/api/articles', requireAdmin, (req, res) => {
+  const { title, category, excerpt, content, cover_image, author, read_time, status } = req.body || {};
+  if (!title) return res.status(400).json({ detail: 'Judul artikel wajib diisi' });
+
+  const slug = String(title).toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '') || ('art-' + Date.now());
+
+  const newArt = {
+    id: 'art-' + Date.now(),
+    title: String(title).trim(),
+    slug,
+    category: category || 'Kuliner Otentik',
+    excerpt: excerpt || '',
+    content: content || '',
+    cover_image: cover_image || '',
+    author: author || 'Dapur Utama Grand Aceh',
+    read_time: read_time || '3 menit baca',
+    status: status === 'draft' ? 'draft' : 'published',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  db.articles = db.articles || [];
+  db.articles.unshift(newArt);
+  res.status(201).json(newArt);
+});
+
+app.put('/api/articles/:id', requireAdmin, (req, res) => {
+  const art = (db.articles || []).find(a => a.id === req.params.id);
+  if (!art) return res.status(404).json({ detail: 'Artikel tidak ditemukan' });
+
+  Object.assign(art, req.body, { updated_at: new Date().toISOString() });
+  res.json(art);
+});
+
+app.delete('/api/articles/:id', requireAdmin, (req, res) => {
+  const idx = (db.articles || []).findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ detail: 'Artikel tidak ditemukan' });
+
+  db.articles.splice(idx, 1);
+  res.json({ ok: true });
 });
 
 // Helper pencocokan meja restoran

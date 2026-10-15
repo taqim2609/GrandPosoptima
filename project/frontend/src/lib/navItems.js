@@ -1,7 +1,7 @@
 /* Daftar menu samping aplikasi — SATU sumber kebenaran.
    Dipakai Layout (render menu) & Pengaturan → Menu & Tampilan UI (atur urutan/nama).
    Jangan duplikasi daftar ini di tempat lain. */
-import { Ban, BarChart3, Bot, Boxes, CalendarCheck, Clock, FileSpreadsheet, FlaskConical, HandCoins, LayoutDashboard, Package, Printer, Settings, ShoppingCart, Tag, Ticket, Users, Wallet } from "lucide-react";
+import { Ban, BarChart3, BookOpen, Bot, Boxes, CalendarCheck, Clock, FileSpreadsheet, FlaskConical, HandCoins, LayoutDashboard, Package, Printer, Settings, ShoppingCart, Tag, Ticket, Users, Wallet } from "lucide-react";
 
 export const NAV_ITEMS = [
   // Operasional
@@ -14,6 +14,7 @@ export const NAV_ITEMS = [
 
   // Katalog & Stok
   { to: "/catalog", label: "Produk & Stok", icon: Package, roles: ["admin", "input"], mod: "produk", section: "Katalog & Stok" },
+  { to: "/articles", label: "Artikel & Cerita", icon: BookOpen, roles: ["admin", "input"], mod: "produk", section: "Katalog & Stok" },
   { to: "/ingredients", label: "Bahan & Belanja", icon: Boxes, roles: ["admin", "input"], mods: ["produk", "belanja_bahan", "opname_bahan"], section: "Katalog & Stok" },
   { to: "/settlement", label: "Settlement Vendor", icon: HandCoins, roles: ["admin", "kasir"], mod: "settlement", section: "Katalog & Stok" },
 

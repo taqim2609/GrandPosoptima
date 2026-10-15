@@ -10,22 +10,22 @@
   "guideType": "hybrid",
   "status": "ready",
   "sourceVersions": {
-    "prd": "1.0",
-    "uiGuide": "1.0",
+    "prd": "1.1",
+    "uiGuide": "1.1",
     "dxGuide": "1.0",
-    "executionPlan": "1.0"
+    "executionPlan": "1.1"
   },
   "artifacts": {
     "prd": {
       "directory": "PRD",
       "entry": "PRD/README.md",
-      "sourceVersion": "1.0",
+      "sourceVersion": "1.1",
       "status": "ready"
     },
     "uiGuide": {
       "directory": "UI",
       "entry": "UI/README.md",
-      "sourceVersion": "1.0",
+      "sourceVersion": "1.1",
       "status": "ready"
     },
     "dxGuide": {
@@ -37,7 +37,7 @@
     "executionPlan": {
       "directory": "EXECUTION",
       "entry": "EXECUTION/README.md",
-      "sourceVersion": "1.0",
+      "sourceVersion": "1.1",
       "status": "ready"
     }
   },
@@ -59,12 +59,18 @@
     "EXECUTION/feature-order.md",
     "EXECUTION/phases/phase-00-decisions.md",
     "EXECUTION/phases/phase-01-core-pos.md",
+    "EXECUTION/phases/phase-02-backlog.md",
     "EXECUTION/release-readiness.md",
     "PRD/PRD.md",
     "PRD/README.md",
     "PRD/asumsi-dan-pertanyaan.md",
     "PRD/fitur/hardware-sunmi.md",
+    "PRD/fitur/keamanan-login.md",
+    "PRD/fitur/landing-page-dan-reservasi.md",
+    "PRD/fitur/manajemen-meja.md",
+    "PRD/fitur/otomasi-ai-whatsapp.md",
     "PRD/fitur/pos-kasir.md",
+    "PRD/fitur/shift-kasir.md",
     "PRD/fitur/titipan-vendor.md",
     "PRD/metrik-keberhasilan.md",
     "PRD/model-data.md",
@@ -81,6 +87,7 @@
     "UI/foundations/warna-tipografi.md",
     "UI/patterns/README.md",
     "UI/patterns/dialog-bayar.md",
+    "UI/screens/landing-page.md",
     "UI/screens/pos-kasir.md",
     "UI/screens/screen-inventory.md"
   ],

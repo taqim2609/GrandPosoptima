@@ -439,6 +439,8 @@ export default function Reservations() {
             {rows.map((r) => {
               const isGroupWa =
                 r.source === "grup_wa" || (r.note && r.note.includes("Grup WA")) || r.created_by === "Grup WA AI";
+              const isOnlineLanding =
+                r.source === "online_landing_page" || Boolean(r.booking_code);
               const isAuto =
                 isGroupWa ||
                 (r.note && (r.note.includes("WhatsApp") || r.note.includes("Booking Otomatis"))) ||
@@ -456,7 +458,11 @@ export default function Reservations() {
                   <td className="p-3">
                     <div className="font-bold flex items-center gap-1.5 flex-wrap">
                       <span>{r.customer_name || r.name}</span>
-                      {isGroupWa ? (
+                      {isOnlineLanding ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#B45309] border border-[#FDE68A] flex items-center gap-1">
+                          Online Web {r.booking_code ? `(${r.booking_code})` : ""}
+                        </span>
+                      ) : isGroupWa ? (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#E0F2FE] text-[#0369A1] border border-[#BAE6FD] flex items-center gap-1">
                           <Hash size={10} /> Grup WA
                         </span>

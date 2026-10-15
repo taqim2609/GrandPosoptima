@@ -65,3 +65,12 @@ Buku besar pelacakan implementasi sistem.
   - Dependencies: TASK-001
   - Validation: Uji query rentang tanggal khusus pada chat asisten AI
   - Evidence: Menunggu pembaruan prompt context dan parameter tool query
+
+- [x] `TASK-008` — Landing Page Publik, Etalase Menu, Cerita Kuliner Aceh, dan Booking Meja Online
+  - Status: `done`
+  - Workflow: `feature`
+  - Phase: 02
+  - Requirements: LND-FR-001, LND-FR-002, LND-FR-003, LND-FR-004
+  - Dependencies: TASK-001
+  - Validation: Uji akses publik rute utama, filter menu, baca artikel, dan submit booking meja terhubung ke POS & WhatsApp
+  - Evidence: LandingPage.jsx aktif di rute publik /, menu terbitan & artikel /api/public/* terverifikasi, formulir booking terhubung ke database reservasi POS dan WhatsApp, panel /articles aktif di admin

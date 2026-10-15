@@ -944,6 +944,26 @@ class ReservationUpdateIn(BaseModel):
     pax: Optional[int] = Field(default=None, ge=1)
     note: Optional[str] = None
 
+class PublicBookingIn(BaseModel):
+    customer_name: str
+    phone: str
+    date: Optional[str] = None
+    time: Optional[str] = "19:00"
+    pax: Optional[int] = Field(default=2, ge=1)
+    table_id: Optional[str] = ""
+    seating_area: Optional[str] = "Indoor"
+    note: Optional[str] = ""
+
+class ArticleIn(BaseModel):
+    title: str
+    category: Optional[str] = "Filosofi Rempah"
+    excerpt: Optional[str] = ""
+    content: Optional[str] = ""
+    cover_image: Optional[str] = ""
+    author: Optional[str] = "Dapur Utama Grand Aceh"
+    read_time: Optional[str] = "4 menit baca"
+    status: Optional[str] = "published"
+
 class RecipeIn(BaseModel):
     product_id: str
     ingredients: List[dict] = []   # [{product_id (bahan), qty, unit?}]
@@ -2447,6 +2467,226 @@ async def set_reservation_status(rid: str, body: dict, user: dict = Depends(get_
 @api.delete("/reservations/{rid}")
 async def delete_reservation(rid: str, admin: dict = Depends(require_admin)):
     await db.reservations.delete_one({"id": rid})
+    return {"ok": True}
+
+# ======================================================================
+# PUBLIC LANDING PAGE & ARTICLES ENDPOINTS
+# ======================================================================
+@api.get("/public/menu")
+async def get_public_menu():
+    cats = await db.categories.find({"active": {"$ne": False}}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    cat_map = {c["id"]: c["name"] for c in cats}
+    products = await db.products.find({"active": {"$ne": False}, "deleted": {"$ne": True}}, {"_id": 0}).to_list(500)
+    out = []
+    for p in products:
+        out.append({
+            "id": p.get("id"),
+            "name": p.get("name"),
+            "category_id": p.get("category_id"),
+            "category_name": cat_map.get(p.get("category_id"), "Makanan Aceh" if p.get("type") == "makanan" else "Minuman & Kopi"),
+            "type": p.get("type"),
+            "price": p.get("price", 0),
+            "description": p.get("description", ""),
+            "image": p.get("image", ""),
+            "sold_out": bool(p.get("sold_out", False)),
+            "is_best_seller": p.get("id") in ("prod-1", "prod-2", "prod-3", "prod-6"),
+            "spicy_level": "Sedang - Pedas" if p.get("id") in ("prod-1", "prod-2") else "Gurih Harum" if p.get("id") == "prod-3" else "Normal",
+        })
+    return {"categories": cats, "products": out, "total": len(out)}
+
+DEFAULT_ARTICLES = [
+    {
+        "id": "art-1",
+        "title": "Rahasia 16 Rempah Kuah Beulangong Aceh",
+        "slug": "rahasia-16-rempah-kuah-beulangong-aceh",
+        "category": "Filosofi Rempah",
+        "excerpt": "Kuah Beulangong bukan sekadar gulai kambing biasa. Di balik kawah belanga tembaga raksasa, tersimpan perpaduan 16 rempah nusantara dan nangka muda yang melambangkan kebersamaan masyarakat Aceh.",
+        "content": "Kuah Beulangong adalah salah satu warisan kuliner paling sakral di Tanah Rencong. Dimasak dalam kuali atau belanga besar berdiameter hingga satu meter, hidangan ini umumnya disajikan saat kenduri adat, peringatan Maulid Nabi, maupun pesta perkawinan.\n\nKeistimewaan Kuah Beulangong terletak pada harmoni rempah: ketumbar sangrai, jintan manis, kapulaga, kayu manis, pekak, kelapa gongseng (u neuheue), hingga cabai kering khas Aceh. Daging kambing atau sapi dipadukan dengan nangka muda (bak panah) atau pisang kepok muda, menghasilkan kuah merah pekat yang gurih, pedas aromatik, dan kaya tekstur tanpa menggunakan santan kental berlebih.\n\nDi Grand Aceh Kuliner, kami menjaga keaslian resep ini dengan memasak kuah beulangong secara perlahan di atas api kayu bakar terpilih untuk meresapkan aroma rempah ke setiap serat daging.",
+        "cover_image": "",
+        "author": "Dapur Utama Grand Aceh",
+        "read_time": "4 menit baca",
+        "status": "published",
+        "created_at": "2026-10-10T10:00:00.000Z",
+        "updated_at": "2026-10-10T10:00:00.000Z"
+    },
+    {
+        "id": "art-2",
+        "title": "Seni Menyeduh Kopi Khop & Filosofi Sanger",
+        "slug": "seni-menyeduh-kopi-khop-filosofi-sanger",
+        "category": "Tradisi Kopi",
+        "excerpt": "Menikmati kopi dengan cangkir terbalik di atas piring kecil adalah keunikan pesisir barat Aceh. Bersanding dengan Kopi Sanger dengan filosofi \"sama-sama ngerti\".",
+        "content": "Bagi masyarakat Aceh, warung kopi adalah ruang silaturahmi sekaligus panggung musyawarah rakyat. Salah satu tradisi seduh kopi yang paling legendaris adalah Kopi Khop, lahir dari kearifan nelayan pesisir Meulaboh, Aceh Barat.\n\nKopi disajikan dalam gelas kaca yang dibalik di atas piring tatakan. Tujuannya adalah menjaga suhu kopi tetap panas lebih lama sekaligus mencegah debu pantai atau pasir masuk saat nelayan melaut. Untuk meminumnya, Anda cukup menyelipkan sedotan atau meniup cairan kopi perlahan hingga merembes ke piring tatakan lalu diseruput.\n\nSementara itu, Kopi Sanger lahir dari mahasiswa di Banda Aceh pada era 1990-an. \"Sanger\" merupakan akronim dari \"sama-sama ngerti\" — racikan kopi saring pekat dengan sedikit susu kental manis dan gula yang dikocok hingga berbuih halus, memberikan kenikmatan kopi susu premium dengan harga yang bersahabat bagi semua kalangan.",
+        "cover_image": "",
+        "author": "Barista Master Grand Aceh",
+        "read_time": "3 menit baca",
+        "status": "published",
+        "created_at": "2026-10-11T14:30:00.000Z",
+        "updated_at": "2026-10-11T14:30:00.000Z"
+    },
+    {
+        "id": "art-3",
+        "title": "Ayam Tangkap: Gurih Renyah Harum Daun Temurui",
+        "slug": "ayam-tangkap-gurih-renyah-harum-daun-temurui",
+        "category": "Resep Warisan",
+        "excerpt": "Sensasi potongan ayam berbumbu ketumbar dan bawang putih yang diselimuti gunungan daun kari temurui dan cabai hijau goreng renyah khas Aceh Besar.",
+        "content": "Ayam Tangkap adalah mahakarya kuliner khas Aceh Besar. Dinamakan demikian karena potongan ayam kampung berukuran kecil \"bersembunyi\" di balik tumpukan dedaunan aromatik yang digoreng garing renyah.\n\nDedaunan yang digunakan bukan sekadar hiasan: daun temurui (daun kari khas Aceh), daun pandan wangi, dan cabai hijau besar diiris tipis lalu digoreng bersamaan dengan ayam hingga renyah keemasan. Daun temurui yang garing bisa dimakan bersama nasi hangat, memberikan sensasi herbal yang gurih, renyah, dan harum semerbak.\n\nDi Grand Aceh Kuliner, kami hanya memilih ayam pejantan/kampung muda agar daging tetap empuk lembut di dalam dengan kulit luar yang garing renyah.",
+        "cover_image": "",
+        "author": "Chef Eksekutif Grand Aceh",
+        "read_time": "5 menit baca",
+        "status": "published",
+        "created_at": "2026-10-12T09:15:00.000Z",
+        "updated_at": "2026-10-12T09:15:00.000Z"
+    },
+    {
+        "id": "art-4",
+        "title": "Karakteristik Mie Aceh: Kenyal Tebal Berbumbu Kari Pesisir",
+        "slug": "karakteristik-mie-aceh-kenyal-tebal-berbumbu-kari",
+        "category": "Kuliner Otentik",
+        "excerpt": "Mengenal perbedaan Mie Aceh Goreng Kering, Tumis Nyemek, dan Kuah Becek. Racikan rempah kapulaga, jintan, dan cabai merah yang kaya karakter.",
+        "content": "Mie Aceh memiliki tekstur mie kuning tebal kenyal menyerupai udon, namun berpadu dengan bumbu pasta kari merah yang kaya rempah pekat. Masakan ini mencerminkan pertemuan sejarah perdagangan maritim Aceh dengan para pedagang India, Timur Tengah, dan Tiongkok.\n\nPelanggan dapat memilih tiga gaya penyajian utama: Goreng Kering (kering bumbu kuat), Tumis Nyemek (kuah sedikit kental berkilau), atau Kuah Becek (berkuah kari segar). Disajikan dengan pelengkap wajib: emping melinjo renyah, irisan mentimun segar, bawang merah mentah asam cuka, dan perasan jeruk nipis yang menyegarkan lidah.",
+        "cover_image": "",
+        "author": "Dapur Utama Grand Aceh",
+        "read_time": "4 menit baca",
+        "status": "published",
+        "created_at": "2026-10-13T16:00:00.000Z",
+        "updated_at": "2026-10-13T16:00:00.000Z"
+    }
+]
+
+@api.get("/public/articles")
+async def get_public_articles():
+    articles = await db.articles.find({"status": "published"}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    if not articles:
+        # Seed default articles if empty
+        for item in DEFAULT_ARTICLES:
+            await db.articles.update_one({"id": item["id"]}, {"$setOnInsert": item}, upsert=True)
+        articles = await db.articles.find({"status": "published"}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return articles
+
+@api.get("/public/articles/{slug_or_id}")
+async def get_public_article_detail(slug_or_id: str):
+    art = await db.articles.find_one({"$or": [{"slug": slug_or_id}, {"id": slug_or_id}]}, {"_id": 0})
+    if not art:
+        # Check defaults
+        art = next((a for a in DEFAULT_ARTICLES if a["slug"] == slug_or_id or a["id"] == slug_or_id), None)
+    if not art:
+        raise HTTPException(404, "Artikel tidak ditemukan")
+    return art
+
+@api.get("/public/tables")
+async def get_public_tables():
+    rows = await db.tables.find({"deleted": {"$ne": True}, "active": {"$ne": False}}, {"_id": 0}).to_list(100)
+    return rows
+
+@api.post("/public/booking")
+async def create_public_booking(body: PublicBookingIn):
+    if not body.customer_name.strip():
+        raise HTTPException(400, "Nama pemesan wajib diisi")
+    if not body.phone.strip():
+        raise HTTPException(400, "Nomor WhatsApp wajib diisi")
+
+    # Table allocation
+    table = None
+    if body.table_id:
+        table = await db.tables.find_one({"id": body.table_id, "deleted": {"$ne": True}})
+    if not table and body.seating_area:
+        table = await db.tables.find_one({
+            "deleted": {"$ne": True},
+            "active": {"$ne": False},
+            "area": {"$regex": f"^{re.escape(body.seating_area)}$", "$options": "i"}
+        })
+    if not table:
+        table = await db.tables.find_one({"deleted": {"$ne": True}, "active": {"$ne": False}})
+
+    import random
+    b_code = f"GAK-{random.randint(1000, 9999)}"
+    t_id = table["id"] if table else ""
+    t_name = table["name"] if table else (body.seating_area or "Meja Reguler")
+
+    doc = {
+        "id": new_id(),
+        "booking_code": b_code,
+        "table_id": t_id,
+        "table_name": t_name,
+        "customer_name": body.customer_name.strip(),
+        "phone": body.phone.strip(),
+        "pax": body.pax,
+        "date": body.date or wib_today(),
+        "time": body.time or "19:00",
+        "seating_area": body.seating_area or "Indoor",
+        "note": body.note.strip(),
+        "status": "pending",
+        "source": "online_landing_page",
+        "created_by": "Pengunjung Online",
+        "created_at": now_utc().isoformat()
+    }
+    await db.reservations.insert_one(doc)
+    doc.pop("_id", None)
+
+    # Queue WA
+    outlet_settings = await db.settings.find_one({"_id": "business"}) or {}
+    outlet_phone = outlet_settings.get("phone", "081269001234")
+    clean_outlet = re.sub(r"\D", "", outlet_phone)
+    if clean_outlet.startswith("0"):
+        clean_outlet = "62" + clean_outlet[1:]
+
+    msg = (f"*RESERVASI ONLINE GRAND ACEH KULINER*\n\n"
+           f"Kode Booking: *{b_code}*\nNama: {doc['customer_name']}\n"
+           f"WhatsApp: {doc['phone']}\nTanggal: {doc['date']}\n"
+           f"Jam: {doc['time']} WIB\nJumlah: {doc['pax']} Orang\n"
+           f"Area/Meja: {t_name}\nCatatan: {doc['note'] or '-'}\n\n"
+           f"Mohon konfirmasi meja untuk kami. Terima kasih!")
+
+    wa_url = f"https://wa.me/{clean_outlet}?text={msg.replace(' ', '%20').replace(chr(10), '%0A')}"
+
+    return {
+        "ok": True,
+        "message": "Reservasi berhasil dikirim! Tim kasir kami akan memverifikasi meja Anda.",
+        "booking_code": b_code,
+        "reservation": doc,
+        "whatsapp_url": wa_url
+    }
+
+@api.get("/articles")
+async def list_admin_articles(user: dict = Depends(get_current_user)):
+    rows = await db.articles.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    if not rows:
+        for item in DEFAULT_ARTICLES:
+            await db.articles.update_one({"id": item["id"]}, {"$setOnInsert": item}, upsert=True)
+        rows = await db.articles.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return rows
+
+@api.post("/articles")
+async def create_admin_article(body: ArticleIn, user: dict = Depends(require_admin)):
+    if not body.title.strip():
+        raise HTTPException(400, "Judul artikel wajib diisi")
+    slug = re.sub(r"[^a-z0-9]+", "-", body.title.lower()).strip("-") or f"art-{int(time.time())}"
+    doc = body.model_dump()
+    doc.update({
+        "id": new_id(),
+        "slug": slug,
+        "created_by": user["name"],
+        "created_at": now_utc().isoformat(),
+        "updated_at": now_utc().isoformat()
+    })
+    await db.articles.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.put("/articles/{aid}")
+async def update_admin_article(aid: str, body: ArticleIn, user: dict = Depends(require_admin)):
+    doc = body.model_dump()
+    doc["updated_at"] = now_utc().isoformat()
+    r = await db.articles.update_one({"id": aid}, {"$set": doc})
+    if not r.matched_count:
+        raise HTTPException(404, "Artikel tidak ditemukan")
+    return await db.articles.find_one({"id": aid}, {"_id": 0})
+
+@api.delete("/articles/{aid}")
+async def delete_admin_article(aid: str, user: dict = Depends(require_admin)):
+    r = await db.articles.delete_one({"id": aid})
+    if not r.deleted_count:
+        raise HTTPException(404, "Artikel tidak ditemukan")
     return {"ok": True}
 
 @api.post("/tables")

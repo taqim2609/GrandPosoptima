@@ -38,12 +38,44 @@ import Members from "@/pages/Members";
 import Reservations from "@/pages/Reservations";
 import VendorSettlement from "@/pages/VendorSettlement";
 import PromosCoupons from "@/pages/PromosCoupons";
+import LandingPage from "@/pages/LandingPage";
+import ArticlesAdmin from "@/pages/ArticlesAdmin";
 
 const LoadingFallback = () => (
   <div className="flex h-full w-full items-center justify-center p-8 bg-[#F4F5F7] lg:bg-transparent">
     <div className="animate-spin h-8 w-8 border-4 border-[#E63946] border-t-transparent rounded-full"></div>
   </div>
 );
+
+// Penentu halaman muka: Di server Raspberry Pi, server lokal LAN toko, atau aplikasi Android APK Sunmi,
+// rute utama (/) langsung membuka POS Kasir (/pos) tanpa landing page.
+// Landing page publik hanya tampil saat dibuka di server Cloud online.
+function RootRoute() {
+  const isCapacitor = typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.() || window.isNativeApp);
+  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+  const isExplicitDisabled = typeof localStorage !== "undefined" && localStorage.getItem("gak_disable_landing_page") === "true";
+  const isEnvDisabled = process.env.REACT_APP_DISABLE_LANDING_PAGE === "true";
+
+  // Deteksi lingkungan Raspberry Pi / Server Lokal Kasir / LAN toko:
+  // IP 192.168.x.x, 10.x.x.x, 172.16-31.x.x, localhost, 127.0.0.1, *.local, raspberrypi
+  const isLocalOrPi =
+    isCapacitor ||
+    isExplicitDisabled ||
+    isEnvDisabled ||
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.includes("raspberrypi") ||
+    hostname.endsWith(".local") ||
+    /^192\.168\./.test(hostname) ||
+    /^10\./.test(hostname) ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
+
+  if (isLocalOrPi) {
+    return <Navigate to="/pos" replace />;
+  }
+
+  return <LandingPage />;
+}
 
 // roles = role dasar yang boleh; mod = modul izin dinamis (RBAC) bila role dasar belum cukup.
 const wrap = (el, roles, mod) => (
@@ -119,8 +151,13 @@ function App() {
               <Route path="/settings" element={wrap(<Settings />, ["admin", "superadmin", "kasir"])} />
               <Route path="/whatsapp" element={wrap(<WhatsApp />, ["admin"], "whatsapp")} />
               <Route path="/device" element={wrap(<DeviceSettings />)} />
-              <Route path="/" element={<Navigate to="/pos" replace />} />
-              <Route path="*" element={<Navigate to="/pos" replace />} />
+              <Route path="/articles" element={wrap(<ArticlesAdmin />, ["admin", "input"], "produk")} />
+              <Route path="/menu" element={<LandingPage defaultSection="menu" />} />
+              <Route path="/cerita" element={<LandingPage defaultSection="cerita" />} />
+              <Route path="/reservasi" element={<LandingPage defaultSection="reservasi" />} />
+              <Route path="/landing" element={<LandingPage />} />
+              <Route path="/" element={<RootRoute />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
         </OfflineProvider>
