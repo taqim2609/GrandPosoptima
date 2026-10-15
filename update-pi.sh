@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")"
+if [ -d "project" ] && [ -f "project/docker-compose.yml" ]; then
+  cd project
+fi
 echo "=== Update Grand Aceh Kuliner POS (Pi/Linux) ==="
 if [ -d .git ]; then
   echo "Menarik pembaruan terbaru dari Git..."

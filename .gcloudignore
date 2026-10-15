@@ -5,7 +5,6 @@
 node_modules/
 **/node_modules/
 project/frontend/node_modules/
-project/frontend/build/
 project/frontend/android/
 project/backend/tests/
 project/backend/__pycache__/

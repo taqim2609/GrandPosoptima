@@ -30,31 +30,41 @@ function copyRecursiveSync(src, dest) {
 }
 
 console.log('[Build] Checking React frontend build status...');
-const hasFrontendBuild = fs.existsSync(srcDir) && fs.existsSync(path.join(srcDir, 'index.html')) && fs.existsSync(path.join(srcDir, 'static', 'js'));
+const hasSrcBuild = fs.existsSync(srcDir) && fs.existsSync(path.join(srcDir, 'index.html')) && fs.existsSync(path.join(srcDir, 'static', 'js'));
+const hasDestBuild = fs.existsSync(destDir) && fs.existsSync(path.join(destDir, 'index.html')) && fs.existsSync(path.join(destDir, 'static', 'js'));
+const hasFrontendBuild = hasSrcBuild || hasDestBuild;
 
 const forceRebuild = process.argv.includes('--rebuild') || process.env.REBUILD_FRONTEND === 'true';
+const hasCraco = fs.existsSync(path.join(frontendDir, 'node_modules', '@craco', 'craco'));
 let srcNewer = false;
-const buildIndex = path.join(srcDir, 'index.html');
-if (fs.existsSync(buildIndex)) {
-  const buildMtime = fs.statSync(buildIndex).mtimeMs;
-  const checkNewer = (dir) => {
-    if (!fs.existsSync(dir)) return false;
-    const entries = fs.readdirSync(dir);
-    for (const e of entries) {
-      const full = path.join(dir, e);
-      const stat = fs.statSync(full);
-      if (stat.isDirectory()) {
-        if (checkNewer(full)) return true;
-      } else if (stat.mtimeMs > buildMtime) {
-        return true;
+
+if (hasSrcBuild && hasCraco) {
+  const buildIndex = path.join(srcDir, 'index.html');
+  if (fs.existsSync(buildIndex)) {
+    const buildMtime = fs.statSync(buildIndex).mtimeMs;
+    const checkNewer = (dir) => {
+      if (!fs.existsSync(dir)) return false;
+      const entries = fs.readdirSync(dir);
+      for (const e of entries) {
+        const full = path.join(dir, e);
+        const stat = fs.statSync(full);
+        if (stat.isDirectory()) {
+          if (checkNewer(full)) return true;
+        } else if (stat.mtimeMs > buildMtime) {
+          return true;
+        }
       }
-    }
-    return false;
-  };
-  srcNewer = checkNewer(path.join(frontendDir, 'src'));
+      return false;
+    };
+    srcNewer = checkNewer(path.join(frontendDir, 'src'));
+  }
 }
 
-const shouldBuild = !hasFrontendBuild || srcNewer || forceRebuild;
+// Hanya rebuild jika:
+// 1. Dipaksa via --rebuild
+// 2. Belum ada build sama sekali (baik di dist maupun di build)
+// 3. Ada file src baru DAN craco sudah terpasang (lingkungan dev/IDE)
+const shouldBuild = forceRebuild || (!hasFrontendBuild && hasCraco) || (srcNewer && hasCraco);
 
 if (shouldBuild) {
   console.log(`[Build] Rebuilding frontend (hasBuild: ${hasFrontendBuild}, srcNewer: ${srcNewer}, force: ${forceRebuild})...`);
@@ -74,8 +84,15 @@ if (shouldBuild) {
     });
   } catch (buildErr) {
     console.error('[Build] Frontend build failed:', buildErr.message);
-    process.exit(1);
+    // Jika dist sudah ada, jangan gagalkan proses build deployment
+    if (hasDestBuild) {
+      console.warn('[Build] Menggunakan fallback pre-built assets di dist/...');
+    } else {
+      process.exit(1);
+    }
   }
+} else {
+  console.log(`[Build] Menggunakan bundle frontend yang sudah siap (hasDest: ${hasDestBuild}, hasSrc: ${hasSrcBuild}).`);
 }
 
 console.log('[Build] Preparing static distribution directory...');
