@@ -1,0 +1,342 @@
+import { useEffect, useMemo, useState, Fragment } from "react";
+import { useNavigate } from "react-router-dom";
+import api, { apiError } from "@/lib/api";
+import { rupiah, wibToday } from "@/lib/format";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+import { FileSpreadsheet, Loader2, Utensils, Coffee, Store, Handshake, HandCoins, FileDown, FileText, Send, TrendingUp, ChevronDown, ChevronRight } from "lucide-react";
+import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
+const BACKEND = process.env.REACT_APP_BACKEND_URL;
+
+function weekRange(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = (d.getDay() + 6) % 7; // Monday = 0
+  const mon = new Date(d); mon.setDate(d.getDate() - day);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const f = (x) => x.toISOString().slice(0, 10);
+  return [f(mon), f(sun)];
+}
+function monthRange(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return [`${ym}-01`, `${ym}-${String(last).padStart(2, "0")}`];
+}
+function enumerateDates(start, end) {
+  const out = [];
+  const d = new Date(start + "T00:00:00");
+  const e = new Date(end + "T00:00:00");
+  while (d <= e) { out.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); }
+  return out;
+}
+
+export default function Reports() {
+  const nav = useNavigate();
+  const { user } = useAuth();
+  const [period, setPeriod] = useState("day");
+  const [day, setDay] = useState(wibToday());
+  const [weekDate, setWeekDate] = useState(wibToday());
+  const [month, setMonth] = useState(wibToday().slice(0, 7));
+  const [data, setData] = useState(null);
+  const [trend, setTrend] = useState([]);
+  const [profit, setProfit] = useState(null);
+  const [pStart, setPStart] = useState(wibToday());
+  const [pEnd, setPEnd] = useState(wibToday());
+
+  const loadProfit = async () => {
+    if (!pStart || !pEnd) return toast.error("Pilih rentang tanggal");
+    try {
+      const { data } = await api.get("/reports/profit", { params: { start: pStart, end: pEnd } });
+      setProfit(data);
+    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+  };
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [view, setView] = useState("fnb"); // fnb | retail
+  const [openVendor, setOpenVendor] = useState({}); // vendor_id -> true bila detail per produk dibuka
+  const [biz, setBiz] = useState(bizCache());
+  useEffect(() => { loadBusiness().then(setBiz); }, []);
+  const lb = labelsOf(biz);
+
+  const [start, end] = useMemo(() => {
+    if (period === "day") return [day, day];
+    if (period === "week") return weekRange(weekDate);
+    return monthRange(month);
+  }, [period, day, weekDate, month]);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get("/reports/period", { params: { start, end } })
+      .then((r) => setData(r.data))
+      .catch((e) => toast.error(apiError(e.response?.data?.detail)))
+      .finally(() => setLoading(false));
+    api.get("/reports/range", { params: { start, end } })
+      .then((r) => {
+        const map = {};
+        (Array.isArray(r.data?.daily) ? r.data.daily : []).forEach((x) => { map[x.date] = x; });
+        // Grafik tren ikut toggle view (F&B = dine-in+take-away; Retail)
+        setTrend(enumerateDates(start, end).map((dt) => {
+          const day = map[dt] || {};
+          return { date: dt, label: dt.slice(5), total: (view === "retail" ? (day.retail || 0) : (day.fnb || day.total || 0)) };
+        }));
+      })
+      .catch(() => setTrend([]));
+  }, [start, end, view]);
+
+  const download = async (path, filename) => {
+    const t = localStorage.getItem("gak_token");
+    try {
+      const res = await fetch(`${BACKEND}/api${path}?start=${start}&end=${end}`, { headers: { Authorization: `Bearer ${t}` } });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+    } catch { toast.error("Gagal mengunduh file"); }
+  };
+  const sendVendorWA = async () => {
+    setSending(true);
+    try { await api.post("/reports/vendors/send-whatsapp", { start, end }); toast.success("Laporan vendor terkirim ke WhatsApp"); }
+    catch (e) { toast.error(apiError(e.response?.data?.detail)); } finally { setSending(false); }
+  };
+
+  const groups = view === "fnb"
+    ? [
+        { key: "makanan", label: "Makanan", icon: Utensils, color: "#E63946" },
+        { key: "minuman", label: "Minuman", icon: Coffee, color: "#0EA5E9" },
+      ]
+    : [{ key: "retail", label: lb.retail, icon: Store, color: "#047857" }];
+  const viewTotal = view === "fnb" ? (data?.fnb_total || 0) : (data?.retail_total || 0);
+  const viewOrder = view === "fnb"
+    ? (data?.by_type?.dine_in?.count || 0) + (data?.by_type?.take_away?.count || 0)
+    : (data?.by_type?.retail?.count || 0);
+  // Bagian vendor — ikut toggle view (scope baris vendor: fnb | retail)
+  const vend = data?.vendor || {};
+  const vrows = (vend.rows || []).filter((r) => (view === "retail" ? r.scope === "retail" : r.scope !== "retail"));
+  const vSum = (k) => vrows.reduce((a, r) => a + (r[k] || 0), 0);
+
+  return (
+    <div className="h-full overflow-y-auto p-8" data-testid="reports-page">
+      <h1 className="text-3xl font-extrabold flex items-center gap-2 mb-1"><FileSpreadsheet /> Laporan</h1>
+      <p className="text-sm text-[#52525B] mb-5">Rekap penjualan per kategori (Makanan, Minuman, {lb.retail}) dan bagi hasil vendor — harian, mingguan, atau bulanan.</p>
+
+      <div className="bg-white rounded-2xl border p-5 mb-5 flex flex-wrap items-end gap-4">
+        <div className="flex gap-1">
+          <button data-testid="period-day" onClick={() => setPeriod("day")} className={`tap h-10 px-4 rounded-lg text-sm font-bold ${period === "day" ? "bg-[#0A0A0A] text-white" : "bg-[#F4F5F7]"}`}>Harian</button>
+          <button data-testid="period-week" onClick={() => setPeriod("week")} className={`tap h-10 px-4 rounded-lg text-sm font-bold ${period === "week" ? "bg-[#0A0A0A] text-white" : "bg-[#F4F5F7]"}`}>Mingguan</button>
+          <button data-testid="period-month" onClick={() => setPeriod("month")} className={`tap h-10 px-4 rounded-lg text-sm font-bold ${period === "month" ? "bg-[#0A0A0A] text-white" : "bg-[#F4F5F7]"}`}>Bulanan</button>
+        </div>
+        {period === "day" && (
+          <div><label className="text-xs uppercase font-bold text-[#52525B]">Tanggal</label><input data-testid="rep-day" type="date" value={day} onChange={(e) => setDay(e.target.value)} className="block h-10 rounded-lg border px-3 font-num mt-1" /></div>
+        )}
+        {period === "week" && (
+          <div><label className="text-xs uppercase font-bold text-[#52525B]">Pilih tanggal dalam minggu</label><input data-testid="rep-week" type="date" value={weekDate} onChange={(e) => setWeekDate(e.target.value)} className="block h-10 rounded-lg border px-3 font-num mt-1" /></div>
+        )}
+        {period === "month" && (
+          <div><label className="text-xs uppercase font-bold text-[#52525B]">Bulan</label><input data-testid="rep-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="block h-10 rounded-lg border px-3 font-num mt-1" /></div>
+        )}
+        <div className="text-sm font-bold text-[#52525B] ml-auto flex items-center gap-3 flex-wrap" data-testid="rep-range-label">
+          <span>Periode: <span className="font-num text-[#0A0A0A]">{start === end ? start : `${start} s/d ${end}`}</span></span>
+          <div className="flex gap-2">
+            <button data-testid="period-excel-btn" onClick={() => download("/reports/period/export/excel", `laporan-${start}_${end}.xlsx`)} className="tap h-9 px-3 rounded-lg bg-white border font-bold text-xs flex items-center gap-1.5"><FileDown size={14} /> Excel</button>
+            <button data-testid="period-pdf-btn" onClick={() => download("/reports/period/export/pdf", `laporan-${start}_${end}.pdf`)} className="tap h-9 px-3 rounded-lg bg-white border font-bold text-xs flex items-center gap-1.5"><FileText size={14} /> PDF</button>
+          </div>
+        </div>
+      </div>
+
+      {loading || !data ? (
+        <div className="h-40 grid place-items-center"><Loader2 className="animate-spin text-[#E63946]" /></div>
+      ) : (
+        <>
+          <div className="flex gap-2 mb-4">
+            <button data-testid="report-view-fnb" onClick={() => setView("fnb")} className={`tap h-10 px-5 rounded-xl font-bold text-sm ${view === "fnb" ? "bg-[#E63946] text-white" : "bg-white border"}`}>🍽️ {lb.fnb}</button>
+            <button data-testid="report-view-retail" onClick={() => setView("retail")} className={`tap h-10 px-5 rounded-xl font-bold text-sm ${view === "retail" ? "bg-[#E63946] text-white" : "bg-white border"}`}>🛒 {lb.retail}</button>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <Stat label={`Total Penjualan ${view === "fnb" ? lb.fnb : lb.retail}`} value={rupiah(viewTotal)} accent />
+            <Stat label="Jumlah Order" value={viewOrder} />
+            <Stat label="Laba Kotor" value={rupiah(view === "fnb" ? (data.gross_profit_fnb || 0) : (data.gross_profit_retail || 0))} />
+            <Stat label={`Bagi Hasil Vendor (${view === "fnb" ? lb.fnb : lb.retail})`} value={rupiah(view === "fnb" ? (vend.fnb_vendor_share || 0) : (vend.retail_vendor_share || 0))} />
+          </div>
+
+          {period !== "day" && (
+            <div className="bg-white rounded-2xl border p-5 mb-5" data-testid="report-trend-chart">
+              <h3 className="font-extrabold flex items-center gap-2 mb-4"><TrendingUp size={18} className="text-[#E63946]" /> Tren Penjualan Harian</h3>
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={trend} margin={{ left: 10, right: 24 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F1F4" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={period === "week" ? 0 : "preserveStartEnd"} padding={{ right: 12 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => "Rp" + (v >= 1000 ? (v / 1000) + "k" : v)} />
+                  <Tooltip formatter={(v) => rupiah(v)} labelFormatter={(l) => `Tanggal ${l}`} />
+                  <Line type="monotone" dataKey="total" stroke="#E63946" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Penjualan" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          <div className="grid lg:grid-cols-3 gap-4 mb-5">
+            {groups.map((g) => {
+              const grp = data?.category_report?.[g.key] || { total: 0, categories: [] };
+              const catItems = Array.isArray(grp.categories) ? grp.categories : [];
+              return (
+                <div key={g.key} className="bg-white rounded-2xl border overflow-hidden" data-testid={`report-group-${g.key}`}>
+                  <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderTopColor: g.color, borderTopWidth: 3 }}>
+                    <span className="font-extrabold flex items-center gap-2" style={{ color: g.color }}><g.icon size={18} /> {g.label}</span>
+                    <span className="font-num font-extrabold">{rupiah(grp.total || 0)}</span>
+                  </div>
+                  <div className="p-4">
+                    {catItems.length === 0 ? (
+                      <div className="text-sm text-[#a1a1aa] py-2">Belum ada penjualan pada periode ini.</div>
+                    ) : catItems.map((c) => (
+                      <div key={c.category_id || c.name} data-testid={`report-cat-${c.category_id}`} className="flex items-center justify-between text-sm border-b last:border-0 py-2">
+                        <span className="text-[#52525B]">{c.name} <span className="text-[#a1a1aa] font-num">×{c.qty}</span></span>
+                        <span className="font-num font-bold">{rupiah(c.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bg-white rounded-2xl border overflow-hidden" data-testid="report-vendor-section">
+            <div className="flex items-center justify-between px-5 py-4 border-b flex-wrap gap-3">
+              <h3 className="font-extrabold flex items-center gap-2"><Handshake size={18} className="text-[#E63946]" /> Bagi Hasil Vendor</h3>
+              <div className="flex gap-2">
+                <button data-testid="vendor-settlement-btn" onClick={() => nav(`/settlement?date=${end}`)}
+                  className="tap h-9 px-3 rounded-lg bg-[#E63946] text-white font-bold text-xs flex items-center gap-1.5"><HandCoins size={14} /> Settlement</button>
+                <button data-testid="vendor-excel-btn" onClick={() => download("/reports/vendors/export/excel", "bagi-hasil-vendor.xlsx")} className="tap h-9 px-3 rounded-lg bg-white border font-bold text-xs flex items-center gap-1.5"><FileDown size={14} /> Excel</button>
+                <button data-testid="vendor-pdf-btn" onClick={() => download("/reports/vendors/export/pdf", "bagi-hasil-vendor.pdf")} className="tap h-9 px-3 rounded-lg bg-white border font-bold text-xs flex items-center gap-1.5"><FileText size={14} /> PDF</button>
+                {user?.role === "admin" && (
+                  <button data-testid="vendor-wa-btn" onClick={sendVendorWA} disabled={sending} className="tap h-9 px-3 rounded-lg bg-[#25D366] text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50">{sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Kirim WA</button>
+                )}
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-[#F4F5F7] text-[#52525B] text-xs uppercase tracking-wider">
+                <tr><th className="text-left p-3">Vendor</th><th className="text-right p-3">Qty</th><th className="text-right p-3">Omzet</th><th className="text-right p-3">Bagi Hasil Vendor</th><th className="text-right p-3">Bagian Outlet</th></tr>
+              </thead>
+              <tbody data-testid="vendor-table-body">
+                {vrows.length === 0 ? (
+                  <tr><td colSpan={5} className="p-8 text-center text-[#a1a1aa]">Belum ada penjualan produk vendor {view === "fnb" ? "(" + lb.fnb + ")" : "(" + lb.retail + ")"} pada periode ini.</td></tr>
+                ) : vrows.map((r) => (
+                  <Fragment key={r.vendor_id}>
+                    <tr data-testid={`vendor-row-${r.vendor_id}`} className="border-t">
+                      <td className="p-3">
+                        {(r.items || []).length > 0 && (
+                          <button data-testid={`vendor-toggle-${r.vendor_id}`} onClick={() => setOpenVendor((o) => ({ ...o, [r.vendor_id]: !o[r.vendor_id] }))}
+                            className="tap inline-flex items-center gap-1 mr-1.5 text-[#E63946] align-middle">
+                            {openVendor[r.vendor_id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </button>
+                        )}
+                        <span className="font-bold">{r.vendor_name}</span>
+                        {(r.items || []).length > 0 && (
+                          <button data-testid={`vendor-detail-btn-${r.vendor_id}`} onClick={() => setOpenVendor((o) => ({ ...o, [r.vendor_id]: !o[r.vendor_id] }))}
+                            className="block text-[11px] text-[#a1a1aa] font-bold hover:text-[#E63946] mt-0.5 text-left">
+                            {openVendor[r.vendor_id] ? "Sembunyikan detail produk" : `${(r.items || []).length} produk — lihat detail`}
+                          </button>
+                        )}
+                      </td>
+                      <td className="p-3 text-right font-num">{r.qty}</td>
+                      <td className="p-3 text-right font-num">{rupiah(r.gross)}</td>
+                      <td className="p-3 text-right font-num font-bold text-[#E63946]">{rupiah(r.vendor_share)}</td>
+                      <td className="p-3 text-right font-num text-[#047857]">{rupiah(r.outlet_share)}</td>
+                    </tr>
+                    {openVendor[r.vendor_id] && (r.items || []).length > 0 && (
+                      <tr className="bg-[#FAFAFA]" data-testid={`vendor-items-${r.vendor_id}`}>
+                        <td colSpan={5} className="px-4 py-3">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-[#52525B] uppercase tracking-wider">
+                                <th className="text-left py-1.5 pl-2 font-bold">Produk</th>
+                                <th className="text-right py-1.5 font-bold">Qty</th>
+                                <th className="text-right py-1.5 font-bold">Omzet</th>
+                                <th className="text-right py-1.5 pr-2 font-bold">Bagi Hasil Vendor</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(r.items || []).map((im) => (
+                                <tr key={im.product_id || im.name} className="border-t border-[#F1F1F4]">
+                                  <td className="py-1.5 pl-2 font-bold">{im.name}</td>
+                                  <td className="py-1.5 text-right font-num">{im.qty}</td>
+                                  <td className="py-1.5 text-right font-num">{rupiah(im.gross)}</td>
+                                  <td className="py-1.5 pr-2 text-right font-num text-[#E63946]">{rupiah(im.vendor_share)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+              {vrows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t bg-[#FAFAFA] font-extrabold">
+                    <td className="p-3">TOTAL {view === "fnb" ? "(" + lb.fnb + ")" : "(" + lb.retail + ")"}</td><td></td>
+                    <td className="p-3 text-right font-num">{rupiah(vSum("gross"))}</td>
+                    <td className="p-3 text-right font-num text-[#E63946]">{rupiah(vSum("vendor_share"))}</td>
+                    <td className="p-3 text-right font-num text-[#047857]">{rupiah(vSum("outlet_share"))}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+            {vrows.length > 0 && (vend.rows || []).length !== vrows.length && (
+              <div className="text-[11px] text-[#a1a1aa] px-5 pb-3 -mt-2">Tabel &amp; total di atas mengikuti toggle {view === "fnb" ? lb.fnb : lb.retail}. Ekspor Excel/PDF/WA mencakup seluruh toko.</div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Laba Kotor per Produk */}
+      <div className="bg-white rounded-2xl border overflow-hidden" data-testid="profit-section">
+        <div className="flex items-center justify-between px-5 py-4 border-b flex-wrap gap-3">
+          <h3 className="font-extrabold flex items-center gap-2"><TrendingUp size={18} className="text-[#E63946]" /> Laba Kotor per Produk</h3>
+          <div className="flex items-center gap-2">
+            <input data-testid="profit-start" type="date" value={pStart} onChange={(e) => setPStart(e.target.value)} className="h-9 rounded-lg border px-2 font-num" />
+            <span className="text-[#a1a1aa]">–</span>
+            <input data-testid="profit-end" type="date" value={pEnd} onChange={(e) => setPEnd(e.target.value)} className="h-9 rounded-lg border px-2 font-num" />
+            <button data-testid="profit-load" onClick={loadProfit} className="tap h-9 px-3 rounded-lg bg-[#0A0A0A] text-white font-bold text-xs">Muat</button>
+          </div>
+        </div>
+        {profit ? (
+          <div>
+            <div className="flex flex-wrap gap-3 px-5 py-3 bg-[#FAFAFA] border-b text-sm">
+              <span className="font-bold">Total Pendapatan: <span className="text-[#E63946] font-num">{rupiah(profit.total_revenue)}</span></span>
+              <span className="font-bold">Modal/HPP: <span className="text-[#a1a1aa] font-num">{rupiah(profit.total_cost)}</span></span>
+              <span className="font-bold">Laba Kotor: <span className="text-[#047857] font-num">{rupiah(profit.total_profit)}</span></span>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-[#F4F5F7] text-[#52525B] text-xs uppercase tracking-wider">
+                <tr><th className="text-left p-3">Produk</th><th className="text-right p-3">Qty</th><th className="text-right p-3">Pendapatan</th><th className="text-right p-3">Modal</th><th className="text-right p-3">Laba</th><th className="text-right p-3">Margin</th></tr>
+              </thead>
+              <tbody>
+                {(profit.rows || []).map((r) => (
+                  <tr key={r.product_id} className="border-t">
+                    <td className="p-3 font-bold">{r.name}</td>
+                    <td className="p-3 text-right font-num">{r.qty}</td>
+                    <td className="p-3 text-right font-num">{rupiah(r.revenue)}</td>
+                    <td className="p-3 text-right font-num text-[#52525B]">{rupiah(r.cost)}</td>
+                    <td className={`p-3 text-right font-num font-bold ${r.profit >= 0 ? "text-[#047857]" : "text-[#EF4444]"}`}>{rupiah(r.profit)}</td>
+                    <td className="p-3 text-right font-num text-[#52525B]">{r.margin}%</td>
+                  </tr>
+                ))}
+                {(!profit.rows || profit.rows.length === 0) && <tr><td colSpan={6} className="p-6 text-center text-[#a1a1aa]">Tidak ada penjualan pada rentang ini.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="p-5 text-sm text-[#a1a1aa]">Pilih rentang tanggal lalu tekan <b>Muat</b> untuk melihat laba kotor per produk.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const Stat = ({ label, value, accent }) => (
+  <div className={`rounded-2xl p-4 border ${accent ? "bg-gradient-to-br from-[#E63946] to-[#F97316] text-white border-transparent shadow-lg shadow-[#E63946]/20" : "bg-gradient-to-br from-white to-[#F5F3FF] border-[#E4E4E7]"}`}>
+    <div className={`text-xs uppercase tracking-wider font-bold ${accent ? "text-white/80" : "text-[#52525B]"}`}>{label}</div>
+    <div className="text-2xl font-extrabold font-num mt-1">{value}</div>
+  </div>
+);
