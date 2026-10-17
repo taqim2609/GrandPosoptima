@@ -325,9 +325,10 @@ def main():
     ]
 
     for target in targets:
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"[Index] Berhasil memperbarui: {target}")
+        if os.path.exists(os.path.dirname(target)):
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(content)
+            print(f"[Index] Berhasil memperbarui: {target}")
 
     print("[Index] Selesai 100%.")
 

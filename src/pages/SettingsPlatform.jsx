@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Palette, Save, RotateCcw, Loader2, Upload, CheckCircle2, ImageIcon } from "lucide-react";
+import { Palette, Save, RotateCcw, Loader2, Upload, CheckCircle2, ImageIcon, Laptop } from "lucide-react";
 import { PLATFORM_DEFAULTS, usePlatform, applyTheme, logoUrl, sanitizeThemeColor } from "@/lib/platform";
 
 const PRESETS = ["#E63946", "#0EA5E9", "#047857", "#7C3AED", "#DB2777", "#B45309", "#4F46E5", "#0F766E", "#C026D3", "#2563EB"];
@@ -158,6 +158,17 @@ export default function SettingsPlatform() {
               <RotateCcw size={16} /> Kembalikan Bawaan
             </button>
             <span className="self-center text-xs text-[#047857] font-bold flex items-center gap-1"><CheckCircle2 size={14} /> Berlaku langsung, tanpa deploy</span>
+          </div>
+
+          {/* ---- Peluncur Desktop Standalone ---- */}
+          <div className="bg-white rounded-2xl border p-5 mt-6 space-y-3">
+            <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+              <Laptop size={18} className="text-emerald-600" /> Mode Desktop Standalone Tanpa Browser
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Anda dapat membuka aplikasi kasir ini di PC/Komputer secara langsung tanpa tampilan browser (tanpa address bar dan tab). 
+              Gunakan tombol <strong>Mode Desktop</strong> di header paling atas untuk menginstall PWA atau mendownload script launcher Windows (<code>Buka-POS-Desktop.bat</code> &amp; <code>Buat-Shortcut-Desktop.bat</code>).
+            </p>
           </div>
         </div>
 

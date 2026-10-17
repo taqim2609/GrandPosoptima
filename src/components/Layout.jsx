@@ -19,6 +19,7 @@ import {
 import { VisualSyncBadge } from "@/components/VisualSyncStatus";
 import VisualSyncStatusCard from "@/components/VisualSyncStatus";
 import ThreeServerMatrix from "@/components/ThreeServerMatrix";
+import PWAInstallButton from "@/components/PWAInstallButton";
 import {
   Clock, LogOut, ShieldCheck, Menu, X,
   Wifi, WifiOff, RefreshCw, CloudOff, Database, KeyRound,
@@ -153,6 +154,7 @@ function HeaderConnectionBadge({ onOpenQueue, onOpenSyncModal }) {
 
   return (
     <div className="flex items-center gap-2">
+      <PWAInstallButton />
       <VisualSyncBadge onClick={onOpenSyncModal} />
 
       <NavLink
