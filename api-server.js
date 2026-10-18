@@ -4504,17 +4504,42 @@ app.get('/api/payment-methods', (req, res) => {
 function getActiveOtaInfo() {
   const otaJsonDist = path.join(__dirname, 'dist', 'ota', 'version.json');
   const otaJsonBuild = path.join(__dirname, 'project', 'frontend', 'build', 'ota', 'version.json');
+  const defaultNodes = {
+    primary_pi: {
+      name: "Raspberry Pi Kasir (LAN Toko)",
+      version_url: "http://pos.local:3000/api/ota/version",
+      bundle_url: "http://pos.local:3000/ota/bundle.zip",
+      role: "local_master",
+    },
+    fallback_vps: {
+      name: "Server VPS Go-Live (Tailscale Mesh)",
+      version_url: "http://100.117.186.13:8000/api/ota/version",
+      bundle_url: "http://100.117.186.13:8000/ota/bundle.zip",
+      role: "remote_fallback",
+    },
+  };
+
   if (fs.existsSync(otaJsonDist)) {
     try {
-      return JSON.parse(fs.readFileSync(otaJsonDist, 'utf8'));
+      const data = JSON.parse(fs.readFileSync(otaJsonDist, 'utf8'));
+      if (!data.nodes) data.nodes = defaultNodes;
+      return data;
     } catch (_) {}
   }
   if (fs.existsSync(otaJsonBuild)) {
     try {
-      return JSON.parse(fs.readFileSync(otaJsonBuild, 'utf8'));
+      const data = JSON.parse(fs.readFileSync(otaJsonBuild, 'utf8'));
+      if (!data.nodes) data.nodes = defaultNodes;
+      return data;
     } catch (_) {}
   }
-  return { version: '2.10.0', url: '/ota/bundle.zip', updated_at: new Date().toISOString() };
+  return {
+    version: '2.10.0',
+    url: '/ota/bundle.zip',
+    apiUrl: '/api/ota/bundle.zip',
+    updated_at: new Date().toISOString(),
+    nodes: defaultNodes,
+  };
 }
 
 app.get(['/api/ota/version', '/ota/version.json'], (req, res) => {

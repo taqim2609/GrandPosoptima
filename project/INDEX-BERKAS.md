@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-18 07:05:36 WIB`
-> Total Berkas Terindeks: **631 berkas**
+> Terakhir diperbarui: `2026-10-18 14:34:59 WIB`
+> Total Berkas Terindeks: **637 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -24,11 +24,11 @@ python3 project/scripts/update_file_index.py
 | **Mobile Android & Sunmi Hardware** | `52` | Modul mobile android & sunmi hardware sistem POS |
 | **Integrasi Hermes Agent** | `2` | Modul integrasi hermes agent sistem POS |
 | **Planora Framework** | `48` | Modul planora framework sistem POS |
-| **Dokumentasi Teknis** | `13` | Modul dokumentasi teknis sistem POS |
+| **Dokumentasi Teknis** | `14` | Modul dokumentasi teknis sistem POS |
 | **Automasi n8n & Workflow** | `3` | Modul automasi n8n & workflow sistem POS |
-| **Deployment & DevOps** | `63` | Modul deployment & devops sistem POS |
+| **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `252` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `255` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -323,7 +323,7 @@ python3 project/scripts/update_file_index.py
 | `.planora/UI/screens/screen-inventory.md` | Dokumen spesifikasi Planora (screen-inventory.md). |
 | `.planora/manifest.json` | Manifes status dan daftar berkas paket Planora. |
 
-### 📁 Dokumentasi Teknis (13 berkas)
+### 📁 Dokumentasi Teknis (14 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -333,6 +333,7 @@ python3 project/scripts/update_file_index.py
 | `project/docs/INTEGRASI-NETZME.md` | Dokumen acuan teknis operasional: INTEGRASI-NETZME.md. |
 | `project/docs/PANDUAN-AKUN-CLI.md` | Dokumen acuan teknis operasional: PANDUAN-AKUN-CLI.md. |
 | `project/docs/PANDUAN-BUILD-PI.md` | Dokumen acuan teknis operasional: PANDUAN-BUILD-PI.md. |
+| `project/docs/PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md` | Dokumen acuan teknis operasional: PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md. |
 | `project/docs/PANDUAN-INTEGRITAS.md` | Dokumen acuan teknis operasional: PANDUAN-INTEGRITAS.md. |
 | `project/docs/PANDUAN-KATEGORI-BAHAN.md` | Dokumen acuan teknis operasional: PANDUAN-KATEGORI-BAHAN.md. |
 | `project/docs/PANDUAN-SHIFT-HARIAN.md` | Dokumen acuan teknis operasional: PANDUAN-SHIFT-HARIAN.md. |
@@ -349,7 +350,7 @@ python3 project/scripts/update_file_index.py
 | `project/n8n-workflows/2-peringatan-stok-menipis.json` | Workflow automasi alur kerja n8n: 2-peringatan-stok-menipis.json. |
 | `project/n8n-workflows/3-rekap-omset-harian.json` | Workflow automasi alur kerja n8n: 3-rekap-omset-harian.json. |
 
-### 📁 Deployment & DevOps (63 berkas)
+### 📁 Deployment & DevOps (65 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -411,9 +412,11 @@ python3 project/scripts/update_file_index.py
 | `project/update-windows.bat` | Skrip otomatisasi Windows Server: update-windows.bat. |
 | `public/bootstrap-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-pi.sh. |
 | `public/bootstrap-vps.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-vps.sh. |
+| `scripts/install-vps-one-click.sh` | Skrip otomatisasi Linux/Raspberry Pi: install-vps-one-click.sh. |
 | `setup-autobackup-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-autobackup-pi.sh. |
 | `setup-autoupdate-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-autoupdate-pi.sh. |
 | `setup-raspberrypi.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-raspberrypi.sh. |
+| `setup-tailscale.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-tailscale.sh. |
 | `start-pc-server.bat` | Skrip otomatisasi Windows Server: start-pc-server.bat. |
 | `update-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: update-pi.sh. |
 
@@ -473,7 +476,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (252 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (255 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -481,9 +484,11 @@ python3 project/scripts/update_file_index.py
 | `AGENTS.md` | Aturan emas agen, konvensi teknis arsitektur F&B/Retail, dan alur Planora. |
 | `CLAUDE.md` | Panduan instruksi agen berbasis Claude untuk repositori. |
 | `INDEX-BERKAS.md` | Buku besar indeks katalog seluruh berkas dalam proyek. |
+| `PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md` | Berkas konfigurasi/data: PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md. |
 | `PANDUAN-HERMES-AGENT.md` | Panduan resmi integrasi Hermes Agent (Nous Research) untuk AI Brain & WA Gateway. |
 | `README.md` | Berkas konfigurasi/data: README.md. |
 | `api-server.js` | Berkas konfigurasi/data: api-server.js. |
+| `capacitor.config.json` | Berkas konfigurasi/data: capacitor.config.json. |
 | `feature-requests.jsonl` | Berkas konfigurasi/data: feature-requests.jsonl. |
 | `firebase-applet-config.json` | Konfigurasi kredensial koneksi Firebase Applet. |
 | `firebase-blueprint.json` | Skema cetak biru Firestore dan konfigurasi database cloud. |
@@ -572,6 +577,7 @@ python3 project/scripts/update_file_index.py
 | `public/screenshot-desktop.png` | Berkas konfigurasi/data: screenshot-desktop.png. |
 | `public/sw.js` | Berkas konfigurasi/data: sw.js. |
 | `scripts/generate_pwa_assets.py` | Berkas konfigurasi/data: generate_pwa_assets.py. |
+| `scripts/make-ota.js` | Berkas konfigurasi/data: make-ota.js. |
 | `server.ts` | Berkas konfigurasi/data: server.ts. |
 | `src/App.css` | Berkas konfigurasi/data: App.css. |
 | `src/App.jsx` | Berkas konfigurasi/data: App.jsx. |

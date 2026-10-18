@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && node build.js",
+    "ota": "node scripts/make-ota.js",
     "lint": "node -e \"console.log('Linting passed')\"",
     "start": "NODE_ENV=production tsx server.ts"
   },

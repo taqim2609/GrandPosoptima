@@ -232,11 +232,34 @@ try {
   const zipDest = path.join(otaDir, 'bundle.zip');
   zip.writeZip(zipDest);
 
+  const crypto = require('crypto');
+  let checksum = '';
+  try {
+    checksum = 'sha256:' + crypto.createHash('sha256').update(fs.readFileSync(zipDest)).digest('hex');
+  } catch (_) {}
+
   const versionJson = {
     version: otaVersion,
     url: '/ota/bundle.zip',
+    apiUrl: '/api/ota/bundle.zip',
     updated_at: new Date().toISOString(),
     bundle_size: fs.statSync(zipDest).size,
+    bundle_size_kb: Math.round(fs.statSync(zipDest).size / 1024),
+    checksum,
+    nodes: {
+      primary_pi: {
+        name: "Raspberry Pi Kasir (LAN Toko)",
+        version_url: "http://pos.local:3000/api/ota/version",
+        bundle_url: "http://pos.local:3000/ota/bundle.zip",
+        role: "local_master",
+      },
+      fallback_vps: {
+        name: "Server VPS Go-Live (Tailscale Mesh)",
+        version_url: "http://100.117.186.13:8000/api/ota/version",
+        bundle_url: "http://100.117.186.13:8000/ota/bundle.zip",
+        role: "remote_fallback",
+      },
+    },
   };
   fs.writeFileSync(path.join(otaDir, 'version.json'), JSON.stringify(versionJson, null, 2));
 

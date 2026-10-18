@@ -42,17 +42,36 @@ export async function checkOtaUpdate({ silent = false } = {}) {
   }
   try {
     const base = getServerUrl();
-    if (!base) return { status: "no-server" };
-    // Cek versi lewat API dulu (jalur /api CORS sudah pasti bekerja di APK),
-    // fallback ke /ota/version.json (nginx) untuk kompatibilitas.
+    // Prioritaskan server aktif, lalu fallback ke node alternatif (Pi LAN & VPS Tailscale)
+    const candidates = [
+      base,
+      "http://pos.local:3000",
+      "http://100.117.186.13:8000",
+      "",
+    ].filter((v, i, a) => a.indexOf(v) === i && (v !== null && v !== undefined));
+
     let res = null;
-    try {
-      res = await fetch(`${base}/api/ota/version`, { cache: "no-store" });
-    } catch (_) {}
-    if (!res || !res.ok) {
-      res = await fetch(`${base}/ota/version.json`, { cache: "no-store" });
+    let activeBase = base || "";
+    for (const cand of candidates) {
+      try {
+        const urlToTry = cand ? `${cand.replace(/\/+$/, "")}/api/ota/version` : "/api/ota/version";
+        res = await fetch(urlToTry, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+        if (res && res.ok) {
+          activeBase = cand;
+          break;
+        }
+      } catch (_) {}
+      try {
+        const urlToTry = cand ? `${cand.replace(/\/+$/, "")}/ota/version.json` : "/ota/version.json";
+        res = await fetch(urlToTry, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+        if (res && res.ok) {
+          activeBase = cand;
+          break;
+        }
+      } catch (_) {}
     }
-    if (!res.ok) return { status: "error", reason: `Server balas HTTP ${res.status}` };
+
+    if (!res || !res.ok) return { status: "error", reason: `Server balas HTTP ${res ? res.status : "offline"}` };
     const { version, url } = await res.json();
     if (!version) return { status: "error", reason: "version server kosong" };
     // Versi bundle yang BENAR-BENAR aktif: dari plugin Capgo (paling akurat).
@@ -70,7 +89,7 @@ export async function checkOtaUpdate({ silent = false } = {}) {
       if (!silent) toast.info(`Sudah versi terbaru (OTA ${current})`, { duration: 5000 });
       return { status: "up-to-date", serverVersion: version, installedVersion: current };
     }
-    const full = url?.startsWith("http") ? url : `${base}${url || "/ota/bundle.zip"}`;
+    const full = url?.startsWith("http") ? url : `${activeBase}${url || "/ota/bundle.zip"}`;
     emitOta(true, 0); // tampilkan indikator + progres
     let dlListener;
     try {
