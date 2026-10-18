@@ -150,15 +150,18 @@
         if (m.index === rx.lastIndex) rx.lastIndex++;
       }
       var idx = 0;
-      return {
+      var iter = {
         next: function () {
           if (idx < matches.length) return { value: matches[idx++], done: false };
           return { value: undefined, done: true };
-        },
-        [Symbol.iterator]: function () {
-          return this;
         }
       };
+      if (typeof Symbol !== "undefined" && Symbol.iterator) {
+        iter[Symbol.iterator] = function () {
+          return this;
+        };
+      }
+      return iter;
     };
   }
 
