@@ -98,7 +98,7 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
     toast.success(`Server diarahkan ke: ${clean}`);
   };
 
-  const isMatchedPreset = NODE_OPTIONS.some((n) => n.url === selectedServer || (n.altUrl && selectedServer === node.altUrl));
+  const isMatchedPreset = NODE_OPTIONS.some((n) => n.url === selectedServer || (n.altUrl && selectedServer === n.altUrl));
 
   return (
     <div className="mb-5 space-y-2.5" data-testid="login-server-selector">

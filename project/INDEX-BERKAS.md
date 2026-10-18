@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-18 14:34:59 WIB`
-> Total Berkas Terindeks: **637 berkas**
+> Terakhir diperbarui: `2026-10-18 20:21:06 WIB`
+> Total Berkas Terindeks: **641 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -28,7 +28,7 @@ python3 project/scripts/update_file_index.py
 | **Automasi n8n & Workflow** | `3` | Modul automasi n8n & workflow sistem POS |
 | **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `255` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `259` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -476,7 +476,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (255 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (259 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -543,6 +543,8 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/public/icon.svg` | Berkas konfigurasi/data: icon.svg. |
 | `project/frontend/public/index.html` | Berkas konfigurasi/data: index.html. |
 | `project/frontend/public/manifest.json` | Berkas konfigurasi/data: manifest.json. |
+| `project/frontend/public/ota/bundle.zip` | Berkas konfigurasi/data: bundle.zip. |
+| `project/frontend/public/ota/version.json` | Berkas konfigurasi/data: version.json. |
 | `project/frontend/public/polyfills.js` | Polyfill ES6/ES7 khusus WebView Android 7 lama pada terminal Sunmi T2. |
 | `project/frontend/public/screenshot-desktop.png` | Berkas konfigurasi/data: screenshot-desktop.png. |
 | `project/frontend/public/sw.js` | Service worker dummy nonaktif (mencegah konflik cache OTA). |
@@ -573,6 +575,8 @@ python3 project/scripts/update_file_index.py
 | `public/icon.svg` | Berkas konfigurasi/data: icon.svg. |
 | `public/index.html` | Berkas konfigurasi/data: index.html. |
 | `public/manifest.json` | Berkas konfigurasi/data: manifest.json. |
+| `public/ota/bundle.zip` | Berkas konfigurasi/data: bundle.zip. |
+| `public/ota/version.json` | Berkas konfigurasi/data: version.json. |
 | `public/polyfills.js` | Berkas konfigurasi/data: polyfills.js. |
 | `public/screenshot-desktop.png` | Berkas konfigurasi/data: screenshot-desktop.png. |
 | `public/sw.js` | Berkas konfigurasi/data: sw.js. |
