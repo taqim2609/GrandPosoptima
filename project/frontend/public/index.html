@@ -120,6 +120,9 @@
         }
         window.addEventListener("error", function (e) {
           var msg = (e && e.message) || "";
+          if (!msg || /WebSocket|closed without opened|HMR|vite|ws:|wss:/i.test(msg)) {
+            return;
+          }
           if (/ChunkLoadError|Loading chunk/i.test(msg)) {
             if (!sessionStorage.getItem("gak_chunk_reloaded")) {
               sessionStorage.setItem("gak_chunk_reloaded", "1");
@@ -131,7 +134,15 @@
         });
         window.addEventListener("unhandledrejection", function (e) {
           var r = e && e.reason; var m = "";
-          try { m = (r && r.message) || String(r); } catch (x) {}
+          try {
+            if (typeof r === "string") {
+              m = r;
+            } else if (r && typeof r === "object") {
+              m = r.message || r.reason || r.type || String(r);
+            } else {
+              m = String(r);
+            }
+          } catch (x) {}
           if (/ChunkLoadError|Loading chunk/i.test(m)) {
             if (!sessionStorage.getItem("gak_chunk_reloaded")) {
               sessionStorage.setItem("gak_chunk_reloaded", "1");
@@ -139,9 +150,9 @@
               return;
             }
           }
-          // Kegagalan HTTP/jaringan (mis. 502 server sesaat, timeout, offline) JANGAN
+          // Kegagalan HTTP/jaringan & WebSocket (HMR disabled / sandbox) JANGAN
           // menampilkan overlay penuh — halaman tetap bisa dipakai & request lain jalan.
-          if (!m || /Request failed with status code|Network Error|timeout of|Failed to fetch|Load failed|ERR_/i.test(m)) {
+          if (!m || /Request failed with status code|Network Error|timeout of|Failed to fetch|Load failed|ERR_|WebSocket|closed without opened|ws:|wss:|vite|HMR|CloseEvent|Event|DOMException/i.test(m)) {
             return;
           }
           show("Promise rejected: " + m, "");

@@ -216,6 +216,9 @@ export function installDiag() {
     } catch (_) {
       msg = "unknown unhandled rejection";
     }
+    if (/WebSocket|closed without opened|ws:|wss:|vite|HMR/i.test(msg)) {
+      return;
+    }
     push({
       t: new Date().toISOString(),
       type: "unhandled_rejection",
