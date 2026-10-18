@@ -255,7 +255,7 @@ app.get(['/bootstrap-pi.sh', '/api/bootstrap-pi.sh', '/api/system/bootstrap-pi.s
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.send(`#!/usr/bin/env bash
 set -e
-BASE_URL="\${AISTUDIO_URL:-https://ais-dev-kpcmk7xhxge7fv25kj6wcu-754954417035.asia-southeast1.run.app}"
+BASE_URL="\${AISTUDIO_URL:-https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app}"
 APP_DIR="\${APP_DIR:-$HOME/grand-aceh-pos}"
 
 echo "======================================================================"
@@ -1066,7 +1066,7 @@ app.get('/api/health', (req, res) => {
 app.get(['/api/system/health', '/api/system-health'], (req, res) => {
   const disk = getDiskInfo();
   const raspberry = getRaspberryPiInfo();
-  const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app';
+  const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app';
 
   // Hitung cadangan database
   let backupCount = 1;
@@ -1116,7 +1116,7 @@ app.get(['/api/system/health', '/api/system-health'], (req, res) => {
 
 app.post('/api/system/health/ping-google', (req, res) => {
   const startTime = Date.now();
-  const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app';
+  const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app';
   const latency = Math.floor(Math.random() * 20) + 15;
   res.json({
     ok: true,
@@ -1154,7 +1154,7 @@ app.get('/api/system/sync/stream', (req, res) => {
 
 // Uji Kecepatan Respon Server (Benchmark: Node Lokal vs Google Cloud)
 app.post(['/api/system/health/speed-test', '/api/system/speed-test'], async (req, res) => {
-  const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app';
+  const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app';
   const env = detectHostEnvironment();
 
   // 1. Latensi internal node lokal jika terpasang
@@ -4716,7 +4716,7 @@ echo "======================================================================"
 
 const FALLBACK_BOOTSTRAP_PI = `#!/usr/bin/env bash
 set -e
-BASE_URL="\${AISTUDIO_URL:-https://ais-dev-kpcmk7xhxge7fv25kj6wcu-754954417035.asia-southeast1.run.app}"
+BASE_URL="\${AISTUDIO_URL:-https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app}"
 APP_DIR="\${APP_DIR:-$HOME/grand-aceh-pos}"
 
 echo "======================================================================"

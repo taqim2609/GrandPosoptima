@@ -7,14 +7,12 @@ set -e
 APP_DIR="${APP_DIR:-$HOME/grand-aceh-vps}"
 EVO_KEY="${EVOLUTION_API_KEY:-GrandAcehSecretKey2026}"
 PORT_EVO="${PORT_EVO:-8080}"
-PORT_N8N="${PORT_N8N:-5678}"
 
 echo "======================================================================"
 echo "  🚀 BOOTSTRAP SERVER CLOUD VPS — GRAND ACEH KULINER"
 echo "======================================================================"
 echo "Direktori VPS : $APP_DIR"
 echo "Evolution Port: $PORT_EVO"
-echo "n8n Port      : $PORT_N8N"
 echo "API Key       : $EVO_KEY"
 echo "======================================================================"
 echo
@@ -70,27 +68,7 @@ services:
     networks:
       - gak_network
 
-  # 2. n8n Workflow Automation Engine
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: gak_n8n_automation
-    restart: always
-    ports:
-      - "5678:5678"
-    environment:
-      - N8N_HOST=0.0.0.0
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - NODE_ENV=production
-      - WEBHOOK_URL=http://localhost:5678/
-      - GENERIC_TIMEZONE=Asia/Jakarta
-      - TZ=Asia/Jakarta
-    volumes:
-      - n8n_data:/home/node/.n8n
-    networks:
-      - gak_network
-
-  # 3. Watchtower (Auto-Update Container Otomatis Setiap Hari)
+  # 2. Watchtower (Auto-Update Container Otomatis Setiap Hari)
   watchtower:
     image: containrrr/watchtower
     container_name: gak_watchtower_updater
@@ -104,7 +82,6 @@ services:
 volumes:
   evolution_instances:
   evolution_store:
-  n8n_data:
 
 networks:
   gak_network:
@@ -126,7 +103,7 @@ echo "======================================================================"
 echo " 🌐 Alamat IP VPS Anda     : http://$VPS_IP"
 echo " 📱 Evolution API (WA)     : http://$VPS_IP:8080"
 echo " 🔑 API Key Evolution      : $EVO_KEY"
-echo " ⚙️ n8n Automation Web     : http://$VPS_IP:5678"
+echo " 🤖 Hermes Agent Support   : Aktif & Siap Terhubung"
 echo " 🔄 Watchtower Auto-Update : Aktif (Otomatis cek update jam 04:00 subuh)"
 echo "======================================================================"
 echo " Silakan masukkan http://$VPS_IP:8080 dan API Key di menu Pengaturan WhatsApp POS!"

@@ -34,23 +34,6 @@
     }
 }
 
-# 2. Domain n8n v1.110.1 Workflow Engine
-{$DOMAIN_N8N:n8n.localhost} {
-    tls {$SSL_EMAIL:admin@yourdomain.com}
-
-    encode zstd gzip
-
-    # Proxy ke n8n service
-    reverse_proxy n8n:5678 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        # WebSocket support untuk canvas live & execution log
-        header_up Upgrade {http.upgrade}
-        header_up Connection {http.connection}
-    }
-}
 
 # 3. Domain Evolution API (WhatsApp Gateway)
 {$DOMAIN_WA:wa.localhost} {

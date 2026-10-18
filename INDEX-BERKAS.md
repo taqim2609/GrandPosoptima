@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-18 20:21:06 WIB`
-> Total Berkas Terindeks: **641 berkas**
+> Terakhir diperbarui: `2026-10-18 22:58:59 WIB`
+> Total Berkas Terindeks: **636 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -25,10 +25,9 @@ python3 project/scripts/update_file_index.py
 | **Integrasi Hermes Agent** | `2` | Modul integrasi hermes agent sistem POS |
 | **Planora Framework** | `48` | Modul planora framework sistem POS |
 | **Dokumentasi Teknis** | `14` | Modul dokumentasi teknis sistem POS |
-| **Automasi n8n & Workflow** | `3` | Modul automasi n8n & workflow sistem POS |
-| **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
+| **Deployment & DevOps** | `64` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `259` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `258` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -342,15 +341,7 @@ python3 project/scripts/update_file_index.py
 | `project/docs/RANCANGAN-VOID-PESANAN.md` | Dokumen acuan teknis operasional: RANCANGAN-VOID-PESANAN.md. |
 | `project/docs/RANCANGAN-WINDOWS-UTAMA-PI-CADANGAN.md` | Dokumen acuan teknis operasional: RANCANGAN-WINDOWS-UTAMA-PI-CADANGAN.md. |
 
-### 📁 Automasi n8n & Workflow (3 berkas)
-
-| Jalur Berkas (`Path`) | Deskripsi Fungsi |
-| :--- | :--- |
-| `project/n8n-workflows/1-notifikasi-pesanan-whatsapp.json` | Workflow automasi alur kerja n8n: 1-notifikasi-pesanan-whatsapp.json. |
-| `project/n8n-workflows/2-peringatan-stok-menipis.json` | Workflow automasi alur kerja n8n: 2-peringatan-stok-menipis.json. |
-| `project/n8n-workflows/3-rekap-omset-harian.json` | Workflow automasi alur kerja n8n: 3-rekap-omset-harian.json. |
-
-### 📁 Deployment & DevOps (65 berkas)
+### 📁 Deployment & DevOps (64 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -396,7 +387,6 @@ python3 project/scripts/update_file_index.py
 | `project/restore-test-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: restore-test-pi.sh. |
 | `project/restore-windows.bat` | Skrip otomatisasi Windows Server: restore-windows.bat. |
 | `project/scripts/install-vps-one-click.sh` | Skrip otomatisasi Linux/Raspberry Pi: install-vps-one-click.sh. |
-| `project/scripts/setup-vps-n8n.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-vps-n8n.sh. |
 | `project/setup-autobackup-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-autobackup-pi.sh. |
 | `project/setup-autobackup-vps.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-autobackup-vps.sh. |
 | `project/setup-autoupdate-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-autoupdate-pi.sh. |
@@ -476,7 +466,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (259 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (258 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -511,7 +501,6 @@ python3 project/scripts/update_file_index.py
 | `project/MULAI-DISINI.txt` | Berkas konfigurasi/data: MULAI-DISINI.txt. |
 | `project/PANDUAN-GITHUB.md` | Berkas konfigurasi/data: PANDUAN-GITHUB.md. |
 | `project/PANDUAN-HERMES-AGENT.md` | Berkas konfigurasi/data: PANDUAN-HERMES-AGENT.md. |
-| `project/PANDUAN-MIGRASI-VPS-N8N.md` | Berkas konfigurasi/data: PANDUAN-MIGRASI-VPS-N8N.md. |
 | `project/PANDUAN-MULTI-NODE-TAILSCALE.md` | Berkas konfigurasi/data: PANDUAN-MULTI-NODE-TAILSCALE.md. |
 | `project/PANDUAN-TAILSCALE.md` | Berkas konfigurasi/data: PANDUAN-TAILSCALE.md. |
 | `project/README-DEPLOY.md` | Berkas konfigurasi/data: README-DEPLOY.md. |

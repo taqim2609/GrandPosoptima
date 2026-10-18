@@ -3,7 +3,7 @@
 
 export const AISTUDIO_DEFAULT_URL = typeof window !== "undefined" && window.location?.origin
   ? window.location.origin
-  : "https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app";
+  : "https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app";
 
 export const getBootstrapPiSh = (baseUrl = AISTUDIO_DEFAULT_URL) => `#!/usr/bin/env bash
 set -e

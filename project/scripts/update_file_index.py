@@ -153,8 +153,6 @@ def categorize_file(rel_path: str) -> str:
         return "Integrasi Hermes Agent"
     if rp.startswith("project/tests/"):
         return "Testing & Verifikasi"
-    if rp.startswith("project/n8n-workflows/"):
-        return "Automasi n8n & Workflow"
     if rp.startswith("project/docs/"):
         return "Dokumentasi Teknis"
     if rp.endswith(".sh") or rp.endswith(".bat") or "docker-compose" in rp or "Dockerfile" in rp:
@@ -193,8 +191,6 @@ def guess_description(rel_path: str) -> str:
         return f"Dokumen spesifikasi Planora ({base})."
     if cat == "Agent Skill System":
         return f"Definisi kemampuan agen: {base}."
-    if cat == "Automasi n8n & Workflow":
-        return f"Workflow automasi alur kerja n8n: {base}."
     if cat == "Dokumentasi Teknis":
         return f"Dokumen acuan teknis operasional: {base}."
 
@@ -251,7 +247,6 @@ def generate_index_markdown(root_dir: str, files: list) -> str:
         "Testing & Verifikasi",
         "Planora Framework",
         "Dokumentasi Teknis",
-        "Automasi n8n & Workflow",
         "Deployment & DevOps",
         "Agent Skill System",
         "Berkas Pendukung / Konfigurasi",

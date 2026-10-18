@@ -157,7 +157,7 @@ export default function SystemHealthPanel({ embedded = false }) {
       setData({
         status: "healthy",
         google_server: {
-          url: "https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app",
+          url: "https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app",
           connected: true,
           status: "online",
           latency_ms: 24,
@@ -373,7 +373,7 @@ export default function SystemHealthPanel({ embedded = false }) {
                 </span>
               </div>
               <p className="text-xs text-[#52525B] mt-0.5">
-                Pemantauan real-time Server Cloud VPS (Docker/n8n), penyimpanan disk, keterhubungan server Google Cloud, &amp; sinkronisasi database.
+                Pemantauan real-time Server Cloud VPS (Docker/Hermes Agent), penyimpanan disk, keterhubungan server Google Cloud, &amp; sinkronisasi database.
               </p>
             </div>
           </div>
@@ -677,7 +677,7 @@ export default function SystemHealthPanel({ embedded = false }) {
                 </span>
               </div>
               <p className="text-xs text-[#64748B]">
-                Perbandingan latensi respons Server Cloud VPS (Evolution API/n8n) vs server cloud Google AI Studio secara presisi.
+                Perbandingan latensi respons Server Cloud VPS (Evolution API/Hermes) vs server cloud Google AI Studio secara presisi.
               </p>
             </div>
           </div>

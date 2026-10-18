@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")"
 
-BASE_URL="${AISTUDIO_URL:-https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}"
+BASE_URL="${AISTUDIO_URL:-https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app}"
 VER_FILE=".aistudio-version"
 CURL_ERR="/tmp/gak-curl-err.txt"
 

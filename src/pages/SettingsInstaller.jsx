@@ -206,7 +206,7 @@ export default function SettingsInstaller() {
               <Cloud size={18} className="text-[#4F46E5]" /> 1. Server Cloud VPS (Ubuntu / Debian) — 1 Perintah via SSH
             </div>
             <p className="text-xs text-[#52525B]">
-              Otomatis memasang <b>Docker</b>, menjalankan <b>Evolution API v2 (Port 8080)</b>, engine otomasi <b>n8n (Port 5678)</b>, dan <b>Watchtower</b> untuk pembaruan container otomatis setiap hari.
+              Otomatis memasang <b>Docker</b>, menjalankan <b>Evolution API v2 (Port 8080)</b>, dukungan <b>Hermes Agent AI Gateway</b>, dan <b>Watchtower</b> untuk pembaruan container otomatis setiap hari.
             </p>
             <Code>{`bash <(curl -fsSL ${AISTUDIO_URL}/bootstrap-vps.sh)`}</Code>
             <div className="text-[11px] text-[#4338CA] font-semibold">

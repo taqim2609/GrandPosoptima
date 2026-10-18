@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 # Install Grand Aceh POS LANGSUNG dari Google AI Studio.
-BASE_URL="${AISTUDIO_URL:-https://ais-dev-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}"
+BASE_URL="${AISTUDIO_URL:-https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app}"
 APP_DIR="${APP_DIR:-$HOME/grand-aceh-pos}"
 
 echo "=== Bootstrap Grand Aceh POS (Raspberry Pi / Google AI Studio) ==="

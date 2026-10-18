@@ -3,7 +3,7 @@ set -e
 # ==============================================================================
 # Bootstrap Grand Aceh POS untuk Raspberry Pi (Tersinkron dengan Server Google)
 # ==============================================================================
-BASE_URL="${AISTUDIO_URL:-https://ais-pre-pweobuimlhj7oohblibyuh-754954417035.asia-southeast1.run.app}"
+BASE_URL="${AISTUDIO_URL:-https://ais-pre-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app}"
 APP_DIR="${APP_DIR:-$HOME/grand-aceh-pos}"
 
 echo "======================================================================"

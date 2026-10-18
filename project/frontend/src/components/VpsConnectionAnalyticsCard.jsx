@@ -365,10 +365,10 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] font-bold text-neutral-500 uppercase">Otomasi n8n:</div>
+              <div className="text-[10px] font-bold text-neutral-500 uppercase">Agen Otomasi:</div>
               <div className="text-xs font-extrabold text-indigo-700 mt-0.5 flex items-center justify-end gap-1">
                 <CheckCircle2 size={13} className="text-indigo-600" />
-                <span>Workflow Siaga</span>
+                <span>Hermes Siaga</span>
               </div>
             </div>
           </div>
@@ -376,7 +376,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
           <div className="p-2.5 rounded-lg bg-white/90 border border-indigo-100 text-[11px] text-neutral-600 space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-neutral-400">Microservice:</span>
-              <span className="font-bold text-neutral-800 truncate max-w-[130px]">Evolution + n8n</span>
+              <span className="font-bold text-neutral-800 truncate max-w-[130px]">Hermes + Evolution</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-neutral-400">Peran:</span>
