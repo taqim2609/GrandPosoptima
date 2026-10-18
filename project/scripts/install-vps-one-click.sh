@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ONE-CLICK INSTALLER: Grand Aceh POS di Debian 12 / Ubuntu VPS
-# (Kompatibel dengan n8n yang sudah berjalan)
+# ONE-CLICK INSTALLER: GrandPOS Go-Live di VPS Linux (Debian 12 / Ubuntu)
+# Terhubung ke PostgreSQL 16 & FastAPI tanpa mengubah skema database
 # ==============================================================================
 
 set -e
@@ -14,115 +14,109 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo -e "${CYAN}======================================================================${NC}"
-echo -e "${CYAN}      🚀 INSTALLER 1-KLIK GRAND ACEH KULINER POS (DEBIAN 12 / UBUNTU)  ${NC}"
+echo -e "${CYAN}      🚀 INSTALLER 1-KLIK GRANDPOS GO-LIVE VPS (DEBIAN/UBUNTU)          ${NC}"
 echo -e "${CYAN}======================================================================${NC}"
 
 # 1. Pastikan dijalankan sebagai root
 if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}⚠️  Harap jalankan script ini sebagai root!${NC}"
+  echo -e "${RED}⚠️  Harap jalankan script ini sebagai root (sudo bash)!${NC}"
   exit 1
 fi
 
-# 2. Update dan install dependensi sistem dasar
-echo -e "\n${YELLOW}[1/5] Memperbarui repositori dan memasang dependensi dasar...${NC}"
+# 2. Update dan install dependensi sistem
+echo -e "\n${YELLOW}[1/6] Memperbarui repositori dan memasang dependensi dasar...${NC}"
 apt-get update -y
-apt-get install -y git curl sudo ca-certificates gnupg ufw
+apt-get install -y git curl sudo ca-certificates gnupg ufw systemctl
 
-# 3. Cek & Pasang Docker Engine jika belum ada
-echo -e "\n${YELLOW}[2/5] Memeriksa instalasi Docker...${NC}"
-if ! command -v docker &> /dev/null; then
-  echo -e "${YELLOW}🐳 Memasang Docker Engine resmi...${NC}"
-  curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-  sh /tmp/get-docker.sh
-  rm -f /tmp/get-docker.sh
-  systemctl enable --now docker
-  echo -e "${GREEN}✓ Docker Engine berhasil dipasang!${NC}"
-else
-  echo -e "${GREEN}✓ Docker sudah terpasang.${NC}"
+# 3. Cek Node.js (v20+)
+echo -e "\n${YELLOW}[2/6] Memeriksa Node.js runtime...${NC}"
+if ! command -v node &> /dev/null; then
+  echo -e "${YELLOW}📦 Memasang Node.js LTS v20...${NC}"
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y nodejs
 fi
+echo -e "${GREEN}✓ Node.js $(node -v) terpasang.${NC}"
 
-# 4. Clone atau update repository POS
-echo -e "\n${YELLOW}[3/5] Mengunduh kode Grand Aceh POS ke /opt/grand-aceh-pos...${NC}"
+# 4. Clone / Update Repository
 TARGET_DIR="/opt/grand-aceh-pos"
-REPO_URL="https://github.com/taqim2609/GrandPosoptima.git"
+echo -e "\n${YELLOW}[3/6] Menyiapkan berkas kode di ${TARGET_DIR}...${NC}"
 
 if [ -d "$TARGET_DIR/.git" ]; then
-  echo -e "${CYAN}📁 Direktori sudah ada, memperbarui file via git pull...${NC}"
   cd "$TARGET_DIR"
   git pull origin main || git pull origin master || true
 else
   mkdir -p "$TARGET_DIR"
-  git clone "$REPO_URL" "$TARGET_DIR"
+  if [ -d "$(pwd)/.git" ]; then
+    cp -r "$(pwd)"/* "$TARGET_DIR/" 2>/dev/null || true
+  fi
   cd "$TARGET_DIR"
 fi
 
-# 5. Buat file .env.vps dengan Secret Acak Unik jika belum ada
-if [ ! -f .env.vps ]; then
-  echo -e "${YELLOW}📝 Menyiapkan berkas konfigurasi .env.vps dengan kunci enkripsi acak...${NC}"
-  
-  # Generate random cryptographic secrets
-  RAND_JWT=$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
-  RAND_ADMIN_PW=$(openssl rand -base64 12 2>/dev/null || head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 14)
-  RAND_EVO_KEY=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-  RAND_N8N_DB=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-  RAND_N8N_ENC=$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+# 5. Konfigurasi Environment Go-Live (.env)
+echo -e "\n${YELLOW}[4/6] Menyiapkan environment Go-Live tanpa merubah skema DB...${NC}"
+cat << EOF > .env
+# GRANDPOS GO-LIVE PRODUCTION CONFIG
+NODE_ENV=production
+PORT=3000
+HOST=0.0.0.0
 
-  cat << EOF > .env.vps
-# ==========================================================
-# GRAND ACEH KULINER POS — VPS AUTO-GENERATED CONFIG
-# Dibuat otomatis dengan kunci keamanan unik pada $(date '+%Y-%m-%d %H:%M:%S')
-# ==========================================================
+# Database Connection (Locked Schema - No DDL Auto-Migrations)
+DATABASE_URL=postgresql://grandpos_app:9d089517ba54dea2d7806cc6bb47141428891343468ed1f949c3e660b3f7a0ae@127.0.0.1:5432/grandpos
 
-DOMAIN_POS=localhost
-DOMAIN_N8N=localhost:5678
-DOMAIN_WA=localhost:8080
-SSL_EMAIL=admin@grandpos.local
+# GrandPOS FastAPI REST API & MCP Server
+GRANDPOS_API_BASE_URL=http://127.0.0.1:8000
+GRANDPOS_API_KEY=65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551b
+GRANDPOS_MCP_URL=http://127.0.0.1:8001/sse
 
-JWT_SECRET=${RAND_JWT}
-ADMIN_EMAIL=owner@grandacehkuliner.com
-ADMIN_PASSWORD=${RAND_ADMIN_PW}
-
-EVOLUTION_API_KEY=${RAND_EVO_KEY}
-
-N8N_DB_USER=n8n_user
-N8N_DB_PASSWORD=${RAND_N8N_DB}
-N8N_DB_NAME=n8n_vps_db
-N8N_ENCRYPTION_KEY=${RAND_N8N_ENC}
-
-UVICORN_WORKERS=4
+# JWT Security
+JWT_SECRET=grandpos_prod_secure_jwt_secret_key_2026_gak_fnb_auth
 EOF
 
-  echo -e "${GREEN}✓ File .env.vps berhasil dibuat dengan kunci rahasia acak unik!${NC}"
-  echo -e "${CYAN}🔑 Password Admin Awal : ${RAND_ADMIN_PW}${NC}"
-fi
+# 6. Install Node dependencies & Build Frontend
+echo -e "\n${YELLOW}[5/6] Membangun frontend dan mengompilasi aplikasi Web POS...${NC}"
+npm install --legacy-peer-deps
+npm run build || true
 
-# 6. Konfigurasi Firewall UFW
-echo -e "\n${YELLOW}[4/5] Mengkonfigurasi Firewall (Port 22, 80, 443, 9000, 5678)...${NC}"
-ufw allow 22/tcp || true
-ufw allow 80/tcp || true
-ufw allow 443/tcp || true
-ufw allow 9000/tcp || true
-ufw allow 5678/tcp || true
-ufw --force enable || true
+# 7. Konfigurasi Systemd Service (grandpos-web)
+echo -e "\n${YELLOW}[6/6] Memasang service Systemd (grandpos-web)...${NC}"
+cat << EOF > /etc/systemd/system/grandpos-web.service
+[Unit]
+Description=GrandPOS Web Application Proxy & Server
+After=network.target postgresql.service
 
-# 7. Jalankan Docker Compose Standalone
-echo -e "\n${YELLOW}[5/5] Membangun dan menjalankan container POS di VPS...${NC}"
-if docker compose version &> /dev/null; then
-  docker compose -f docker-compose.pos-standalone.yml --env-file .env.vps up -d --build
-else
-  docker-compose -f docker-compose.pos-standalone.yml --env-file .env.vps up -d --build
-fi
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${TARGET_DIR}
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3000
 
-IP_ADDR=$(curl -s -4 icanhazip.com || hostname -I | awk '{print $1}' || echo "IP_VPS_ANDA")
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable grandpos-web.service
+systemctl restart grandpos-web.service || true
+
+# Allow firewall ports
+ufw allow 3000/tcp || true
+ufw allow 8000/tcp || true
+ufw allow 8001/tcp || true
+
+IP_ADDR=$(curl -s -4 icanhazip.com || hostname -I | awk '{print $1}' || echo "127.0.0.1")
 
 echo -e "\n${GREEN}======================================================================${NC}"
-echo -e "${GREEN}  🎉 INSTALASI GRAND ACEH POS BERHASIL SELESAI!                        ${NC}"
+echo -e "${GREEN}  🎉 DEPLOYMENT GRANDPOS GO-LIVE VPS BERHASIL SELESAI!                   ${NC}"
 echo -e "${GREEN}======================================================================${NC}"
-echo -e "${CYAN}Layanan Anda sekarang aktif di:${NC}"
-echo -e "  📱 Web POS Kasir      : ${YELLOW}http://${IP_ADDR}${NC}"
-echo -e "  🖥️  Panel Portainer UI : ${YELLOW}http://${IP_ADDR}:9000${NC}"
-echo -e "  ⚙️  n8n Automation     : ${YELLOW}http://${IP_ADDR}:5678${NC}"
-echo -e "  💬 WhatsApp Gateway   : ${YELLOW}http://${IP_ADDR}:8080${NC}"
+echo -e "${CYAN}Status Layanan Terpasang:${NC}"
+echo -e "  🌐 Web POS Application  : ${YELLOW}http://${IP_ADDR}:3000${NC}"
+echo -e "  ⚡ FastAPI REST API     : ${YELLOW}http://127.0.0.1:8000/health${NC}"
+echo -e "  🤖 MCP SSE Server       : ${YELLOW}http://127.0.0.1:8001/sse${NC}"
+echo -e "  🗄️ PostgreSQL Database  : ${YELLOW}127.0.0.1:5432 (database: grandpos)${NC}"
 echo -e "${GREEN}======================================================================${NC}"
-echo -e "${BLUE}💡 Folder proyek berada di: /opt/grand-aceh-pos${NC}"
-echo -e "${BLUE}💡 Untuk melihat log container: docker ps atau buka Portainer di port 9000${NC}\n"
+echo -e "${BLUE}💡 Skema PostgreSQL dikunci: Tidak ada migrasi DDL yang dijalankan.${NC}"
+echo -e "${BLUE}💡 Untuk mengecek log service: systemctl status grandpos-web${NC}\n"

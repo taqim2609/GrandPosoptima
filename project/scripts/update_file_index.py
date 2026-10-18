@@ -113,6 +113,8 @@ FILE_DESCRIPTIONS = {
     "project/frontend/src/lib/rbac.js": "Utilitas verifikasi hak akses berbasis peran (RBAC).",
     "project/frontend/src/lib/ota.js": "Utilitas pengecekan pembaruan Capgo OTA langsung di perangkat kasir.",
     "project/frontend/src/lib/offlineQueue.js": "Antrean transaksi luring berbasis IndexedDB yang sinkron saat online.",
+    "src/components/QuickStockManager.jsx": "Komponen pembaruan cepat stok fisik massal dan pencatatan penggunaan bahan dapur (100% backend mandiri).",
+    "project/frontend/src/components/QuickStockManager.jsx": "Komponen pembaruan cepat stok fisik massal dan pencatatan penggunaan bahan dapur.",
 
     # Hardware & Android
     "apk/Grand-Aceh-Kuliner-POS-v2.10.apk": "Paket instalasi Android release untuk perangkat Sunmi T2 / tablet POS.",
@@ -309,7 +311,7 @@ def main():
     # Menemukan root repositori
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(os.path.dirname(script_dir))
-    if not os.path.exists(os.path.join(root_dir, "server.js")):
+    if not os.path.exists(os.path.join(root_dir, "package.json")):
         root_dir = os.path.dirname(script_dir)
 
     print(f"[Index] Memindai repositori di: {root_dir}")

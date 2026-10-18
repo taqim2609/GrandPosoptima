@@ -1,6 +1,6 @@
 {
-  "summary": "Updated implementation plan adding printer integration details for PC/Desktop mode (Silent Kiosk Printing option via --kiosk-printing, Windows Thermal Driver 80mm/58mm, Epson LAN, and Bluetooth thermal printers).",
-  "updatedAt": "2026-10-16T15:05:25.251637968Z",
+  "summary": "Revised implementation plan including Android APK & Capgo OTA updates:\n1. Database Schema Lock: Lock live PostgreSQL schema from DDL migrations\n2. One-Click VPS Installer: `scripts/install-vps-one-click.sh` for online backend & API\n3. One-Click Raspberry Pi Installer: `install-pi.sh` with Tailscale integration & offline-first local POS setup\n4. Android APK & Capgo OTA: Update OTA bundle script (`make-ota.js`), Capacitor Android config, Sunmi T2 SDK hardware bridge, and fallback server URL targeting Pi local IP -> VPS Tailscale IP\n5. Comprehensive Operational Guide: `PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md`\n6. System Health & Tailscale UI: Dual-node real-time status & OTA version monitoring in POS UI",
+  "updatedAt": "2026-10-18T06:34:32.758076257Z",
   "requestFeedback": true,
   "userFacing": true
 }

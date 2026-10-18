@@ -11,15 +11,11 @@ import { usePlatform, logoUrl } from "@/lib/platform";
 import { canAny, roleNameOf, isSuperAdmin } from "@/lib/rbac";
 import { useUI, orderNav, navLabel } from "@/lib/ui";
 import { NAV_ITEMS } from "@/lib/navItems";
-import {
-  subscribeFirestoreSync,
-  testFirestoreConnection,
-  firestoreDatabaseId,
-} from "@/lib/firebase";
 import { VisualSyncBadge } from "@/components/VisualSyncStatus";
 import VisualSyncStatusCard from "@/components/VisualSyncStatus";
 import ThreeServerMatrix from "@/components/ThreeServerMatrix";
 import PWAInstallButton from "@/components/PWAInstallButton";
+import PostgresStatusIndicator from "@/components/PostgresStatusIndicator";
 import {
   Clock, LogOut, ShieldCheck, Menu, X,
   Wifi, WifiOff, RefreshCw, CloudOff, Database, KeyRound,
@@ -155,6 +151,7 @@ function HeaderConnectionBadge({ onOpenQueue, onOpenSyncModal }) {
   return (
     <div className="flex items-center gap-2">
       <PWAInstallButton />
+      <PostgresStatusIndicator />
       <VisualSyncBadge onClick={onOpenSyncModal} />
 
       <NavLink

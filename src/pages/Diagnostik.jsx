@@ -34,16 +34,15 @@ import { toast } from "sonner";
 import { buildDiagReport, installDiag, errorLog } from "@/lib/diag";
 import { copyText } from "@/lib/utils";
 import { getServerUrl } from "@/lib/api";
-import {
-  fetchRemoteErrorLogs,
-  logRuntimeErrorToFirestore,
-  markErrorResolved,
-  deleteRemoteErrorLog,
-  testFirestoreConnection,
-} from "@/lib/firebase";
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
 import TailscaleDashboard from "@/components/TailscaleDashboard";
 import GlobalErrorDiagnosticPanel from "@/components/GlobalErrorDiagnosticPanel";
+import {
+  fetchRemoteErrorLogs,
+  markErrorResolved,
+  deleteRemoteErrorLog,
+  logRuntimeError,
+} from "@/lib/sync";
 
 export default function Diagnostik() {
   const [report, setReport] = useState("");
@@ -53,15 +52,7 @@ export default function Diagnostik() {
   const [fixingAll, setFixingAll] = useState(false);
   const [fixingStepId, setFixingStepId] = useState(null);
   const [diagScore, setDiagScore] = useState(100);
-  const [activeTab, setActiveTab] = useState("auto-diagnosa"); // "auto-diagnosa" | "global-errors" | "hybrid-sync" | "firestore-logs" | "technical-report"
-
-  // Firestore Remote Error Logs State
-  const [remoteLogs, setRemoteLogs] = useState([]);
-  const [loadingRemoteLogs, setLoadingRemoteLogs] = useState(false);
-  const [filterType, setFilterType] = useState("all");
-  const [filterResolved, setFilterResolved] = useState("all");
-  const [expandedLogId, setExpandedLogId] = useState(null);
-  const [testingError, setTestingError] = useState(false);
+  const [activeTab, setActiveTab] = useState("auto-diagnosa"); // "auto-diagnosa" | "global-errors" | "hybrid-sync" | "technical-report"
 
   // Langkah-langkah diagnosa otomatis dengan kesanggupan Auto-Repair
   const [steps, setSteps] = useState([
@@ -76,14 +67,14 @@ export default function Diagnostik() {
       icon: Wifi,
     },
     {
-      id: "firestore",
-      name: "Firestore Error Telemetry & Cloud Monitoring",
+      id: "database",
+      name: "Database Server Mandiri (Gudang-644 / Local DB)",
       status: "idle",
       details: "Menunggu pemeriksaan...",
       suggestion: "",
       canFix: true,
-      fixName: "Uji Koneksi Firestore",
-      icon: Flame,
+      fixName: "Uji Koneksi Database",
+      icon: HardDrive,
     },
     {
       id: "server",
@@ -231,27 +222,29 @@ export default function Diagnostik() {
       updateStep("internet", "error", "Gagal memverifikasi jaringan: " + e.message, "Harap hubungkan kembali jaringan perangkat.");
     }
 
-    // 1b. Firestore Error Telemetry & Cloud Monitoring
+    // 1b. Database Server Mandiri (Gudang-644 / Local DB)
     await delay(250);
     try {
-      const fsTest = await testFirestoreConnection();
-      if (fsTest.ok) {
+      const t0 = performance.now();
+      const dbRes = await fetch("/api/health").then((r) => r.json()).catch(() => null);
+      const latency = Math.round(performance.now() - t0);
+      if (dbRes) {
         updateStep(
-          "firestore",
+          "database",
           "success",
-          `Firestore Error Telemetry aktif & terhubung (${fsTest.latency_ms} ms). Koleksi error_logs siap menerima data debugging.`,
-          "Koneksi Firestore siap memantau crash runtime dan remote debugging."
+          `Database Server aktif & terhubung lancar (${latency} ms). Status: ${dbRes.status || "OK"}.`,
+          "Koneksi database server mandiri normal dan siap melayani transaksi."
         );
       } else {
         updateStep(
-          "firestore",
+          "database",
           "warning",
-          `Firestore Error Telemetry: ${fsTest.message || "Tidak dapat terhubung"}`,
-          "Periksa izin jaringan atau koneksi Firebase."
+          "Database Server tidak merespons",
+          "Periksa izin jaringan atau service backend server toko."
         );
       }
     } catch (e) {
-      updateStep("firestore", "warning", "Modul Firestore: " + e.message, "Aplikasi tetap beroperasi dengan fallback lokal.");
+      updateStep("database", "warning", "Database Server: " + e.message, "Aplikasi tetap beroperasi dengan fallback lokal.");
     }
 
     // 2. Server API Lokal
@@ -522,18 +515,18 @@ export default function Diagnostik() {
         }
       } 
       
-      else if (id === "firestore") {
-        // Uji dan verifikasi koneksi Firestore
-        const testRes = await testFirestoreConnection();
-        if (testRes.ok) {
+      else if (id === "database") {
+        // Uji dan verifikasi koneksi Database Server
+        const dbRes = await fetch("/api/health").then((r) => r.json()).catch(() => null);
+        if (dbRes) {
           updateStep(
-            "firestore",
+            "database",
             "success",
-            `Koneksi Firestore aktif & terverifikasi (${testRes.latency_ms} ms). Remote Error Telemetry siap.`,
-            "Remote debugging cloud beroperasi."
+            `Koneksi Database aktif & terverifikasi. Status: ${dbRes.status || "OK"}.`,
+            "Database server mandiri beroperasi normal."
           );
         } else {
-          throw new Error(testRes.message || "Gagal menghubungi Firestore");
+          throw new Error("Gagal menghubungi database server");
         }
       } 
       
@@ -726,7 +719,7 @@ export default function Diagnostik() {
       setRemoteLogs(docs);
     } catch (e) {
       console.warn("Failed to load remote error logs:", e);
-      toast.error("Gagal memuat log Firestore: " + (e.message || e));
+      toast.error("Gagal memuat log server: " + (e.message || e));
     } finally {
       setLoadingRemoteLogs(false);
     }
@@ -745,10 +738,10 @@ export default function Diagnostik() {
   };
 
   const handleDeleteRemoteLog = async (logId) => {
-    if (!window.confirm("Hapus catatan log error ini dari Firestore?")) return;
+    if (!window.confirm("Hapus catatan log error ini dari server?")) return;
     try {
       await deleteRemoteErrorLog(logId);
-      toast.success("Log error berhasil dihapus dari Firestore");
+      toast.success("Log error berhasil dihapus dari server");
       setRemoteLogs((prev) => prev.filter((l) => l.id !== logId));
     } catch (e) {
       toast.error("Gagal menghapus log: " + e.message);
@@ -757,9 +750,9 @@ export default function Diagnostik() {
 
   const handleSendTestError = async () => {
     setTestingError(true);
-    const tId = toast.loading("Mengirim telemetry error uji coba ke Firestore...");
+    const tId = toast.loading("Mengirim telemetry error uji coba ke server...");
     try {
-      const docId = await logRuntimeErrorToFirestore({
+      const docId = await logRuntimeError({
         message: `Uji Coba Remote Error Telemetry (${new Date().toLocaleTimeString()})`,
         stack: "Error: Uji Coba Remote Telemetry Diagnostik\n    at handleSendTestError (Diagnostik.jsx:line)\n    at HTMLButtonElement.dispatch (react-dom.production.min.js)",
         type: "test_telemetry",
@@ -769,7 +762,7 @@ export default function Diagnostik() {
           screen_resolution: `${window.innerWidth}x${window.innerHeight}`,
         },
       });
-      toast.success(`Error telemetry uji coba berhasil disimpan ke Firestore! (ID: ${docId})`, { id: tId });
+      toast.success(`Error telemetry uji coba berhasil disimpan ke server! (ID: ${docId})`, { id: tId });
       await loadRemoteLogs();
     } catch (e) {
       toast.error("Gagal mengirim error uji coba: " + e.message, { id: tId });
@@ -779,7 +772,7 @@ export default function Diagnostik() {
   };
 
   useEffect(() => {
-    if (activeTab === "firestore-logs") {
+    if (activeTab === "cloud-logs" || activeTab === "firestore-logs") {
       loadRemoteLogs();
     }
   }, [activeTab]);
@@ -879,15 +872,15 @@ export default function Diagnostik() {
             Hybrid Sync &amp; Latensi
           </button>
           <button
-            onClick={() => setActiveTab("firestore-logs")}
+            onClick={() => setActiveTab("cloud-logs")}
             className={`px-5 py-3 font-bold text-sm whitespace-nowrap transition relative flex items-center gap-2 ${
-              activeTab === "firestore-logs"
+              activeTab === "cloud-logs" || activeTab === "firestore-logs"
                 ? "text-zinc-950 border-b-2 border-zinc-950"
                 : "text-zinc-400 hover:text-zinc-600"
             }`}
           >
-            <Flame size={16} className={activeTab === "firestore-logs" ? "text-amber-600" : ""} />
-            Firestore Error Telemetry
+            <Flame size={16} className={activeTab === "cloud-logs" || activeTab === "firestore-logs" ? "text-amber-600" : ""} />
+            Remote Error Telemetry
             {unresolvedCount > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white">
                 {unresolvedCount}
@@ -1027,7 +1020,7 @@ export default function Diagnostik() {
           </div>
         )}
 
-        {activeTab === "firestore-logs" && (
+        {(activeTab === "cloud-logs" || activeTab === "firestore-logs") && (
           <div className="space-y-4">
             {/* Header & Controls Bar */}
             <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
@@ -1035,10 +1028,10 @@ export default function Diagnostik() {
                 <div>
                   <div className="flex items-center gap-2">
                     <Flame className="text-amber-500" size={20} />
-                    <h2 className="text-base font-black text-zinc-900">Firestore Remote Error Monitoring</h2>
+                    <h2 className="text-base font-black text-zinc-900">Remote Error Telemetry (Gudang-644 / Cloud)</h2>
                   </div>
                   <p className="text-xs text-zinc-500 mt-1">
-                    Semua uncaught exception, runtime crash, React error boundary, dan unhandled promise rejections dari tablet kasir maupun POS web dicatat ke koleksi <code className="bg-zinc-100 px-1 py-0.5 rounded text-zinc-800 font-mono text-[11px]">error_logs</code> Firestore secara real-time.
+                    Semua uncaught exception, runtime crash, React error boundary, dan unhandled promise rejections dari tablet kasir maupun POS web dicatat ke sistem telemetri server secara real-time.
                   </p>
                 </div>
 
@@ -1100,7 +1093,7 @@ export default function Diagnostik() {
             {loadingRemoteLogs && remoteLogs.length === 0 ? (
               <div className="bg-white border border-zinc-200 rounded-2xl p-12 text-center text-zinc-400 space-y-2">
                 <RefreshCw size={24} className="animate-spin mx-auto text-zinc-400" />
-                <p className="text-sm font-medium">Memuat log telemetry dari Firestore...</p>
+                <p className="text-sm font-medium">Memuat log telemetry dari server...</p>
               </div>
             ) : filteredLogs.length === 0 ? (
               <div className="bg-white border border-zinc-200 rounded-2xl p-12 text-center text-zinc-500 space-y-2">
@@ -1108,7 +1101,7 @@ export default function Diagnostik() {
                 <p className="text-sm font-bold text-zinc-800">Tidak ada log error yang cocok</p>
                 <p className="text-xs text-zinc-400">
                   {remoteLogs.length === 0 
-                    ? "Belum ada error runtime yang tercatat di database Firestore." 
+                    ? "Belum ada error runtime yang tercatat di database server." 
                     : "Tidak ada catatan error untuk filter yang dipilih."}
                 </p>
               </div>

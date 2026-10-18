@@ -714,6 +714,125 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync) {
     res.json({ count });
   });
 
+  // POST /api/inventory/bulk-update-stock - Bulk physical stock update (Bahan Baku & Produk Titipan)
+  app.post(['/api/inventory/bulk-update-stock', '/inventory/bulk-update-stock'], (req, res) => {
+    const items = req.body.items || [];
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ detail: 'Format data items harus berupa array' });
+    }
+    if (!db.stockOpnames) db.stockOpnames = [];
+    if (!db.ingredientOpname) db.ingredientOpname = [];
+
+    const updated = [];
+    const now = new Date().toISOString();
+
+    items.forEach((item) => {
+      const counted = Number(item.counted_stock);
+      if (isNaN(counted) || counted < 0) return;
+
+      if (item.type === 'ingredient') {
+        const ing = db.ingredients.find((i) => i.id === item.id);
+        if (ing) {
+          const prev = Number(ing.stock || 0);
+          const diff = counted - prev;
+          ing.stock = counted;
+          const rec = {
+            id: 'iop-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+            ingredient_id: ing.id,
+            ingredient_name: ing.name,
+            system_stock: prev,
+            counted_stock: counted,
+            difference: diff,
+            note: item.note || 'Update cepat stok fisik bahan',
+            created_at: now,
+          };
+          db.ingredientOpname.unshift(rec);
+          updated.push({ id: ing.id, type: 'ingredient', name: ing.name, old_stock: prev, new_stock: counted, diff });
+        }
+      } else if (item.type === 'vendor' || item.type === 'product') {
+        const prod = db.products.find((p) => p.id === item.id);
+        if (prod) {
+          const prev = Number(prod.stock || 0);
+          const diff = counted - prev;
+          prod.stock = counted;
+          const rec = {
+            id: 'op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+            product_id: prod.id,
+            product_name: prod.name,
+            system_stock: prev,
+            counted_stock: counted,
+            difference: diff,
+            note: item.note || 'Update cepat stok fisik titipan',
+            created_at: now,
+          };
+          db.stockOpnames.unshift(rec);
+          updated.push({ id: prod.id, type: 'vendor', name: prod.name, old_stock: prev, new_stock: counted, diff });
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Berhasil memperbarui stok ${updated.length} item`,
+      count: updated.length,
+      updated,
+    });
+  });
+
+  // POST /api/ingredients/usage-bulk - Catat pemakaian bahan baku dapur massal
+  app.post(['/api/ingredients/usage-bulk', '/ingredients/usage-bulk'], (req, res) => {
+    const items = req.body.items || [];
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ detail: 'Format data items harus berupa array' });
+    }
+    if (!db.ingredientUsage) db.ingredientUsage = [];
+
+    const recorded = [];
+    const now = new Date().toISOString();
+
+    items.forEach((item) => {
+      const qty = Number(item.qty);
+      if (isNaN(qty) || qty <= 0) return;
+
+      const ing = db.ingredients.find((i) => i.id === (item.ingredient_id || item.id));
+      if (ing) {
+        const prev = Number(ing.stock || 0);
+        const newStock = Math.max(0, Math.round((prev - qty) * 100) / 100);
+        ing.stock = newStock;
+
+        const record = {
+          id: 'iusg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          ingredient_id: ing.id,
+          ingredient_name: ing.name,
+          unit: ing.unit || '',
+          qty,
+          reason: item.reason || 'masak',
+          note: item.note || '',
+          previous_stock: prev,
+          new_stock: newStock,
+          created_at: now,
+        };
+        db.ingredientUsage.unshift(record);
+        recorded.push(record);
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Berhasil mencatat penggunaan ${recorded.length} bahan baku`,
+      count: recorded.length,
+      items: recorded,
+    });
+  });
+
+  // GET /api/ingredients/usage - Riwayat pencatatan penggunaan bahan baku
+  app.get(['/api/ingredients/usage', '/ingredients/usage'], (req, res) => {
+    if (!db.ingredientUsage) db.ingredientUsage = [];
+    const limit = Number(req.query.limit || 50);
+    res.json(db.ingredientUsage.slice(0, limit));
+  });
+
+
   // POST /api/ingredients/vision-commit
   app.post(['/api/ingredients/vision-commit', '/ingredients/vision-commit'], (req, res) => {
     const items = req.body.items || [];

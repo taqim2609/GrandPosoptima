@@ -3,44 +3,44 @@ import axios from "axios";
 // Standard preset servers for hybrid architecture
 export const SERVER_PRESETS = [
   {
-    id: "cloud",
-    name: "Google Cloud Server",
-    subname: "Primary Cloud (Google Cloud Run / AIS)",
-    defaultUrl: "", // relative / current origin
-    badge: "Cloud Firestore",
-    badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
-    description: "Server Google Cloud dengan database Firestore, AI Studio, dan akses online 24 jam.",
-    iconType: "cloud",
-  },
-  {
-    id: "pc_master",
-    name: "PC Server (Master Desktop)",
-    subname: "Local Master & Evolution API",
-    defaultUrl: "http://localhost:8000",
-    badge: "Master LAN + WA",
+    id: "golive_fastapi",
+    name: "GrandPOS FastAPI (Go-Live)",
+    subname: "FastAPI + PostgreSQL (127.0.0.1:8000)",
+    defaultUrl: "http://127.0.0.1:8000",
+    badge: "Go-Live Production",
     badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    description: "PC Kasir Utama di toko. Menjalankan MongoDB lokal dan Evolution API WhatsApp.",
+    description: "Server utama FastAPI dengan PostgreSQL 16 live dan MCP Server (Port 8001).",
     iconType: "server",
   },
   {
-    id: "pi_node",
-    name: "Raspberry Pi (Node Kasir 2)",
-    subname: "Edge Terminal / Dapur",
-    defaultUrl: "http://raspberrypi.local:8000",
-    badge: "Terminal LAN",
-    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
-    description: "Terminal tambahan atau display pesanan dapur di jaringan WiFi toko.",
-    iconType: "cpu",
+    id: "hermes_tailscale",
+    name: "Server VPS (Tailscale Tunnel)",
+    subname: "FastAPI + PostgreSQL (Tailscale)",
+    defaultUrl: "http://100.117.186.13:8000",
+    badge: "Tailscale VPS",
+    badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
+    description: "Remote VPS server via Tailscale IP untuk akses antar-lokasi.",
+    iconType: "server",
   },
   {
-    id: "tailscale",
-    name: "Tailscale Funnel (Akses Luar)",
-    subname: "Secure Remote Tunnel",
-    defaultUrl: "https://grandpos.tailf3a839.ts.net",
-    badge: "Remote HTTPS",
-    badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    description: "Akses server lokal toko dari luar jaringan tanpa perlu utak-atik port router.",
-    iconType: "globe",
+    id: "pi_local",
+    name: "Raspberry Pi Kasir Toko (LAN)",
+    subname: "Localhost / pos.local:3000",
+    defaultUrl: "http://pos.local:3000",
+    badge: "Master LAN Pi",
+    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
+    description: "Node kasir fisik Raspberry Pi 4 lokal di outlet toko dengan printer thermal & offline-first queue.",
+    iconType: "server",
+  },
+  {
+    id: "cloud",
+    name: "Google Cloud Server (AIS)",
+    subname: "Express Middleware Port 3000",
+    defaultUrl: "", // relative / current origin
+    badge: "Cloud Standby",
+    badgeColor: "bg-zinc-100 text-zinc-700 border-zinc-200",
+    description: "Server Cloud terpadu dengan Express API dan Vite middleware di port 3000.",
+    iconType: "cloud",
   },
 ];
 
@@ -71,9 +71,9 @@ export function setServerUrl(url) {
 export function getActiveServerPreset(currentUrl = getServerUrl()) {
   const clean = (currentUrl || "").replace(/\/+$/, "");
   if (!clean) return "cloud";
-  if (clean.includes("localhost") || clean.includes("127.0.0.1") || clean.includes(":8000")) return "pc_master";
-  if (clean.includes("raspberrypi") || clean.includes(".150")) return "pi_node";
-  if (clean.includes(".ts.net") || clean.includes("tailscale")) return "tailscale";
+  if (clean.includes("100.117.186.13") || clean.includes("gudang-644")) return "hermes_tailscale";
+  if (clean.includes("localhost") || clean.includes("127.0.0.1") || clean.includes(":8000")) return "hermes_local";
+  if (clean.includes(".ts.net") || clean.includes("tailscale")) return "tailscale_funnel";
   return "custom";
 }
 
@@ -93,13 +93,19 @@ export async function probeServer(base, timeoutMs = 2500) {
       healthUrl = `${cleanBase}/api/health`;
     }
 
-    const res = await fetch(healthUrl, { signal: ctrl.signal, cache: "no-store" });
+    let res = await fetch(healthUrl, { signal: ctrl.signal, cache: "no-store" }).catch(() => null);
+    if (!res || !res.ok) {
+      if (cleanBase) {
+        res = await fetch(`${cleanBase}/health`, { signal: ctrl.signal, cache: "no-store" }).catch(() => null);
+      }
+    }
+
     const latency = Math.round(performance.now() - start);
-    if (!res.ok) {
-      return { ok: false, latency, error: `HTTP ${res.status}` };
+    if (!res || !res.ok) {
+      return { ok: false, latency, error: res ? `HTTP ${res.status}` : "Tidak terjangkau" };
     }
     const j = await res.json().catch(() => null);
-    const valid = j && (j.app === "gak-pos" || j.ok || j.status === "ok");
+    const valid = j && (j.app === "gak-pos" || j.ok || j.status === "ok" || j.healthy === true || j.status === "healthy" || j.service || j.db === true);
     return {
       ok: !!valid,
       latency,
@@ -165,6 +171,7 @@ const api = axios.create({
 api.interceptors.request.use((cfg) => {
   const t = localStorage.getItem("gak_token");
   if (t) cfg.headers.Authorization = `Bearer ${t}`;
+  cfg.headers["X-API-Key"] = process.env.REACT_APP_GRANDPOS_API_KEY || "65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551b";
   return cfg;
 });
 

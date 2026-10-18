@@ -43,7 +43,6 @@ import {
 import { copyText } from "@/lib/utils";
 import { getBundleVersion } from "@/lib/versions";
 import { getServerUrl } from "@/lib/api";
-import { testFirestoreConnection, logRuntimeErrorToFirestore } from "@/lib/firebase";
 
 export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
   const [logs, setLogs] = useState([]);
@@ -53,12 +52,11 @@ export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
   const [isSimulating, setIsSimulating] = useState(false);
   const [isTestingServices, setIsTestingServices] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
-  const [isSyncingFirestore, setIsSyncingFirestore] = useState(false);
 
   // Live Service Health Status
   const [healthStatus, setHealthStatus] = useState({
     api: { status: "unknown", latency: null, message: "Belum diuji" },
-    firestore: { status: "unknown", latency: null, message: "Belum diuji" },
+    database: { status: "unknown", latency: null, message: "Belum diuji" },
     internet: { status: "unknown", latency: null, message: "Belum diuji" },
     publishing: { status: "unknown", version: getBundleVersion(), latest: null, message: "Memeriksa versi..." },
   });
@@ -123,20 +121,22 @@ export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
       };
     }
 
-    // 3. Firestore Telemetry Check
+    // 3. Database Server Check (Server Gudang-644 / Local DB)
     try {
-      const fsRes = await testFirestoreConnection();
-      if (fsRes.ok) {
-        newHealth.firestore = {
+      const t0 = performance.now();
+      const dbRes = await fetch("/api/health").then((r) => r.json()).catch(() => null);
+      const latency = Math.round(performance.now() - t0);
+      if (dbRes) {
+        newHealth.database = {
           status: "healthy",
-          latency: fsRes.latency_ms,
-          message: `Terhubung (${fsRes.latency_ms} ms)`,
+          latency,
+          message: `Aktif (${latency} ms)`,
         };
       } else {
-        newHealth.firestore = { status: "warning", latency: null, message: fsRes.message || "Gagal" };
+        newHealth.database = { status: "warning", latency: null, message: "Gagal terhubung" };
       }
     } catch (e) {
-      newHealth.firestore = { status: "warning", latency: null, message: e.message || "Offline" };
+      newHealth.database = { status: "warning", latency: null, message: e.message || "Offline" };
     }
 
     // 4. Publishing & Bundle Version Check
@@ -228,33 +228,6 @@ export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
       toast.error("Gagal menyusun laporan: " + e.message);
     } finally {
       setIsCopying(false);
-    }
-  };
-
-  const handleSyncAllToFirestore = async () => {
-    if (logs.length === 0) {
-      toast.info("Tidak ada log error untuk dikirim.");
-      return;
-    }
-    setIsSyncingFirestore(true);
-    const t = toast.loading(`Mengunggah ${logs.length} catatan log ke Firestore...`);
-    try {
-      for (const item of logs.slice(-10)) {
-        await logRuntimeErrorToFirestore({
-          type: item.category || item.type,
-          message: item.msg || item.message,
-          stack: item.stack || "",
-          componentStack: item.componentStack || "",
-          url: item.url || window.location.href,
-          status: item.status,
-          method: item.method,
-        });
-      }
-      toast.success("Log error berhasil disinkronkan ke Firestore Remote Debugging!", { id: t });
-    } catch (e) {
-      toast.error("Gagal mengirim ke Firestore: " + e.message, { id: t });
-    } finally {
-      setIsSyncingFirestore(false);
     }
   };
 
@@ -449,20 +422,20 @@ export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
             </div>
           </div>
 
-          {/* 3. Firestore Telemetry */}
+          {/* 3. Database Server */}
           <div className="bg-zinc-50/80 border border-zinc-200/60 rounded-xl p-3 flex items-center gap-2.5">
             <div
               className={`p-2 rounded-lg shrink-0 ${
-                healthStatus.firestore.status === "healthy"
+                healthStatus.database.status === "healthy"
                   ? "bg-emerald-100 text-emerald-700"
                   : "bg-amber-100 text-amber-700"
               }`}
             >
-              <Flame size={15} />
+              <Server size={15} />
             </div>
             <div className="min-w-0">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Firestore Telemetri</div>
-              <div className="text-xs font-black text-zinc-800 truncate">{healthStatus.firestore.message}</div>
+              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Database Server</div>
+              <div className="text-xs font-black text-zinc-800 truncate">{healthStatus.database.message}</div>
             </div>
           </div>
 
@@ -654,16 +627,6 @@ export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
             title="Simulasikan ChunkLoadError akibat perubahan publish"
           >
             <Zap size={12} /> Tes Chunk Error
-          </button>
-
-          <button
-            onClick={handleSyncAllToFirestore}
-            disabled={isSyncingFirestore || logs.length === 0}
-            className="px-3 h-8 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] rounded-lg flex items-center gap-1.5 transition disabled:opacity-50"
-            title="Kirim catatan log saat ini ke koleksi error_logs Firestore"
-          >
-            <Flame size={12} className={isSyncingFirestore ? "animate-spin" : ""} />
-            {isSyncingFirestore ? "Sinkron..." : "Kirim Firestore"}
           </button>
         </div>
       </div>

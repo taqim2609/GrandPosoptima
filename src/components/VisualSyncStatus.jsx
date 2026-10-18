@@ -4,14 +4,14 @@ import {
   Server, Cpu, Cloud, ShieldCheck, ArrowUpDown, ChevronRight, Activity
 } from "lucide-react";
 import {
-  subscribeFirestoreSync,
-  testFirestoreConnection,
+  subscribeSync,
+  testSyncConnection,
   getLastSyncInfo,
   updateLastSyncInfo,
-  syncAllMenuAndStockToFirestore,
-  firestoreDatabaseId,
-  firebaseProjectId
-} from "@/lib/firebase";
+  syncAllMenuAndStock,
+  syncDatabaseId,
+  syncNodeId
+} from "@/lib/sync";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -43,7 +43,7 @@ export function VisualSyncBadge({ onClick }) {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    const unsub = subscribeFirestoreSync((active, info) => {
+    const unsub = subscribeSync((active, info) => {
       setIsSyncing(active);
       if (info) setSyncInfo(info);
       else setSyncInfo(getLastSyncInfo());
@@ -128,13 +128,13 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
 
   const handleTest = async () => {
     setIsTesting(true);
-    toast.info("Menguji konektivitas PC Server / Pi ⇄ Firebase Cloud...");
-    const res = await testFirestoreConnection();
+    toast.info("Menguji konektivitas PC Server / Pi ⇄ Server Gudang-644 / Cloud...");
+    const res = await testSyncConnection();
     setIsTesting(false);
     setSyncInfo(getLastSyncInfo());
     if (res.ok) {
-      toast.success(`Terhubung ke Firebase (${res.latencyMs}ms)!`, {
-        description: `Database: ${res.databaseId}`,
+      toast.success(`Terhubung ke Server Cloud (${res.latencyMs}ms)!`, {
+        description: `Database: ${res.databaseId} (Node: ${res.projectId})`,
       });
     } else {
       toast.warning("Status Offline / Cache Lokal", {
@@ -151,7 +151,7 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
         api.get("/products"),
         api.get("/categories")
       ]);
-      const res = await syncAllMenuAndStockToFirestore(pRes.data || [], cRes.data || []);
+      const res = await syncAllMenuAndStock(pRes.data || [], cRes.data || []);
       setIsSyncing(false);
       setSyncInfo(getLastSyncInfo());
       if (res.success) {
@@ -171,7 +171,7 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    const unsub = subscribeFirestoreSync((active, info) => {
+    const unsub = subscribeSync((active, info) => {
       setIsSyncing(active);
       if (info) setSyncInfo(info);
       else setSyncInfo(getLastSyncInfo());
@@ -238,7 +238,7 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
                 )}
               </div>
               <p className="text-xs text-neutral-500 mt-1">
-                Sinkronisasi instan Menu, Harga, Stok &amp; Transaksi ke <b>Google Cloud &amp; Firestore</b> (didukung node lokal PC / Pi opsional).
+                Sinkronisasi instan Menu, Harga, Stok &amp; Transaksi ke <b>Server Gudang-644 &amp; Cloud API</b> (didukung node lokal PC / Pi opsional).
               </p>
             </div>
           </div>
@@ -349,9 +349,9 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
           </div>
 
           <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-100">
-            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Node & Target Cloud</div>
-            <div className="text-xs font-mono font-bold text-neutral-700 truncate mt-1.5" title={`Firestore: ${firestoreDatabaseId}`}>
-              PC Server ⇄ Pi ⇄ Cloud
+            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Node & Target Server</div>
+            <div className="text-xs font-mono font-bold text-neutral-700 truncate mt-1.5" title={`Database: ${syncDatabaseId}`}>
+              PC Server ⇄ Pi ⇄ Gudang-644
             </div>
           </div>
         </div>
@@ -360,10 +360,10 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
         <div className="pt-2.5 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex items-center gap-1 font-semibold text-emerald-700">
-              <CheckCircle2 size={13} className="text-emerald-600" /> Menu, Harga &amp; Stok otomatis tersinkron ke Google Cloud Firestore
+              <CheckCircle2 size={13} className="text-emerald-600" /> Menu, Harga &amp; Stok otomatis tersinkron ke Server Gudang-644 &amp; PostgreSQL
             </span>
             <span className="hidden md:inline text-neutral-300">·</span>
-            <span className="hidden md:inline font-mono text-[11px] text-neutral-400">DB: {firestoreDatabaseId}</span>
+            <span className="hidden md:inline font-mono text-[11px] text-neutral-400">DB: {syncDatabaseId}</span>
           </div>
 
           <button

@@ -59,7 +59,7 @@ export default function SystemHealthPanel({ embedded = false }) {
       jitter_ms: 1.8,
       status: "online",
       rating: "Sangat Cepat (< 50 ms)",
-      description: "Server utama cloud aktif melayani seluruh transaksi POS, database Firestore, dan sinkronisasi real-time.",
+      description: "Server utama cloud aktif melayani seluruh transaksi POS, database mandiri PostgreSQL 16, dan sinkronisasi real-time.",
       color: "#2563EB",
     },
     comparison: {
@@ -410,7 +410,7 @@ export default function SystemHealthPanel({ embedded = false }) {
       {/* Pusat Pemantauan 3 Server Terpadu (Cloud, PC Master, WA Gateway) */}
       <ThreeServerMatrix className="mb-2" />
 
-      {/* Panel Diagnostik Latensi & Packet Loss Hybrid (Local PC, Pi & Firebase) */}
+      {/* Panel Diagnostik Latensi & Packet Loss Hybrid (Local PC, Pi & Cloud) */}
       <HybridSyncDiagnosticPanel />
 
       {/* 3 Kartu Metrik Utama: Disk Storage, DB Sync, Server Connectivity */}

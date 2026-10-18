@@ -1,59 +1,180 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import {
-  getAuth,
-  signInWithPopup,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signOut,
-} from "firebase/auth";
-import firebaseConfig from "./firebaseConfig";
+// Standalone Google Drive OAuth 2.0 Auth (No Firebase SDK)
+const OAUTH_CLIENT_ID = "956375484215-icprobcchq0sjbiiath1lnvdkp8i1cgv.apps.googleusercontent.com";
+const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive";
 
-// Inisialisasi Firebase App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
-
-// Provider Google dengan scope Google Drive
-const provider = new GoogleAuthProvider();
-provider.addScope("https://www.googleapis.com/auth/drive.file");
-provider.addScope("https://www.googleapis.com/auth/drive.appdata");
-provider.addScope("https://www.googleapis.com/auth/drive");
-provider.setCustomParameters({ prompt: "select_account" });
-
-// In-memory token storage (MANDATORY security practice)
 let cachedAccessToken = null;
+let currentUser = null;
 let isSigningIn = false;
+const authListeners = new Set();
+
+const AUTH_STORAGE_KEY = "gak_gdrive_auth_session";
+
+function notifyAuthListeners() {
+  authListeners.forEach((listener) => {
+    try {
+      if (cachedAccessToken && currentUser) {
+        listener.onSuccess?.(currentUser, cachedAccessToken);
+      } else {
+        listener.onFailure?.();
+      }
+    } catch (_) {}
+  });
+}
+
+// Load Google Identity Services (GIS) script dynamically
+function loadGisScript() {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") return resolve(null);
+    if (window.google?.accounts?.oauth2) {
+      return resolve(window.google.accounts.oauth2);
+    }
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.google?.accounts?.oauth2));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve(window.google?.accounts?.oauth2);
+    script.onerror = () => resolve(null);
+    document.head.appendChild(script);
+  });
+}
 
 // Initialize auth state listener
 export const initAuth = (
   onAuthSuccess,
   onAuthFailure
 ) => {
-  return onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        // User logged into Firebase session but accessToken needs user re-auth or is cached
-        if (onAuthFailure) onAuthFailure();
+  const listener = { onSuccess: onAuthSuccess, onFailure: onAuthFailure };
+  authListeners.add(listener);
+
+  // Check stored session
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.token && parsed.expiresAt > Date.now()) {
+        cachedAccessToken = parsed.token;
+        currentUser = parsed.user || { displayName: "Google Drive User", email: "drive@grandpos.id" };
+        if (onAuthSuccess) onAuthSuccess(currentUser, cachedAccessToken);
+        return () => authListeners.delete(listener);
+      } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
       }
-    } else {
-      cachedAccessToken = null;
-      if (onAuthFailure) onAuthFailure();
     }
-  });
+  } catch (_) {}
+
+  if (onAuthFailure) onAuthFailure();
+  return () => authListeners.delete(listener);
 };
 
-// Google Sign-In with popup
+// Google Sign-In with popup via standard Google Identity Services / OAuth2
 export const googleSignIn = async () => {
+  if (isSigningIn) return null;
+  isSigningIn = true;
   try {
-    isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error("Gagal memperoleh token akses Google Drive.");
+    const oauth2 = await loadGisScript();
+    if (oauth2) {
+      return await new Promise((resolve, reject) => {
+        const tokenClient = oauth2.initTokenClient({
+          client_id: OAUTH_CLIENT_ID,
+          scope: SCOPES,
+          callback: async (resp) => {
+            if (resp.error) {
+              return reject(new Error(resp.error_description || resp.error));
+            }
+            cachedAccessToken = resp.access_token;
+            let user = {
+              displayName: "Google Drive Akun",
+              email: "drive@grandpos.id",
+              photoURL: "",
+            };
+            try {
+              const uRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                headers: { Authorization: `Bearer ${resp.access_token}` },
+              });
+              if (uRes.ok) {
+                const uData = await uRes.json();
+                user = {
+                  displayName: uData.name || uData.email,
+                  email: uData.email,
+                  photoURL: uData.picture || "",
+                };
+              }
+            } catch (_) {}
+            currentUser = user;
+            try {
+              localStorage.setItem(
+                AUTH_STORAGE_KEY,
+                JSON.stringify({
+                  token: cachedAccessToken,
+                  user,
+                  expiresAt: Date.now() + (parseInt(resp.expires_in, 10) || 3600) * 1000,
+                })
+              );
+            } catch (_) {}
+            notifyAuthListeners();
+            resolve({ user, accessToken: cachedAccessToken });
+          },
+        });
+        tokenClient.requestAccessToken({ prompt: "consent" });
+      });
     }
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
+
+    // Fallback if GIS fails to load: Standalone popup token flow
+    return await new Promise((resolve, reject) => {
+      const redirectUri = window.location.origin;
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
+        OAUTH_CLIENT_ID
+      )}&redirect_uri=${encodeURIComponent(
+        redirectUri
+      )}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
+
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      const popup = window.open(
+        authUrl,
+        "google_oauth_popup",
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+
+      if (!popup) {
+        return reject(new Error("Popup diblokir oleh browser. Izinkan popup untuk login."));
+      }
+
+      const timer = setInterval(() => {
+        try {
+          if (popup.closed) {
+            clearInterval(timer);
+            reject(new Error("Login Google dibatalkan."));
+            return;
+          }
+          if (popup.location.href.includes(redirectUri)) {
+            const hash = popup.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            const token = params.get("access_token");
+            if (token) {
+              clearInterval(timer);
+              popup.close();
+              cachedAccessToken = token;
+              currentUser = {
+                displayName: "Google Drive Terhubung",
+                email: "drive@grandpos.id",
+              };
+              notifyAuthListeners();
+              resolve({ user: currentUser, accessToken: cachedAccessToken });
+            }
+          }
+        } catch (_) {
+          // Cross-origin before redirect is normal
+        }
+      }, 500);
+    });
   } catch (error) {
     console.error("[GDrive Auth Error]:", error);
     throw error;
@@ -69,8 +190,12 @@ export const setCachedAccessToken = (token) => {
 };
 
 export const googleLogout = async () => {
-  await signOut(auth);
   cachedAccessToken = null;
+  currentUser = null;
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch (_) {}
+  notifyAuthListeners();
 };
 
 // ==========================================

@@ -1,7 +1,6 @@
 import { Component } from "react";
 import { AlertTriangle, RefreshCw, Send, ShieldAlert, ChevronDown, ChevronUp } from "lucide-react";
 import { logAppError } from "@/lib/diag";
-import { logRuntimeErrorToFirestore } from "@/lib/firebase";
 import GlobalErrorDiagnosticPanel from "./GlobalErrorDiagnosticPanel";
 
 /* Menahan error render agar tidak mematikan seluruh aplikasi/halaman.
@@ -17,19 +16,12 @@ export default class ErrorBoundary extends Component {
   componentDidCatch(err, info) {
     try {
       console.error("[gak] render error:", err, info?.componentStack?.slice(0, 400));
-      // Log to diagnostic module and Firestore collection for remote debugging
+      // Log to diagnostic module
       logAppError("react_render_error", err?.message || String(err), {
         stack: err?.stack || "",
         componentStack: info?.componentStack || "",
       });
-      logRuntimeErrorToFirestore({
-        type: "react_render_error",
-        message: err?.message || String(err),
-        stack: err?.stack || "",
-        componentStack: info?.componentStack || "",
-      })
-        .then(() => this.setState({ reported: true }))
-        .catch(() => {});
+      this.setState({ reported: true });
     } catch (e) {}
 
     const errStr = String(err?.message || err || "");
@@ -60,7 +52,7 @@ export default class ErrorBoundary extends Component {
           <p className="text-sm text-[#92400E] mt-1.5 leading-relaxed">
             {isChunkError
               ? "Aplikasi telah diperbarui ke versi terbaru di server. Klik tombol di bawah untuk memuat ulang halaman dan menyinkronkan bundle."
-              : "Sisa aplikasi tetap bisa dipakai (kolom dan halaman lain tidak terpengaruh). Laporan error telah otomatis dicatat di panel diagnostik dan dikirim ke telemetri Firestore."}
+              : "Sisa aplikasi tetap bisa dipakai (kolom dan halaman lain tidak terpengaruh). Laporan error telah otomatis dicatat di panel diagnostik lokal."}
           </p>
           <pre className="mt-3 rounded-xl bg-white border border-amber-200/80 p-3 text-[11px] overflow-x-auto whitespace-pre-wrap font-mono text-amber-950">
             {String(this.state.err?.message || this.state.err)}

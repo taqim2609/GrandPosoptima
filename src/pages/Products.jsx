@@ -4,11 +4,12 @@ import { rupiah, TYPE_LABEL } from "@/lib/format";
 import { toast } from "sonner";
 import {
   Package, Plus, Pencil, Trash2, Sparkles, ImagePlus, Loader2,
-  FileDown, FileUp, Download, Ban, CheckCircle2, X, Search, RefreshCw, Cloud, Database
+  FileDown, FileUp, Download, Ban, CheckCircle2, X, Search, RefreshCw, Cloud, Database,
+  Zap
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import LazyProductImage from "@/components/LazyProductImage";
-import { syncProductToFirestore, syncAllMenuAndStockToFirestore, getLastSyncInfo } from "@/lib/firebase";
+import QuickStockManager from "@/components/QuickStockManager";
 
 const empty = { name: "", sku: "", category_id: "", type: "makanan", price: 0, cost: 0, vendor_id: "", vendor_share_percent: 0, description: "", image: "", active: true, sold_out: false, stock: 0, min_stock: 10, weight_sale: false, weight_unit: "ons" };
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
@@ -27,6 +28,7 @@ export default function Products() {
   const [aiImg, setAiImg] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [syncingCloud, setSyncingCloud] = useState(false);
+  const [quickStockOpen, setQuickStockOpen] = useState(false);
 
   const load = () => Promise.all([api.get("/products"), api.get("/categories"), api.get("/vendors")]).then(([p, c, v]) => { setItems(p.data); setCats(c.data); setVendors(v.data); });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount
@@ -44,19 +46,12 @@ export default function Products() {
         payload.vendor_share_percent = Number(form.vendor_share_percent);
         payload.cost = 0;
       }
-      let savedProduct = null;
       if (editId) {
-        const res = await api.put(`/products/${editId}`, payload);
-        savedProduct = { ...payload, id: editId };
+        await api.put(`/products/${editId}`, payload);
       } else {
-        const res = await api.post("/products", payload);
-        savedProduct = res.data;
+        await api.post("/products", payload);
       }
-      // Real-time Cloud Sync to Firebase (PC Server & Raspberry Pi)
-      if (savedProduct) {
-        syncProductToFirestore(savedProduct).catch(() => {});
-      }
-      toast.success("Produk tersimpan & tersinkron ke cloud");
+      toast.success("Produk tersimpan");
       setOpen(false);
       load();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
@@ -69,25 +64,20 @@ export default function Products() {
   const toggleSold = async (p) => {
     try {
       await api.patch(`/products/${p.id}/sold-out`);
-      syncProductToFirestore({ ...p, sold_out: !p.sold_out }).catch(() => {});
       load();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
   };
 
   const handleManualSync = async () => {
     setSyncingCloud(true);
-    toast.info("Menyinkronkan seluruh Menu, Harga & Stok ke Cloud...");
+    toast.info("Memperbarui seluruh Menu, Harga & Stok dari database...");
     try {
-      const res = await syncAllMenuAndStockToFirestore(items, cats);
+      await load();
       setSyncingCloud(false);
-      if (res.success) {
-        toast.success(`Berhasil menyinkronkan ${items.length} menu & ${cats.length} kategori ke Cloud (PC & Pi Siap)!`);
-      } else {
-        toast.error("Sinkronisasi gagal: " + res.error);
-      }
+      toast.success(`Data ${items.length} menu & ${cats.length} kategori berhasil diperbarui!`);
     } catch (_) {
       setSyncingCloud(false);
-      toast.error("Gagal sinkronisasi");
+      toast.error("Gagal memperbarui data");
     }
   };
 
@@ -137,10 +127,19 @@ export default function Products() {
             onClick={handleManualSync}
             disabled={syncingCloud}
             className="tap h-11 px-4 rounded-xl bg-neutral-900 text-white font-bold text-sm flex items-center gap-2 shadow-xs disabled:opacity-50"
-            title="Sinkronkan Menu, Harga & Stok ke Cloud (PC Server & Raspberry Pi)"
+            title="Muat Ulang Menu, Harga & Stok dari Database Server"
           >
             <RefreshCw size={16} className={syncingCloud ? "animate-spin" : "text-emerald-400"} />
-            {syncingCloud ? "Menyinkronkan..." : "Sinkron Cloud (PC & Pi)"}
+            {syncingCloud ? "Memuat..." : "Refresh Data"}
+          </button>
+          <button
+            data-testid="quick-stock-btn"
+            onClick={() => setQuickStockOpen(true)}
+            className="tap h-11 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm flex items-center gap-2 shadow-xs transition-colors"
+            title="Update Cepat Stok & Pemakaian Bahan"
+          >
+            <Zap size={16} />
+            Update Cepat Stok
           </button>
           <button data-testid="download-template-btn" onClick={() => download("/products/template", "template_produk.xlsx")} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><Download size={16} /> Template</button>
           <button data-testid="export-btn" onClick={() => download("/products/export", "produk.xlsx")} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><FileDown size={16} /> Export</button>
@@ -297,6 +296,13 @@ export default function Products() {
       </Dialog>
 
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onDone={load} />
+
+      {/* Modal Update Cepat Stok & Pemakaian Bahan */}
+      <Dialog open={quickStockOpen} onOpenChange={setQuickStockOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <QuickStockManager onUpdated={() => { load(); }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,107 +1,48 @@
-# Peluncur Desktop Standalone, PWA & Printer - Grand Aceh Kuliner POS
+# Panduan Implementation Plan — Deployment VPS, Raspberry Pi (Tailscale Hybrid) & Android APK/OTA
 
-Rencana implementasi untuk menjalankan aplikasi Grand Aceh Kuliner POS di komputer PC / Windows / Linux secara langsung tanpa antarmuka browser biasa (tanpa address bar dan tab browser), menggunakan kombinasi **Progressive Web App (PWA) Standalone** yang paling responsif, **Script Launcher Otomatis**, serta **Dukungan Printer Thermal PC**.
-
-## User Review & Critical Decisions
-
-> [!IMPORTANT]
-> Berdasarkan jawaban konfirmasi dan pertanyaan Anda mengenai printer:
-> 1. **Solusi Desktop**: Menggunakan PWA App Mode Standalone (jendela khusus tanpa tab & address bar) untuk performa paling cepat dan responsif.
-> 2. **Script Otomatis**: Menyediakan script launcher otomatis (`.bat` untuk Windows & `.desktop` untuk Linux/Raspberry Pi) dan pembuat shortcut Desktop.
-> 3. **Dukungan Printer di Desktop/PC**:
->    - **Windows / Linux System Driver**: Mendukung semua printer thermal USB/LPT/Driver Windows (Epson, Xprinter, POS-80, POS-58) dengan format cetak otomatis 80mm/58mm.
->    - **Mode Cetak Otomatis (Silent Kiosk Printing)**: Di dalam script `.bat`, disediakan opsi `--kiosk-printing` agar struk langsung tercetak tanpa perlu mengklik "Print" di dialog browser tiap kali transaksi lunas.
->    - **Printer LAN/Network & Bluetooth**: Mendukung printer jaringan Epson (ePOS SDK) dan Bluetooth ESC/POS.
+Rencana ini mengatur otomatisasi deployment terpadu untuk tiga lapisan: **VPS Go-Live** (sebagai pusat data & REST API/MCP), **Raspberry Pi Lokal** (sebagai kasir utama offline-first dalam jaringan Tailscale), serta **Aplikasi Android APK & Capgo OTA** (untuk perangkat Kasir Sunmi T2 dengan SDK printer & cash drawer native), tanpa merubah skema database PostgreSQL live.
 
 ---
 
-## 1. Overview & Core Concept
+## Rincian Perubahan & Langkah Implementasi
 
-- **Tujuan**: Memungkinkan kasir dan admin membuka aplikasi POS di PC/Komputer seperti aplikasi desktop native (tanpa elemen browser seperti URL bar, tab, bookmark bar) dan melakukan cetak struk kasir secara cepat dan otomatis.
-- **Target Pengguna**: Kasir F&B/Retail dan Manager Toko di komputer PC Master/Kasir.
-- **Nilai Utama**: Peluncuran 1-klik dari Desktop Windows, tampilan full-screen/standalone bersih, instalasi PWA mudah, serta cetak struk thermal otomatis ke printer USB/LAN/Bluetooth.
+### 1. Perlindungan Database (Database Schema Lock)
+- Memastikan skema PostgreSQL di VPS (`postgresql://grandpos_app:***@127.0.0.1:5432/grandpos`) terkunci dari eksekusi DDL atau migrasi otomatis.
+- Mengonfigurasi antrean sinkronisasi offline (`OfflineContext.jsx` & `offlineQueue.js`) agar transaksi dari Raspberry Pi / Android POS tersimpan di IndexedDB saat offline dan terkirim secara idempoten saat online via Tailscale IP.
 
----
+### 2. Skrip Otomatisasi VPS (`scripts/install-vps-one-click.sh`)
+- Menginstal dan mengonfigurasi service Systemd untuk Node web proxy di port 3000.
+- Mengatur Caddy/Nginx reverse proxy ke port 3000 (Web), port 8000 (FastAPI REST API), dan port 8001 (MCP Server SSE).
+- Membuka akses jaringan Tailscale agar aman diakses oleh Raspberry Pi dan perangkat Android.
 
-## 2. User Experience & Visual Design
+### 3. Skrip Otomatisasi Raspberry Pi (`install-pi.sh` & `setup-tailscale.sh`)
+- Memperbarui `install-pi.sh` agar secara otomatis:
+  - Mengunduh & mengaktifkan Tailscale pada Raspberry Pi (`tailscale up`).
+  - Mengonfigurasi environment kasir lokal (`GRANDPOS_API_BASE_URL` mengarah ke localhost dengan fallback ke Tailscale IP VPS jika lokal down).
+  - Memasang service `grandpos-pi.service` agar aplikasi kasir langsung aktif saat Raspberry Pi dinyalakan.
 
-- **Instalasi In-App PWA**:
-  - Tombol "Install App Desktop" yang bersih di header/top-bar aplikasi.
-  - Memicu dialog instalasi PWA native dari browser (Chrome/Edge/Brave).
-  - Jika aplikasi sudah berjalan dalam mode PWA Standalone, tombol install otomatis tersembunyi.
-- **Panduan Peluncur & Printer Desktop di Pengaturan**:
-  - Menu khusus di **Pengaturan > Platform & Hardware** yang memberikan tautan download script launcher desktop (`Buka-POS-Desktop.bat`, `Buat-Shortcut-Desktop.bat`, `Buka-POS-KioskPrint.bat`).
-  - Penjelasan pemilihan mode printer di **Pengaturan > Perangkat** (Mode System Print, Epson LAN, atau Bluetooth).
-- **Tampilan App Mode**:
-  - Jendela frameless standalone bersih dengan tema Grand Aceh Kuliner POS (Emerald / Slate).
+### 4. Pembaharuan Android APK & Capgo OTA (`capacitor.config.json` & `make-ota.js`)
+- Mengupdate konfigurasi Capacitor Android (`capacitor.config.json`) dan server selector untuk default ke IP lokal Raspberry Pi dengan auto-fallback ke Tailscale IP VPS.
+- Memperbarui skrip pembuat bundle Capgo OTA (`scripts/make-ota.js`) untuk menghasilkan pembaruan instan tanpa harus re-install APK.
+- Memastikan integrasi Sunmi T2 Native SDK bridge (`lib/print.js` dan `lib/device.js`) tetap aktif untuk cetak struk thermal dan pembukaan laci kasir (`openDrawer`).
 
----
+### 5. Monitoring UI & Dashboard Tailscale (`SystemHealthPanel.jsx`, `OtaIndicator.jsx` & `TailscaleDashboard.jsx`)
+- Menampilkan indikator status real-time untuk seluruh ekosistem:
+  - **Node Lokal (Raspberry Pi)**: Status server web lokal, printer thermal Sunmi, dan IndexedDB queue.
+  - **Node Remote (VPS via Tailscale)**: REST API (`127.0.0.1:8000`), MCP SSE (`8001`), dan status database.
+  - **Status OTA App**: Versi bundle Capgo OTA aktif dan indikator update otomatis.
 
-## 3. Key Product Decisions & Trade-Offs
+### 6. Panduan Operasional Lengkap (`PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md`)
+- Dokumentasi bahasa Indonesia berisi:
+  - Cara menjalankan `install-vps-one-click.sh` di VPS.
+  - Cara menghubungkan Raspberry Pi ke jaringan Tailscale menggunakan `install-pi.sh`.
+  - Prosedur build & rilis Capgo OTA update untuk Android APK.
+  - Prosedur pengujian mode offline (cabut LAN/WiFi) dan verifikasi auto-sync saat terhubung kembali ke VPS via Tailscale.
 
-- **Keputusan 1: PWA Standalone + Silent Kiosk Printing**:
-  - *Pendekatan*: PWA Standalone dengan peluncur Chrome/Edge App Mode + parameter `--kiosk-printing`.
-  - *Alasan*: Menghasilkan respon sangat cepat, tidak perlu install driver pihak ketiga yang berat, dan struk dapat langsung terpotong/tercetak tanpa popup konfirmasi.
-- **Keputusan 2: Kompatibilitas Printer Thermal Multiversi**:
-  - *Pendekatan*: Menggunakan CSS Thermal Native `@page { size: 80mm auto; margin: 0; }` untuk Windows System Driver + raw ESC/POS via Epson LAN/Bluetooth + Sunmi InnerPrinter untuk Android.
-
----
-
-## 4. Technical Architecture & Component Structure
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                   Aplikasi POS (React 19 / Vite)                 │
-├──────────────────────────────────────────────────────────────────┤
-│  ┌───────────────────────┐        ┌───────────────────────────┐  │
-│  │ Hook usePWAInstall.js │ ─────► │ Component PWAInstallButton│  │
-│  └───────────────────────┘        └───────────────────────────┘  │
-│              │                                 │                 │
-│              ▼                                 ▼                 │
-│  ┌───────────────────────┐        ┌───────────────────────────┐  │
-│  │ Manifest & SW (PWA)   │        │ SettingsPlatform & Header │  │
-│  └───────────────────────┘        └───────────────────────────┘  │
-│              │                                 │                 │
-│              └─────────────────┬───────────────┘                 │
-│                                │                                 │
-│                                ▼                                 │
-│                     Modul Printer (print.js / receipt.js)        │
-│                     ├── System Driver (Windows 80mm/58mm)        │
-│                     ├── Silent Kiosk Printing                    │
-│                     ├── Epson LAN Network Printer                │
-│                     └── Sunmi SDK (khusus Android APK)           │
-└──────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│              Script Launcher & Desktop Shortcut Generator        │
-├──────────────────────────────────────────────────────────────────┤
-│  • Buka-POS-Desktop.bat     (Peluncur Windows App Mode biasa)    │
-│  • Buka-POS-KioskPrint.bat  (Peluncur Windows Cetak Otomatis)    │
-│  • Buat-Shortcut-Desktop.bat (Pembuat Ikon Desktop Windows)      │
-│  • Buka-POS-Linux.desktop   (Peluncur Linux / Raspberry Pi)      │
-└──────────────────────────────────────────────────────────────────┘
-```
+### 7. Verifikasi Build
+- Menjalankan `compile_applet` untuk memastikan seluruh skrip, modul backend, dan komponen frontend terkompilasi tanpa error.
 
 ---
 
-## 5. Steps for Implementation
-
-1. **Konfigurasi Web App Manifest & Service Worker**:
-   - Perbarui `manifest.json` agar mendukung `'display': 'standalone'`, ikon lengkap (192x192, 512x512, maskable), dan `theme_color`.
-
-2. **Membuat Custom Hook & Tombol In-App PWA Installer**:
-   - Buat hook `src/hooks/usePWAInstall.js` untuk mendeteksi event `beforeinstallprompt` dan mode standalone.
-   - Buat komponen `src/components/PWAInstallButton.jsx` dan pasang di header aplikasi POS serta modal panduan.
-
-3. **Membuat Script Launcher & Shortcut Generator (Dengan Dukungan Printer)**:
-   - `Buka-POS-Desktop.bat`: Membuka URL POS dalam App Mode biasa.
-   - `Buka-POS-KioskPrint.bat`: Membuka POS dalam App Mode dengan `--kiosk-printing` untuk cetak struk langsung tanpa dialog.
-   - `Buat-Shortcut-Desktop.bat`: Script pembuat file `.lnk` di Desktop Windows secara otomatis.
-   - `Buka-POS-Linux.desktop`: Peluncur Linux/Raspberry Pi.
-
-4. **Menambahkan Halaman / Modal Panduan Desktop & Printer**:
-   - Tambahkan kartu panduan "Mode Desktop & Printer Thermal" di halaman `SettingsPlatform.jsx` dengan instruksi setting printer USB/LAN dan tombol download script launcher.
-
-5. **Uji Coba & Verifikasi**:
-   - Jalankan `compile_applet` untuk memastikan build frontend dan backend tidak ada error.
+## Membutuhkan Konfirmasi
+Silakan periksa rencana di atas dan klik **Proceed** jika Anda sudah setuju untuk saya mulai mengeksekusi semua perubahan.

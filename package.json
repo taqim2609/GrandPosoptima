@@ -5,7 +5,7 @@
   "description": "Grand Aceh Kuliner POS — Hybrid F&B + Retail",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
+    "build": "vite build && node build.js",
     "lint": "node -e \"console.log('Linting passed')\"",
     "start": "NODE_ENV=production tsx server.ts"
   },
@@ -52,7 +52,6 @@
     "dotenv": "^16.4.7",
     "embla-carousel-react": "^8.6.0",
     "express": "^4.21.2",
-    "firebase": "^12.19.0",
     "input-otp": "^1.5.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^1.58.0",

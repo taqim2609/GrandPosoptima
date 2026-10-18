@@ -72,7 +72,7 @@ const DASH_LOCAL_KEY = "gak_dash_widgets_";
 
 export const DASH_WIDGETS = [
   { id: "vps_analytics", label: "Status Kesehatan Koneksi VPS & Latensi Gateway (Real-Time)", roles: ["superadmin", "admin", "kasir", "input"] },
-  { id: "firestore", label: "Status Koneksi & Persistensi Cloud Firestore", roles: ["superadmin", "admin", "kasir", "input"] },
+  { id: "cloud_sync", label: "Status Koneksi & Sinkronisasi Cloud (Server Gudang-644 / API)", roles: ["superadmin", "admin", "kasir", "input"] },
   { id: "kpi", label: "Ringkasan KPI (Total, Order, Rata-rata, Laba)", roles: ["superadmin", "admin", "kasir"] },
   { id: "jenis", label: "Penjualan per Jenis Order", roles: ["superadmin", "admin", "kasir"] },
   { id: "finansial", label: "Kartu Laba · Rata-rata · Kas Bersih · Bagi Hasil", roles: ["superadmin", "admin", "kasir"] },
@@ -85,10 +85,10 @@ export const DASH_WIDGETS = [
 ];
 
 export const DASH_ROLE_DEFAULT = {
-  superadmin: ["vps_analytics", "firestore", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
-  admin: ["vps_analytics", "firestore", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
-  kasir: ["vps_analytics", "firestore", "kpi", "jenis", "finansial", "trend", "terlaris", "metode"],
-  input: ["vps_analytics", "firestore", "lowstock"],
+  superadmin: ["vps_analytics", "cloud_sync", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
+  admin: ["vps_analytics", "cloud_sync", "kpi", "jenis", "finansial", "trend", "kategori", "terlaris", "metode", "ai", "lowstock"],
+  kasir: ["vps_analytics", "cloud_sync", "kpi", "jenis", "finansial", "trend", "terlaris", "metode"],
+  input: ["vps_analytics", "cloud_sync", "lowstock"],
 };
 
 const WStat = memo(({ icon: Icon, label, value, accent }) => (
@@ -576,6 +576,7 @@ export default function Dashboard() {
     switch (id) {
       case "vps_analytics":
         return <VpsAnalyticsCard />;
+      case "cloud_sync":
       case "firestore":
         return <VisualSyncStatusCard />;
       case "kpi":

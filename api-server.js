@@ -5210,6 +5210,7 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${aiFeat.api_key || 'hermes_gak_pos_secret_key_2026'}`,
+          'X-Hermes-Session-Key': 'grandpos-pos-analyst',
         },
         body: JSON.stringify({
           model: targetModel,

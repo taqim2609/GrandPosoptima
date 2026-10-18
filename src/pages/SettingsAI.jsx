@@ -203,15 +203,20 @@ function FeatureCard({ featKey, data, onSaved }) {
             <input data-testid={`ai-base-url-${featKey}`} value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })}
               placeholder="http://100.x.y.z:8000/v1 atau https://chenzk.top/v1" className="w-full h-11 rounded-xl border px-3 font-num" />
             <div className="flex gap-2 flex-wrap mt-1.5">
+              <button type="button" data-testid={`preset-hermes-pos-analyst-${featKey}`}
+                onClick={() => setForm((f) => ({ ...f, base_url: "http://127.0.0.1:8000/v1", model: "pos-analyst" }))}
+                className="text-[11px] font-bold text-[#16A34A] hover:underline bg-[#F0FDF4] px-2 py-0.5 rounded border border-[#BBF7D0]">
+                + Hermes POS-Analyst (http://127.0.0.1:8000/v1 | pos-analyst)
+              </button>
               <button type="button" data-testid={`preset-hermes-funnel-${featKey}`}
-                onClick={() => setForm((f) => ({ ...f, base_url: "https://gudang-644.tailf3a839.ts.net:10000/p/business-analyst", model: "business-analyst" }))}
+                onClick={() => setForm((f) => ({ ...f, base_url: "https://gudang-644.tailf3a839.ts.net:10000/p/pos-analyst", model: "pos-analyst" }))}
                 className="text-[11px] font-bold text-[#2563EB] hover:underline bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
-                + Hermes Funnel (https://gudang-644...:10000/p/business-analyst)
+                + Hermes Funnel (:10000/p/pos-analyst)
               </button>
               <button type="button" data-testid={`preset-hermes-tailscale-${featKey}`}
-                onClick={() => setForm((f) => ({ ...f, base_url: "http://100.117.186.13:8642/p/business-analyst", model: "business-analyst" }))}
+                onClick={() => setForm((f) => ({ ...f, base_url: "http://100.117.186.13:8642/p/pos-analyst", model: "pos-analyst" }))}
                 className="text-[11px] font-bold text-[#0D9488] hover:underline bg-[#CCFBF1] px-2 py-0.5 rounded border border-[#99F6E4]">
-                + Hermes Tailscale (http://100.117.186.13:8642/p/business-analyst)
+                + Hermes Tailscale (:8642/p/pos-analyst)
               </button>
               <button type="button" data-testid={`preset-chenzk-${featKey}`}
                 onClick={() => setForm((f) => ({ ...f, base_url: "https://chenzk.top/v1", model: f.model || "gpt-4o-mini" }))}

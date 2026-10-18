@@ -9,13 +9,13 @@ import { useUI, posLabel } from "@/lib/ui";
 import { useOffline } from "@/context/OfflineContext";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { syncOrderToFirestore } from "@/lib/firebase";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import VoidDialog from "@/components/VoidDialog";
 import LazyProductImage from "@/components/LazyProductImage";
 import ReceiptModal from "@/components/ReceiptModal";
+import PostgresStatusIndicator from "@/components/PostgresStatusIndicator";
 import {
   Utensils, ShoppingBag, Store, Plus, Minus, Trash2, Armchair,
   Search, Receipt, X, CheckCircle2, Layers, Database, ScanLine, Clock, Play, Printer, Wifi, WifiOff, RefreshCw, CloudOff,
@@ -716,14 +716,6 @@ export default function POS() {
 
       setPayOpen(false);
       setReceipt(fullReceipt);
-      // Synchronize to Firebase Firestore
-      if (fullReceipt) {
-        try {
-          await syncOrderToFirestore(fullReceipt);
-        } catch (fireErr) {
-          console.error("[Firestore] Gagal sinkronisasi transaksi ke Firebase:", fireErr);
-        }
-      }
       // Auto-print struk (buka laci juga) bila diaktifkan
       if (getDeviceConfig().autoPrint) {
         try { printReceipt(fullReceipt); } catch (e) {}
@@ -923,6 +915,7 @@ export default function POS() {
           ))}
         </div>
         <div className="hidden sm:flex flex-1" />
+        <PostgresStatusIndicator className="h-10" />
         {/* Indikator Status Koneksi & Sinkronisasi */}
         <div
           data-testid="pos-connection-status"

@@ -861,7 +861,7 @@ export default function WhatsApp() {
 
             <div className="space-y-3 text-xs">
               <p className="text-slate-600 leading-relaxed">
-                Jalur ini menghubungkan aplikasi POS di **Google Cloud** dengan gateway Hermes yang berjalan di **Raspberry Pi toko**. Pesan transaksi yang dibuat di cloud otomatis ditarik dan dikirim oleh Hermes Pi melalui Firestore &amp; token sinkronisasi.
+                Jalur ini menghubungkan aplikasi POS di **Google Cloud** dengan gateway Hermes yang berjalan di **Raspberry Pi toko**. Pesan transaksi yang dibuat di cloud otomatis ditarik dan dikirim oleh Hermes Pi melalui API Outbox &amp; token sinkronisasi.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">

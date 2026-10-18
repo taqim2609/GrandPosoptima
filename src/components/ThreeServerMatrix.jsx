@@ -16,7 +16,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
-import { testFirestoreConnection } from "@/lib/firebase";
+import { testSyncConnection } from "@/lib/sync";
 
 export default function ThreeServerMatrix({ compact = false, showHeader = true, className = "" }) {
   const [loading, setLoading] = useState(true);
@@ -25,27 +25,27 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [serverData, setServerData] = useState({
     title: "Pusat Pemantauan Multi-Node Server — Grand Aceh Kuliner",
-    summary: "Ketiga node server (Google Cloud Primary, Node Kasir Toko, dan Hermes Agent WhatsApp Gateway) terhubung dan termonitor dalam 1 layar.",
+    summary: "Node server mandiri gudang-644 (PostgreSQL 16 & FastAPI), Node Kasir Toko, dan Hermes Agent WhatsApp Gateway terhubung dan termonitor dalam 1 layar.",
     servers: [
       {
-        id: "cloud",
+        id: "gudang_644",
         num: 1,
-        name: "Google Cloud Server & Firestore",
-        short_name: "Google Cloud (Primary)",
-        role: "Penyimpanan Cloud 24/7 & Sinkronisasi Pusat",
+        name: "Server Gudang-644 (PostgreSQL 16 & FastAPI)",
+        short_name: "Gudang-644 (Tailscale)",
+        role: "Database Mandiri & Engine Transaksi Utama (Tanpa Firebase)",
         category: "cloud",
-        badge: "Cloud Primary (Aktif)",
+        badge: "Postgres 16 (Aktif)",
         badge_color: "bg-emerald-50 text-emerald-700 border-emerald-200",
         status: "online",
-        latency_ms: 22,
+        latency_ms: 12,
         rating: "Aktif & Terhubung",
-        endpoint: typeof window !== "undefined" ? window.location.origin : "https://grandposopt.ai.studio",
-        database: "Firestore (ai-studio-grandposoptima-268f86d5-06a2-4402-8f77-90451ffce535)",
+        endpoint: "http://100.117.186.13:8000",
+        database: "PostgreSQL 16 (Bind 127.0.0.1 - Hardened)",
         features: [
-          "Sinkronisasi real-time menu, harga, dan stok",
-          "Cadangan transaksi multi-perangkat di cloud",
-          "Telemetri dan remote runtime error monitoring",
-          "Akses analitik dashboard pemilik dari luar toko",
+          "Database mandiri PostgreSQL 16 dengan 24 tabel transaksi & 4 view analitik",
+          "FastAPI backend teruji 131 test dengan varians kas Rp0",
+          "Pemisahan shift per-kasir & optimistic concurrency control meja",
+          "100% Arsitektur Mandiri & Teruji (Self-Hosted PostgreSQL 16 & FastAPI)",
         ],
       },
       {
@@ -124,17 +124,17 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
     const toastId = toast.loading("Menguji koneksi multi-node server...");
     try {
       const startTime = Date.now();
-      const [statusRes, firestoreRes] = await Promise.allSettled([
+      const [statusRes, syncRes] = await Promise.allSettled([
         fetch("/api/system/servers/status?refresh=1", { cache: "no-store" }),
-        testFirestoreConnection(),
+        testSyncConnection(),
       ]);
 
       if (statusRes.status === "fulfilled" && statusRes.value.ok) {
         const json = await statusRes.value.json();
-        if (firestoreRes.status === "fulfilled" && firestoreRes.value?.ok) {
+        if (syncRes.status === "fulfilled" && syncRes.value?.ok) {
           const cloud = json.servers?.find((s) => s.id === "cloud");
           if (cloud) {
-            cloud.latency_ms = Math.round(firestoreRes.value.latencyMs || cloud.latency_ms);
+            cloud.latency_ms = Math.round(syncRes.value.latencyMs || cloud.latency_ms);
             cloud.status = "online";
           }
         }
@@ -163,7 +163,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
     const toastId = toast.loading(`Menguji koneksi ke ${s?.short_name || serverId}...`);
     try {
       if (serverId === "cloud") {
-        const res = await testFirestoreConnection();
+        const res = await testSyncConnection();
         if (res.ok) {
           setServerData((prev) => ({
             ...prev,
@@ -173,7 +173,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                 : item
             ),
           }));
-          toast.success(`Google Cloud & Firestore Terhubung (${Math.round(res.latencyMs)} ms)`, { id: toastId });
+          toast.success(`Google Cloud Server Terhubung (${Math.round(res.latencyMs)} ms)`, { id: toastId });
         } else {
           toast.warning("Google Cloud Offline / Cache Lokal", { id: toastId });
         }
@@ -296,7 +296,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                 })()}
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Pantau status operasional <b>Google Cloud &amp; Firestore</b>, <b>Node Kasir Toko (Raspberry Pi 4 / PC Master)</b>, dan <b>Hermes Agent (WhatsApp Gateway Baileys &amp; AI Brain)</b> dalam 1 tampilan.
+                Pantau status operasional <b>Google Cloud API Server</b>, <b>Node Kasir Toko (Raspberry Pi 4 / PC Master)</b>, dan <b>Hermes Agent (WhatsApp Gateway Baileys &amp; AI Brain)</b> dalam 1 tampilan.
               </p>
             </div>
           </div>

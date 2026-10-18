@@ -86,7 +86,7 @@ export default function GDriveBackupManager() {
     }
   }, [token]);
 
-  // Initialize Firebase Auth listener
+  // Initialize Google Drive Auth listener
   useEffect(() => {
     loadServerConfig();
     const unsubscribe = initAuth(

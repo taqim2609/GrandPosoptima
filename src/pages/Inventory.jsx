@@ -5,10 +5,23 @@ import { toast } from "sonner";
 import { Boxes, PackagePlus, ClipboardCheck, Plus, Camera, ScanLine, Loader2, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { wibToday } from "@/lib/format";
-import { syncStockToFirestore } from "@/lib/firebase";
+
+import QuickStockManager from "@/components/QuickStockManager";
+import { Zap } from "lucide-react";
 
 export default function Inventory() {
-  const [tab, setTab] = useState("purchase");
+  const initialTab = () => {
+    try {
+      const q = new URLSearchParams(window.location.search).get("tab");
+      if (q === "quick-stock" || q === "quick") return "quick-stock";
+      if (q === "opname") return "opname";
+      return "purchase";
+    } catch (e) {
+      return "purchase";
+    }
+  };
+
+  const [tab, setTab] = useState(initialTab);
   const [products, setProducts] = useState([]);
 
   const loadProducts = () => api.get("/products", { params: { type: "retail" } }).then((r) => setProducts(r.data));
@@ -17,21 +30,27 @@ export default function Inventory() {
 
   return (
     <div className="h-full overflow-y-auto p-8">
-      <h1 className="text-3xl font-extrabold flex items-center gap-2 mb-1"><Boxes /> Persediaan Retail</h1>
-      <p className="text-[#52525B] mb-6">Pembelian stok masuk & stok opname (khusus produk retail).</p>
+      <h1 className="text-3xl font-extrabold flex items-center gap-2 mb-1"><Boxes /> Persediaan Retail &amp; Stok</h1>
+      <p className="text-[#52525B] mb-6">Pembelian stok masuk, stok opname, dan update cepat stok bahan dapur &amp; titipan vendor.</p>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 flex-wrap">
         <button data-testid="tab-purchase" onClick={() => setTab("purchase")}
-          className={`tap h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 ${tab === "purchase" ? "bg-[#E63946] text-white" : "bg-white border"}`}>
-          <PackagePlus size={17} /> Pembelian
+          className={`tap h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 ${tab === "purchase" ? "bg-[#E63946] text-white" : "bg-white border text-slate-700"}`}>
+          <PackagePlus size={17} /> Pembelian Retail
         </button>
         <button data-testid="tab-opname" onClick={() => setTab("opname")}
-          className={`tap h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 ${tab === "opname" ? "bg-[#E63946] text-white" : "bg-white border"}`}>
-          <ClipboardCheck size={17} /> Stok Opname
+          className={`tap h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 ${tab === "opname" ? "bg-[#E63946] text-white" : "bg-white border text-slate-700"}`}>
+          <ClipboardCheck size={17} /> Stok Opname Retail
+        </button>
+        <button data-testid="tab-quick-stock" onClick={() => setTab("quick-stock")}
+          className={`tap h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 ${tab === "quick-stock" ? "bg-[#E63946] text-white" : "bg-white border text-slate-700"}`}>
+          <Zap size={17} className={tab === "quick-stock" ? "text-amber-300 fill-amber-300" : "text-amber-500"} /> Update Cepat Stok &amp; Bahan
         </button>
       </div>
 
-      {tab === "purchase" ? <Purchase products={products} onDone={loadProducts} /> : <Opname products={products} onDone={loadProducts} />}
+      {tab === "purchase" && <Purchase products={products} onDone={loadProducts} />}
+      {tab === "opname" && <Opname products={products} onDone={loadProducts} />}
+      {tab === "quick-stock" && <QuickStockManager onUpdated={loadProducts} />}
     </div>
   );
 }
@@ -54,11 +73,6 @@ function Purchase({ products, onDone }) {
     try {
       const { data } = await api.post("/purchases", { product_id: pid, qty: Number(qty), unit_cost: Number(cost || 0), note });
       toast.success("Pembelian dicatat, stok bertambah");
-      const currentProd = products.find((p) => p.id === pid);
-      if (currentProd) {
-        const newStock = Number(currentProd.stock || 0) + Number(qty);
-        syncStockToFirestore(pid, newStock).catch(() => {});
-      }
       setPid(""); setQty(""); setCost(""); setNote("");
       load(); onDone();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
@@ -129,7 +143,6 @@ function Opname({ products, onDone }) {
     try {
       const { data } = await api.post("/stock-opname", { product_id: pid, counted_stock: Number(counted), note });
       toast.success(`Opname tersimpan. Selisih: ${data.difference}`);
-      syncStockToFirestore(pid, Number(counted)).catch(() => {});
       setPid(""); setCounted(""); setNote("");
       load(); onDone();
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }

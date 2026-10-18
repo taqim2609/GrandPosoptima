@@ -1,11 +1,10 @@
 import axios from "axios";
 import { getServerUrl } from "./api";
 import { getBundleVersion } from "./versions";
-import { logRuntimeErrorToFirestore, testFirestoreConnection } from "./firebase";
 
 // ============================================================
-// Diagnostik & Lapor Bug — menangkap error global + Firestore
-// Error Monitoring & Telemetry untuk Remote Debugging.
+// Diagnostik & Lapor Bug — menangkap error global aplikasi
+// Error Monitoring & Telemetry Lokal.
 // ============================================================
 
 const MAX = 60;
@@ -157,19 +156,10 @@ export function analyzePersistentFailures(logs = errorLog) {
   return results;
 }
 
-// Throttler to prevent flooding Firestore on infinite loop errors
+// Throttler to prevent flooding on infinite loop errors
 const recentErrorHashes = new Set();
 
 function push(entry) {
-  const msgLower = String(entry.msg || entry.message || "").toLowerCase();
-  // Filter out normal expected Firestore offline transitions / retry notices
-  if (
-    msgLower.includes("@firebase/firestore") &&
-    (msgLower.includes("could not reach cloud firestore backend") || msgLower.includes("code=unavailable"))
-  ) {
-    return;
-  }
-
   const category = categorizeError(entry);
   const enriched = {
     id: `err_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -180,26 +170,6 @@ function push(entry) {
   errorLog.push(enriched);
   if (errorLog.length > MAX) errorLog.shift();
   notifyListeners();
-
-  // Send to Firestore remote debugging collection asynchronously
-  const hash = `${enriched.category}_${enriched.msg}_${enriched.file || ""}_${enriched.line || ""}`;
-  if (!recentErrorHashes.has(hash)) {
-    recentErrorHashes.add(hash);
-    setTimeout(() => recentErrorHashes.delete(hash), 15000); // 15s throttle per unique error
-
-    logRuntimeErrorToFirestore({
-      type: enriched.category || enriched.type,
-      message: enriched.msg,
-      stack: enriched.stack || "",
-      componentStack: enriched.componentStack || "",
-      file: enriched.file || "",
-      line: enriched.line || 0,
-      col: enriched.col || 0,
-      url: enriched.url || (typeof window !== "undefined" ? window.location.href : ""),
-      status: enriched.status,
-      method: enriched.method,
-    }).catch(() => {});
-  }
 }
 
 export function logAppError(type, message, extra = {}) {
@@ -222,15 +192,6 @@ let installed = false;
 export function installDiag() {
   if (installed || typeof window === "undefined") return;
   installed = true;
-
-  // Test Firestore connection on app startup
-  testFirestoreConnection().then((res) => {
-    if (!res.ok) {
-      console.warn("[Firestore Monitor] Initial Firestore test connection note:", res.error);
-    } else {
-      console.info("[Firestore Monitor] Connected to Firestore error telemetry collection.");
-    }
-  });
 
   window.addEventListener("error", (e) => {
     const errorObj = e.error || {};
@@ -275,7 +236,7 @@ export function installDiag() {
           if (d) detail = typeof d === "string" ? d : JSON.stringify(d);
         } catch (_) {}
 
-        // Only log 5xx server failures or network disconnects to Firestore
+        // Only log 5xx server failures or network disconnects
         if (status >= 500 || status === 0 || !err.response) {
           push({
             t: new Date().toISOString(),

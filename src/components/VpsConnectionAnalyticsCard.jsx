@@ -20,7 +20,7 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { testFirestoreConnection } from "@/lib/firebase";
+import { testSyncConnection } from "@/lib/sync";
 
 export default function VpsConnectionAnalyticsCard({ className = "" }) {
   const [loading, setLoading] = useState(false);
@@ -31,13 +31,13 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
   // Status State
   const [status, setStatus] = useState({
     google: {
-      name: "Google Cloud & Firestore",
+      name: "Google Cloud API Server",
       role: "Basis Data Pusat & Telemetri 24/7",
       status: "online",
       latency_ms: 22,
       jitter_ms: 1.4,
       endpoint: typeof window !== "undefined" ? window.location.origin : "https://cloud.run.app",
-      db_id: "ai-studio-grandposoptima-268f86d5-06a2-4402-8f77-90451ffce535",
+      db_id: "grandpos_pg",
       auto_connect: true,
       sync_mode: "Real-Time (Live SSE)",
     },
@@ -146,14 +146,14 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
     const toastId = toast.loading("Menguji koneksi ke Server VPS dan Google Cloud...");
     try {
       const startTime = Date.now();
-      const [statusRes, firestoreRes] = await Promise.allSettled([
+      const [statusRes, syncRes] = await Promise.allSettled([
         fetch("/api/system/servers/status?refresh=1", { cache: "no-store" }),
-        testFirestoreConnection(),
+        testSyncConnection(),
       ]);
 
       const gLatency =
-        firestoreRes.status === "fulfilled" && firestoreRes.value?.ok
-          ? Math.round(firestoreRes.value.latencyMs)
+        syncRes.status === "fulfilled" && syncRes.value?.ok
+          ? Math.round(syncRes.value.latencyMs)
           : Math.floor(Math.random() * 8) + 20;
 
       const totalTime = Date.now() - startTime;
@@ -242,7 +242,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
               </div>
               <div>
                 <div className="text-[10px] font-black uppercase tracking-wider text-blue-700">Node #1 · Cloud Primary</div>
-                <h4 className="text-sm font-black text-neutral-900">Google Cloud &amp; Firestore</h4>
+                <h4 className="text-sm font-black text-neutral-900">Google Cloud API Server</h4>
               </div>
             </div>
             <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -274,7 +274,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
           <div className="p-2.5 rounded-lg bg-white/90 border border-blue-100 text-[11px] text-neutral-600 space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-neutral-400">Database:</span>
-              <span className="font-bold text-neutral-800 truncate max-w-[130px]">Firestore Cloud DB</span>
+              <span className="font-bold text-neutral-800 truncate max-w-[130px]">PostgreSQL 16 &amp; API</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-neutral-400">Mode Sinkron:</span>
@@ -441,7 +441,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
         <div className="flex items-start md:items-center gap-2">
           <ShieldCheck size={16} className="text-emerald-600 shrink-0 mt-0.5 md:mt-0" />
           <span>
-            <b>Koneksi Otomatis ke Google Cloud:</b> Aplikasi secara otomatis menyambung ke server Google melalui <b>Heartbeat SSE &amp; Firebase SDK Persistence</b> tanpa memerlukan konfigurasi manual ulang.
+            <b>Koneksi Otomatis ke Google Cloud:</b> Aplikasi secara otomatis menyambung ke server Google melalui <b>Heartbeat SSE &amp; REST API Mandiri</b> tanpa memerlukan konfigurasi manual ulang.
           </span>
         </div>
         <div className="text-[11px] text-neutral-400 font-mono shrink-0">

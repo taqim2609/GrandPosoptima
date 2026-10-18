@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-15 19:17:20 WIB`
-> Total Berkas Terindeks: **471 berkas**
+> Terakhir diperbarui: `2026-10-18 07:05:36 WIB`
+> Total Berkas Terindeks: **631 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -16,27 +16,25 @@ python3 project/scripts/update_file_index.py
 
 | Kategori | Jumlah Berkas | Keterangan |
 | :--- | :---: | :--- |
-| **Cloud Run & Server Root** | `6` | Modul cloud run & server root sistem POS |
-| **Backend FastAPI & Data** | `8` | Modul backend fastapi & data sistem POS |
+| **Cloud Run & Server Root** | `5` | Modul cloud run & server root sistem POS |
 | **Frontend — Halaman UI** | `46` | Modul frontend — halaman ui sistem POS |
 | **Frontend — Komponen UI** | `71` | Modul frontend — komponen ui sistem POS |
 | **Frontend — State & Context** | `2` | Modul frontend — state & context sistem POS |
-| **Frontend — Utility & Library** | `22` | Modul frontend — utility & library sistem POS |
+| **Frontend — Utility & Library** | `23` | Modul frontend — utility & library sistem POS |
 | **Mobile Android & Sunmi Hardware** | `52` | Modul mobile android & sunmi hardware sistem POS |
 | **Integrasi Hermes Agent** | `2` | Modul integrasi hermes agent sistem POS |
-| **Testing & Verifikasi** | `8` | Modul testing & verifikasi sistem POS |
 | **Planora Framework** | `48` | Modul planora framework sistem POS |
 | **Dokumentasi Teknis** | `13` | Modul dokumentasi teknis sistem POS |
 | **Automasi n8n & Workflow** | `3` | Modul automasi n8n & workflow sistem POS |
-| **Deployment & DevOps** | `61` | Modul deployment & devops sistem POS |
+| **Deployment & DevOps** | `63` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `78` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `252` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
 ## Daftar Lengkap Berkas Menurut Modul
 
-### 📁 Cloud Run & Server Root (6 berkas)
+### 📁 Cloud Run & Server Root (5 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -45,20 +43,6 @@ python3 project/scripts/update_file_index.py
 | `metadata.json` | Metadata manifes AI Studio (nama aplikasi, deskripsi, capabilities server-side). |
 | `package.json` | Konfigurasi dependensi Node.js root server. |
 | `routes/allMissingRoutes.js` | Berkas konfigurasi/data: allMissingRoutes.js. |
-| `server.js` | Server utama Express.js Node.js (Cloud Run & development) melayani API dan fallback SPA. |
-
-### 📁 Backend FastAPI & Data (8 berkas)
-
-| Jalur Berkas (`Path`) | Deskripsi Fungsi |
-| :--- | :--- |
-| `project/backend/.dockerignore` | Berkas konfigurasi/data: .dockerignore. |
-| `project/backend/.env.docker.example` | Berkas konfigurasi/data: .env.docker.example. |
-| `project/backend/Dockerfile` | Definisi kontainer Docker backend Python. |
-| `project/backend/create_user.py` | Utilitas CLI pembuatan akun pengguna kasir/admin. |
-| `project/backend/hermes_bridge.py` | Jembatan WhatsApp POS <-> Hermes gateway (HMAC Generic V2 & outbox idempoten). |
-| `project/backend/pytest.ini` | Berkas konfigurasi/data: pytest.ini. |
-| `project/backend/requirements.txt` | Daftar pustaka Python backend (FastAPI, Motor, Uvicorn, bcrypt, jwt). |
-| `project/backend/server.py` | Backend FastAPI (Python/Motor) utama melayani semua endpoint POS (/api). |
 
 ### 📁 Frontend — Halaman UI (46 berkas)
 
@@ -194,7 +178,7 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/src/context/AuthContext.jsx` | Konteks autentikasi pengguna, sesi token JWT, dan login PIN. |
 | `project/frontend/src/context/OfflineContext.jsx` | Konteks sinkronisasi offline-first IndexedDB idempoten (JANGAN DI-REFACTOR). |
 
-### 📁 Frontend — Utility & Library (22 berkas)
+### 📁 Frontend — Utility & Library (23 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -217,6 +201,7 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/src/lib/print.js` | Bridge pencetakan printer thermal Bluetooth dan Sunmi native. |
 | `project/frontend/src/lib/rbac.js` | Utilitas verifikasi hak akses berbasis peran (RBAC). |
 | `project/frontend/src/lib/receipt.js` | Generator layout cetak struk thermal 58mm/80mm dan perintah openDrawer. |
+| `project/frontend/src/lib/sync.js` | Berkas konfigurasi/data: sync.js. |
 | `project/frontend/src/lib/ui.js` | Berkas konfigurasi/data: ui.js. |
 | `project/frontend/src/lib/utils.js` | Berkas konfigurasi/data: utils.js. |
 | `project/frontend/src/lib/versions.js` | Berkas konfigurasi/data: versions.js. |
@@ -284,19 +269,6 @@ python3 project/scripts/update_file_index.py
 | :--- | :--- |
 | `project/hermes-integration/grandpos-wa-inbound/__init__.py` | Plugin Hermes inbound hook pre_gateway_dispatch untuk meneruskan WA ke POS. |
 | `project/hermes-integration/grandpos-wa-inbound/plugin.yaml` | Manifes registrasi plugin Hermes grandpos-wa-inbound. |
-
-### 📁 Testing & Verifikasi (8 berkas)
-
-| Jalur Berkas (`Path`) | Deskripsi Fungsi |
-| :--- | :--- |
-| `project/tests/__init__.py` | Skrip pengujian otomatis: __init__.py. |
-| `project/tests/test_hermes_bridge.py` | Pengujian unit logika jembatan outbox Hermes (22 tes). |
-| `project/tests/test_hermes_plugin_inbound.py` | Pengujian unit plugin hook masuk Hermes tanpa dependensi eksternal (8 tes). |
-| `project/tests/test_hermes_wa_e2e.py` | Pengujian end-to-end penandatanganan HMAC V2 dan render webhook (5 tes). |
-| `project/tests/test_report_calculations.py` | Skrip pengujian otomatis: test_report_calculations.py. |
-| `project/tests/test_wa_outbox_sync.py` | Skrip pengujian otomatis: test_wa_outbox_sync.py. |
-| `project/tests/test_wa_provider_migration.py` | Pengujian migrasi provider legacy (wacloud/evolution) ke hermes (3 tes). |
-| `project/tests/test_wa_status_security.py` | Skrip pengujian otomatis: test_wa_status_security.py. |
 
 ### 📁 Planora Framework (48 berkas)
 
@@ -377,10 +349,13 @@ python3 project/scripts/update_file_index.py
 | `project/n8n-workflows/2-peringatan-stok-menipis.json` | Workflow automasi alur kerja n8n: 2-peringatan-stok-menipis.json. |
 | `project/n8n-workflows/3-rekap-omset-harian.json` | Workflow automasi alur kerja n8n: 3-rekap-omset-harian.json. |
 
-### 📁 Deployment & DevOps (61 berkas)
+### 📁 Deployment & DevOps (63 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
+| `Buat-Shortcut-Desktop.bat` | Skrip otomatisasi Windows Server: Buat-Shortcut-Desktop.bat. |
+| `Buka-POS-Desktop.bat` | Skrip otomatisasi Windows Server: Buka-POS-Desktop.bat. |
+| `Buka-POS-KioskPrint.bat` | Skrip otomatisasi Windows Server: Buka-POS-KioskPrint.bat. |
 | `backup-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: backup-pi.sh. |
 | `backup-to-cloud.sh` | Skrip otomatisasi Linux/Raspberry Pi: backup-to-cloud.sh. |
 | `bootstrap-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-pi.sh. |
@@ -393,6 +368,9 @@ python3 project/scripts/update_file_index.py
 | `project/.emergent/cron/dispatch_webhook.sh` | Skrip otomatisasi Linux/Raspberry Pi: dispatch_webhook.sh. |
 | `project/.emergent/cron/watch_crons.sh` | Skrip otomatisasi Linux/Raspberry Pi: watch_crons.sh. |
 | `project/.emergent/cron/webhook_crond.sh` | Skrip otomatisasi Linux/Raspberry Pi: webhook_crond.sh. |
+| `project/Buat-Shortcut-Desktop.bat` | Skrip otomatisasi Windows Server: Buat-Shortcut-Desktop.bat. |
+| `project/Buka-POS-Desktop.bat` | Skrip otomatisasi Windows Server: Buka-POS-Desktop.bat. |
+| `project/Buka-POS-KioskPrint.bat` | Skrip otomatisasi Windows Server: Buka-POS-KioskPrint.bat. |
 | `project/backup-pi-to-vps.sh` | Skrip otomatisasi Linux/Raspberry Pi: backup-pi-to-vps.sh. |
 | `project/backup-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: backup-pi.sh. |
 | `project/backup-to-cloud.sh` | Skrip otomatisasi Linux/Raspberry Pi: backup-to-cloud.sh. |
@@ -405,13 +383,7 @@ python3 project/scripts/update_file_index.py
 | `project/check-integrity-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: check-integrity-pi.sh. |
 | `project/check-update-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: check-update-pi.sh. |
 | `project/check-workers-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: check-workers-pi.sh. |
-| `project/docker-compose.gudang.yml` | Konfigurasi Docker container: docker-compose.gudang.yml. |
-| `project/docker-compose.pc-master.yml` | Konfigurasi Docker container: docker-compose.pc-master.yml. |
-| `project/docker-compose.pos-standalone.yml` | Konfigurasi Docker container: docker-compose.pos-standalone.yml. |
-| `project/docker-compose.vps.yml` | Konfigurasi Docker container: docker-compose.vps.yml. |
-| `project/docker-compose.yml` | Konfigurasi Docker container: docker-compose.yml. |
 | `project/fix-permission-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: fix-permission-pi.sh. |
-| `project/frontend/Dockerfile` | Berkas konfigurasi/data: Dockerfile. |
 | `project/frontend/public/bootstrap-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-pi.sh. |
 | `project/frontend/public/bootstrap-vps.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-vps.sh. |
 | `project/install-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: install-pi.sh. |
@@ -437,6 +409,8 @@ python3 project/scripts/update_file_index.py
 | `project/update-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: update-pi.sh. |
 | `project/update-pos-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: update-pos-pi.sh. |
 | `project/update-windows.bat` | Skrip otomatisasi Windows Server: update-windows.bat. |
+| `public/bootstrap-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-pi.sh. |
+| `public/bootstrap-vps.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-vps.sh. |
 | `setup-autobackup-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-autobackup-pi.sh. |
 | `setup-autoupdate-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-autoupdate-pi.sh. |
 | `setup-raspberrypi.sh` | Skrip otomatisasi Linux/Raspberry Pi: setup-raspberrypi.sh. |
@@ -499,7 +473,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (78 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (252 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -508,10 +482,13 @@ python3 project/scripts/update_file_index.py
 | `CLAUDE.md` | Panduan instruksi agen berbasis Claude untuk repositori. |
 | `INDEX-BERKAS.md` | Buku besar indeks katalog seluruh berkas dalam proyek. |
 | `PANDUAN-HERMES-AGENT.md` | Panduan resmi integrasi Hermes Agent (Nous Research) untuk AI Brain & WA Gateway. |
+| `README.md` | Berkas konfigurasi/data: README.md. |
+| `api-server.js` | Berkas konfigurasi/data: api-server.js. |
 | `feature-requests.jsonl` | Berkas konfigurasi/data: feature-requests.jsonl. |
 | `firebase-applet-config.json` | Konfigurasi kredensial koneksi Firebase Applet. |
 | `firebase-blueprint.json` | Skema cetak biru Firestore dan konfigurasi database cloud. |
 | `firestore.rules` | Aturan keamanan Firestore Cloud Database. |
+| `postcss.config.js` | Berkas konfigurasi/data: postcss.config.js. |
 | `project/.emergent/cron/applied.hash` | Berkas konfigurasi/data: applied.hash. |
 | `project/.emergent/cron/webhook-crons` | Berkas konfigurasi/data: webhook-crons. |
 | `project/.emergent/crons.yml` | Berkas konfigurasi/data: crons.yml. |
@@ -519,8 +496,6 @@ python3 project/scripts/update_file_index.py
 | `project/.emergent/markers/.bootstrap-complete` | Berkas konfigurasi/data: .bootstrap-complete. |
 | `project/.emergent/markers/.restore-complete` | Berkas konfigurasi/data: .restore-complete. |
 | `project/.emergent/system_deps.txt` | Berkas konfigurasi/data: system_deps.txt. |
-| `project/.env.gudang.example` | Berkas konfigurasi/data: .env.gudang.example. |
-| `project/.env.vps.example` | Berkas konfigurasi/data: .env.vps.example. |
 | `project/AGENTS.md` | Berkas konfigurasi/data: AGENTS.md. |
 | `project/Buka-POS-Linux.desktop` | Berkas konfigurasi/data: Buka-POS-Linux.desktop. |
 | `project/Buka-POS-Windows.url` | Berkas konfigurasi/data: Buka-POS-Windows.url. |
@@ -536,12 +511,10 @@ python3 project/scripts/update_file_index.py
 | `project/PANDUAN-TAILSCALE.md` | Berkas konfigurasi/data: PANDUAN-TAILSCALE.md. |
 | `project/README-DEPLOY.md` | Berkas konfigurasi/data: README-DEPLOY.md. |
 | `project/README.md` | Berkas konfigurasi/data: README.md. |
-| `project/backend_test.py` | Berkas konfigurasi/data: backend_test.py. |
 | `project/design_guidelines.json` | Berkas konfigurasi/data: design_guidelines.json. |
 | `project/firebase-blueprint.json` | Berkas konfigurasi/data: firebase-blueprint.json. |
 | `project/firestore.rules` | Berkas konfigurasi/data: firestore.rules. |
 | `project/frontend/.dockerignore` | Berkas konfigurasi/data: .dockerignore. |
-| `project/frontend/.env` | Berkas konfigurasi/data: .env. |
 | `project/frontend/README-ANDROID.md` | Berkas konfigurasi/data: README-ANDROID.md. |
 | `project/frontend/README.md` | Berkas konfigurasi/data: README.md. |
 | `project/frontend/capacitor.config.json` | Berkas konfigurasi/data: capacitor.config.json. |
@@ -558,11 +531,15 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/public/PANDUAN_APK_SUNMI_T2.txt` | Berkas konfigurasi/data: PANDUAN_APK_SUNMI_T2.txt. |
 | `project/frontend/public/PROMPT_AISTUDIO_SUNMI_NATIVE.txt` | Berkas konfigurasi/data: PROMPT_AISTUDIO_SUNMI_NATIVE.txt. |
 | `project/frontend/public/SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt` | Berkas konfigurasi/data: SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt. |
+| `project/frontend/public/apple-touch-icon.png` | Berkas konfigurasi/data: apple-touch-icon.png. |
 | `project/frontend/public/icon-192.png` | Berkas konfigurasi/data: icon-192.png. |
 | `project/frontend/public/icon-512.png` | Berkas konfigurasi/data: icon-512.png. |
+| `project/frontend/public/icon-maskable-512.png` | Berkas konfigurasi/data: icon-maskable-512.png. |
+| `project/frontend/public/icon.svg` | Berkas konfigurasi/data: icon.svg. |
 | `project/frontend/public/index.html` | Berkas konfigurasi/data: index.html. |
 | `project/frontend/public/manifest.json` | Berkas konfigurasi/data: manifest.json. |
 | `project/frontend/public/polyfills.js` | Polyfill ES6/ES7 khusus WebView Android 7 lama pada terminal Sunmi T2. |
+| `project/frontend/public/screenshot-desktop.png` | Berkas konfigurasi/data: screenshot-desktop.png. |
 | `project/frontend/public/sw.js` | Service worker dummy nonaktif (mencegah konflik cache OTA). |
 | `project/frontend/scripts/make-ota.js` | Berkas konfigurasi/data: make-ota.js. |
 | `project/frontend/src/App.css` | Berkas konfigurasi/data: App.css. |
@@ -570,7 +547,6 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/src/constants/testIds/auth.js` | Berkas konfigurasi/data: auth.js. |
 | `project/frontend/src/constants/testIds/home.js` | Berkas konfigurasi/data: home.js. |
 | `project/frontend/src/constants/testIds/index.js` | Berkas konfigurasi/data: index.js. |
-| `project/frontend/src/firebase-applet-config.json` | Berkas konfigurasi/data: firebase-applet-config.json. |
 | `project/frontend/src/hooks/use-toast.js` | Berkas konfigurasi/data: use-toast.js. |
 | `project/frontend/src/index.css` | Berkas konfigurasi/data: index.css. |
 | `project/frontend/src/index.js` | Titik masuk render React DOM dengan polyfills. |
@@ -581,4 +557,176 @@ python3 project/scripts/update_file_index.py
 | `project/scripts/seed_data.py` | Berkas konfigurasi/data: seed_data.py. |
 | `project/scripts/update_file_index.py` | Berkas konfigurasi/data: update_file_index.py. |
 | `project/test_result.md` | Berkas konfigurasi/data: test_result.md. |
+| `public/.well-known/assetlinks.json` | Berkas konfigurasi/data: assetlinks.json. |
+| `public/PANDUAN_APK_SUNMI_T2.txt` | Berkas konfigurasi/data: PANDUAN_APK_SUNMI_T2.txt. |
+| `public/PROMPT_AISTUDIO_SUNMI_NATIVE.txt` | Berkas konfigurasi/data: PROMPT_AISTUDIO_SUNMI_NATIVE.txt. |
+| `public/SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt` | Berkas konfigurasi/data: SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt. |
+| `public/apple-touch-icon.png` | Berkas konfigurasi/data: apple-touch-icon.png. |
+| `public/icon-192.png` | Berkas konfigurasi/data: icon-192.png. |
+| `public/icon-512.png` | Berkas konfigurasi/data: icon-512.png. |
+| `public/icon-maskable-512.png` | Berkas konfigurasi/data: icon-maskable-512.png. |
+| `public/icon.svg` | Berkas konfigurasi/data: icon.svg. |
+| `public/index.html` | Berkas konfigurasi/data: index.html. |
+| `public/manifest.json` | Berkas konfigurasi/data: manifest.json. |
+| `public/polyfills.js` | Berkas konfigurasi/data: polyfills.js. |
+| `public/screenshot-desktop.png` | Berkas konfigurasi/data: screenshot-desktop.png. |
+| `public/sw.js` | Berkas konfigurasi/data: sw.js. |
+| `scripts/generate_pwa_assets.py` | Berkas konfigurasi/data: generate_pwa_assets.py. |
+| `server.ts` | Berkas konfigurasi/data: server.ts. |
+| `src/App.css` | Berkas konfigurasi/data: App.css. |
+| `src/App.jsx` | Berkas konfigurasi/data: App.jsx. |
+| `src/components/AiIngredientRecommendationModal.jsx` | Berkas konfigurasi/data: AiIngredientRecommendationModal.jsx. |
+| `src/components/ErrorBoundary.jsx` | Berkas konfigurasi/data: ErrorBoundary.jsx. |
+| `src/components/ForceChangePassword.jsx` | Berkas konfigurasi/data: ForceChangePassword.jsx. |
+| `src/components/GDriveBackupManager.jsx` | Berkas konfigurasi/data: GDriveBackupManager.jsx. |
+| `src/components/GlobalErrorDiagnosticPanel.jsx` | Berkas konfigurasi/data: GlobalErrorDiagnosticPanel.jsx. |
+| `src/components/HybridSyncDiagnosticPanel.jsx` | Berkas konfigurasi/data: HybridSyncDiagnosticPanel.jsx. |
+| `src/components/Layout.jsx` | Berkas konfigurasi/data: Layout.jsx. |
+| `src/components/LazyProductImage.jsx` | Berkas konfigurasi/data: LazyProductImage.jsx. |
+| `src/components/LoginServerSelector.jsx` | Berkas konfigurasi/data: LoginServerSelector.jsx. |
+| `src/components/OtaIndicator.jsx` | Berkas konfigurasi/data: OtaIndicator.jsx. |
+| `src/components/PWAInstallButton.jsx` | Berkas konfigurasi/data: PWAInstallButton.jsx. |
+| `src/components/PosAiChatWidget.jsx` | Berkas konfigurasi/data: PosAiChatWidget.jsx. |
+| `src/components/PostgresStatusIndicator.jsx` | Berkas konfigurasi/data: PostgresStatusIndicator.jsx. |
+| `src/components/ProtectedRoute.jsx` | Berkas konfigurasi/data: ProtectedRoute.jsx. |
+| `src/components/QuickStockManager.jsx` | Komponen pembaruan cepat stok fisik massal dan pencatatan penggunaan bahan dapur (100% backend mandiri). |
+| `src/components/ReceiptModal.jsx` | Berkas konfigurasi/data: ReceiptModal.jsx. |
+| `src/components/ReceiptPaper.jsx` | Berkas konfigurasi/data: ReceiptPaper.jsx. |
+| `src/components/ShiftClosingReportView.jsx` | Berkas konfigurasi/data: ShiftClosingReportView.jsx. |
+| `src/components/SubTabs.jsx` | Berkas konfigurasi/data: SubTabs.jsx. |
+| `src/components/SystemHealthPanel.jsx` | Berkas konfigurasi/data: SystemHealthPanel.jsx. |
+| `src/components/TailscaleDashboard.jsx` | Berkas konfigurasi/data: TailscaleDashboard.jsx. |
+| `src/components/ThreeServerMatrix.jsx` | Berkas konfigurasi/data: ThreeServerMatrix.jsx. |
+| `src/components/VisualSyncStatus.jsx` | Berkas konfigurasi/data: VisualSyncStatus.jsx. |
+| `src/components/VoidDialog.jsx` | Berkas konfigurasi/data: VoidDialog.jsx. |
+| `src/components/VpsConnectionAnalyticsCard.jsx` | Berkas konfigurasi/data: VpsConnectionAnalyticsCard.jsx. |
+| `src/components/WhatsAppGatewayCard.jsx` | Berkas konfigurasi/data: WhatsAppGatewayCard.jsx. |
+| `src/components/WidgetKustom.jsx` | Berkas konfigurasi/data: WidgetKustom.jsx. |
+| `src/components/dashboard/DashboardCharts.jsx` | Berkas konfigurasi/data: DashboardCharts.jsx. |
+| `src/components/ui/accordion.jsx` | Berkas konfigurasi/data: accordion.jsx. |
+| `src/components/ui/alert-dialog.jsx` | Berkas konfigurasi/data: alert-dialog.jsx. |
+| `src/components/ui/alert.jsx` | Berkas konfigurasi/data: alert.jsx. |
+| `src/components/ui/aspect-ratio.jsx` | Berkas konfigurasi/data: aspect-ratio.jsx. |
+| `src/components/ui/avatar.jsx` | Berkas konfigurasi/data: avatar.jsx. |
+| `src/components/ui/badge.jsx` | Berkas konfigurasi/data: badge.jsx. |
+| `src/components/ui/breadcrumb.jsx` | Berkas konfigurasi/data: breadcrumb.jsx. |
+| `src/components/ui/button.jsx` | Berkas konfigurasi/data: button.jsx. |
+| `src/components/ui/calendar.jsx` | Berkas konfigurasi/data: calendar.jsx. |
+| `src/components/ui/card.jsx` | Berkas konfigurasi/data: card.jsx. |
+| `src/components/ui/carousel.jsx` | Berkas konfigurasi/data: carousel.jsx. |
+| `src/components/ui/checkbox.jsx` | Berkas konfigurasi/data: checkbox.jsx. |
+| `src/components/ui/collapsible.jsx` | Berkas konfigurasi/data: collapsible.jsx. |
+| `src/components/ui/command.jsx` | Berkas konfigurasi/data: command.jsx. |
+| `src/components/ui/context-menu.jsx` | Berkas konfigurasi/data: context-menu.jsx. |
+| `src/components/ui/dialog.jsx` | Berkas konfigurasi/data: dialog.jsx. |
+| `src/components/ui/drawer.jsx` | Berkas konfigurasi/data: drawer.jsx. |
+| `src/components/ui/dropdown-menu.jsx` | Berkas konfigurasi/data: dropdown-menu.jsx. |
+| `src/components/ui/form.jsx` | Berkas konfigurasi/data: form.jsx. |
+| `src/components/ui/hover-card.jsx` | Berkas konfigurasi/data: hover-card.jsx. |
+| `src/components/ui/input-otp.jsx` | Berkas konfigurasi/data: input-otp.jsx. |
+| `src/components/ui/input.jsx` | Berkas konfigurasi/data: input.jsx. |
+| `src/components/ui/label.jsx` | Berkas konfigurasi/data: label.jsx. |
+| `src/components/ui/menubar.jsx` | Berkas konfigurasi/data: menubar.jsx. |
+| `src/components/ui/navigation-menu.jsx` | Berkas konfigurasi/data: navigation-menu.jsx. |
+| `src/components/ui/pagination.jsx` | Berkas konfigurasi/data: pagination.jsx. |
+| `src/components/ui/popover.jsx` | Berkas konfigurasi/data: popover.jsx. |
+| `src/components/ui/progress.jsx` | Berkas konfigurasi/data: progress.jsx. |
+| `src/components/ui/radio-group.jsx` | Berkas konfigurasi/data: radio-group.jsx. |
+| `src/components/ui/resizable.jsx` | Berkas konfigurasi/data: resizable.jsx. |
+| `src/components/ui/scroll-area.jsx` | Berkas konfigurasi/data: scroll-area.jsx. |
+| `src/components/ui/select.jsx` | Berkas konfigurasi/data: select.jsx. |
+| `src/components/ui/separator.jsx` | Berkas konfigurasi/data: separator.jsx. |
+| `src/components/ui/sheet.jsx` | Berkas konfigurasi/data: sheet.jsx. |
+| `src/components/ui/skeleton.jsx` | Berkas konfigurasi/data: skeleton.jsx. |
+| `src/components/ui/slider.jsx` | Berkas konfigurasi/data: slider.jsx. |
+| `src/components/ui/sonner.jsx` | Berkas konfigurasi/data: sonner.jsx. |
+| `src/components/ui/switch.jsx` | Berkas konfigurasi/data: switch.jsx. |
+| `src/components/ui/table.jsx` | Berkas konfigurasi/data: table.jsx. |
+| `src/components/ui/tabs.jsx` | Berkas konfigurasi/data: tabs.jsx. |
+| `src/components/ui/textarea.jsx` | Berkas konfigurasi/data: textarea.jsx. |
+| `src/components/ui/toast.jsx` | Berkas konfigurasi/data: toast.jsx. |
+| `src/components/ui/toaster.jsx` | Berkas konfigurasi/data: toaster.jsx. |
+| `src/components/ui/toggle-group.jsx` | Berkas konfigurasi/data: toggle-group.jsx. |
+| `src/components/ui/toggle.jsx` | Berkas konfigurasi/data: toggle.jsx. |
+| `src/components/ui/tooltip.jsx` | Berkas konfigurasi/data: tooltip.jsx. |
+| `src/constants/testIds/auth.js` | Berkas konfigurasi/data: auth.js. |
+| `src/constants/testIds/home.js` | Berkas konfigurasi/data: home.js. |
+| `src/constants/testIds/index.js` | Berkas konfigurasi/data: index.js. |
+| `src/context/AuthContext.jsx` | Berkas konfigurasi/data: AuthContext.jsx. |
+| `src/context/OfflineContext.jsx` | Berkas konfigurasi/data: OfflineContext.jsx. |
+| `src/hooks/use-toast.js` | Berkas konfigurasi/data: use-toast.js. |
+| `src/hooks/usePWAInstall.js` | Berkas konfigurasi/data: usePWAInstall.js. |
+| `src/index.css` | Berkas konfigurasi/data: index.css. |
+| `src/index.jsx` | Berkas konfigurasi/data: index.jsx. |
+| `src/lib/api.js` | Berkas konfigurasi/data: api.js. |
+| `src/lib/bluetooth.js` | Berkas konfigurasi/data: bluetooth.js. |
+| `src/lib/business.js` | Berkas konfigurasi/data: business.js. |
+| `src/lib/customWidgets.js` | Berkas konfigurasi/data: customWidgets.js. |
+| `src/lib/device.js` | Berkas konfigurasi/data: device.js. |
+| `src/lib/diag.js` | Berkas konfigurasi/data: diag.js. |
+| `src/lib/features.js` | Berkas konfigurasi/data: features.js. |
+| `src/lib/format.js` | Berkas konfigurasi/data: format.js. |
+| `src/lib/gdrive.js` | Berkas konfigurasi/data: gdrive.js. |
+| `src/lib/installers.js` | Berkas konfigurasi/data: installers.js. |
+| `src/lib/navItems.js` | Berkas konfigurasi/data: navItems.js. |
+| `src/lib/offlineQueue.js` | Berkas konfigurasi/data: offlineQueue.js. |
+| `src/lib/offlineQueue.test.js` | Berkas konfigurasi/data: offlineQueue.test.js. |
+| `src/lib/ota.js` | Berkas konfigurasi/data: ota.js. |
+| `src/lib/platform.js` | Berkas konfigurasi/data: platform.js. |
+| `src/lib/print.js` | Berkas konfigurasi/data: print.js. |
+| `src/lib/rbac.js` | Berkas konfigurasi/data: rbac.js. |
+| `src/lib/receipt.js` | Berkas konfigurasi/data: receipt.js. |
+| `src/lib/sync.js` | Berkas konfigurasi/data: sync.js. |
+| `src/lib/ui.js` | Berkas konfigurasi/data: ui.js. |
+| `src/lib/utils.js` | Berkas konfigurasi/data: utils.js. |
+| `src/lib/versions.js` | Berkas konfigurasi/data: versions.js. |
+| `src/pages/AppVersi.jsx` | Berkas konfigurasi/data: AppVersi.jsx. |
+| `src/pages/ArticlesAdmin.jsx` | Berkas konfigurasi/data: ArticlesAdmin.jsx. |
+| `src/pages/AssistantAI.jsx` | Berkas konfigurasi/data: AssistantAI.jsx. |
+| `src/pages/Cash.jsx` | Berkas konfigurasi/data: Cash.jsx. |
+| `src/pages/Catalog.jsx` | Berkas konfigurasi/data: Catalog.jsx. |
+| `src/pages/Categories.jsx` | Berkas konfigurasi/data: Categories.jsx. |
+| `src/pages/Coupons.jsx` | Berkas konfigurasi/data: Coupons.jsx. |
+| `src/pages/Dashboard.jsx` | Berkas konfigurasi/data: Dashboard.jsx. |
+| `src/pages/DeviceSettings.jsx` | Berkas konfigurasi/data: DeviceSettings.jsx. |
+| `src/pages/Diagnostik.jsx` | Berkas konfigurasi/data: Diagnostik.jsx. |
+| `src/pages/Ingredients.jsx` | Berkas konfigurasi/data: Ingredients.jsx. |
+| `src/pages/Integritas.jsx` | Berkas konfigurasi/data: Integritas.jsx. |
+| `src/pages/Inventory.jsx` | Berkas konfigurasi/data: Inventory.jsx. |
+| `src/pages/LandingPage.jsx` | Berkas konfigurasi/data: LandingPage.jsx. |
+| `src/pages/Login.jsx` | Berkas konfigurasi/data: Login.jsx. |
+| `src/pages/Members.jsx` | Berkas konfigurasi/data: Members.jsx. |
+| `src/pages/Orders.jsx` | Berkas konfigurasi/data: Orders.jsx. |
+| `src/pages/POS.jsx` | Berkas konfigurasi/data: POS.jsx. |
+| `src/pages/Products.jsx` | Berkas konfigurasi/data: Products.jsx. |
+| `src/pages/Promos.jsx` | Berkas konfigurasi/data: Promos.jsx. |
+| `src/pages/PromosCoupons.jsx` | Berkas konfigurasi/data: PromosCoupons.jsx. |
+| `src/pages/Recipes.jsx` | Berkas konfigurasi/data: Recipes.jsx. |
+| `src/pages/Reports.jsx` | Berkas konfigurasi/data: Reports.jsx. |
+| `src/pages/Reservations.jsx` | Berkas konfigurasi/data: Reservations.jsx. |
+| `src/pages/RoleBasedAccess.jsx` | Berkas konfigurasi/data: RoleBasedAccess.jsx. |
+| `src/pages/Settings.jsx` | Berkas konfigurasi/data: Settings.jsx. |
+| `src/pages/SettingsAI.jsx` | Berkas konfigurasi/data: SettingsAI.jsx. |
+| `src/pages/SettingsBusiness.jsx` | Berkas konfigurasi/data: SettingsBusiness.jsx. |
+| `src/pages/SettingsCustomWidgets.jsx` | Berkas konfigurasi/data: SettingsCustomWidgets.jsx. |
+| `src/pages/SettingsData.jsx` | Berkas konfigurasi/data: SettingsData.jsx. |
+| `src/pages/SettingsInstaller.jsx` | Berkas konfigurasi/data: SettingsInstaller.jsx. |
+| `src/pages/SettingsIntegrations.jsx` | Berkas konfigurasi/data: SettingsIntegrations.jsx. |
+| `src/pages/SettingsPlatform.jsx` | Berkas konfigurasi/data: SettingsPlatform.jsx. |
+| `src/pages/SettingsReport.jsx` | Berkas konfigurasi/data: SettingsReport.jsx. |
+| `src/pages/SettingsRoles.jsx` | Berkas konfigurasi/data: SettingsRoles.jsx. |
+| `src/pages/SettingsUI.jsx` | Berkas konfigurasi/data: SettingsUI.jsx. |
+| `src/pages/SettingsWATemplates.jsx` | Berkas konfigurasi/data: SettingsWATemplates.jsx. |
+| `src/pages/Shift.jsx` | Berkas konfigurasi/data: Shift.jsx. |
+| `src/pages/SystemHealth.jsx` | Berkas konfigurasi/data: SystemHealth.jsx. |
+| `src/pages/Tables.jsx` | Berkas konfigurasi/data: Tables.jsx. |
+| `src/pages/Users.jsx` | Berkas konfigurasi/data: Users.jsx. |
+| `src/pages/VendorSettlement.jsx` | Berkas konfigurasi/data: VendorSettlement.jsx. |
+| `src/pages/Vendors.jsx` | Berkas konfigurasi/data: Vendors.jsx. |
+| `src/pages/VoidRefund.jsx` | Berkas konfigurasi/data: VoidRefund.jsx. |
+| `src/pages/WhatsApp.jsx` | Berkas konfigurasi/data: WhatsApp.jsx. |
+| `src/pages/WhatsAppReport.jsx` | Berkas konfigurasi/data: WhatsAppReport.jsx. |
+| `tailwind.config.js` | Berkas konfigurasi/data: tailwind.config.js. |
+| `tsconfig.json` | Berkas konfigurasi/data: tsconfig.json. |
+| `vite.config.mjs` | Berkas konfigurasi/data: vite.config.mjs. |
 

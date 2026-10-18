@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { setFirestoreSyncing, syncOrderToFirestore } from "@/lib/firebase";
 import { reconcilePendingOrders } from "@/lib/offlineQueue";
 
 const KEY = "gak_pending_orders";
@@ -35,7 +34,6 @@ export function OfflineProvider({ children }) {
   }, []);
 
   const _syncItems = useCallback(async (items) => {
-    setFirestoreSyncing(true, 3000);
     let ok = 0;
     const done = [];
     const completedIds = new Set();
@@ -47,15 +45,6 @@ export function OfflineProvider({ children }) {
           completedIds.add(item.temp_id);
           ok++;
           done.push({ client_ref: item.temp_id, order_number: res.data?.order_number, total: item.meta?.total || 0, status: "ok" });
-
-          // Auto-sync the completed order to Firebase Firestore when back online
-          if (res.data) {
-            try {
-              await syncOrderToFirestore(res.data);
-            } catch (fireErr) {
-              console.error("[Firestore] Gagal sinkronisasi transaksi offline ke Firebase:", fireErr);
-            }
-          }
         } catch (e) {
           const d = e.response?.data?.detail;
           errorsById.set(
@@ -81,8 +70,8 @@ export function OfflineProvider({ children }) {
         window.dispatchEvent(new Event("gak-synced")); // refresh cached master data after upload
       }
       return ok;
-    } finally {
-      setFirestoreSyncing(false);
+    } catch (_) {
+      return ok;
     }
   }, []);
 
