@@ -197,8 +197,8 @@ POS hybrid F&B + retail untuk Grand Aceh Kuliner. POS komputer (web) + POS Andro
 - Catatan: prasyarat Installer sudah menampilkan `sudo systemctl enable docker` untuk auto-start di Pi.
 
 ## FITUR (2026-06-21) — Update 1-Klik dari aplikasi (halaman Installer) + Installer khusus GitHub
-- Installer page dirombak jadi KHUSUS GitHub: dihapus unduh ZIP proyek + kartu unduh install/update manual. Repo default: https://github.com/taqim2609/POS-grand.git
-- bootstrap-pi.sh kini clone/pull dari GitHub (auto pasang git+Docker, systemctl enable docker). One-liner: `bash <(curl -fsSL https://raw.githubusercontent.com/taqim2609/POS-grand/main/bootstrap-pi.sh)`. Cadangan: tombol unduh bootstrap-pi.sh.
+- Installer page dirombak jadi KHUSUS GitHub: dihapus unduh ZIP proyek + kartu unduh install/update manual. Repo default: https://github.com/taqim2609/GrandPosoptima.git
+- bootstrap-pi.sh kini clone/pull dari GitHub (auto pasang git+Docker, systemctl enable docker). One-liner: `bash <(curl -fsSL https://raw.githubusercontent.com/taqim2609/GrandPosoptima/main/bootstrap-pi.sh)`. Cadangan: tombol unduh bootstrap-pi.sh.
 - Panduan: /app/PANDUAN-GITHUB.md (install/update/akses/backup/restart).
 - Update 1-Klik: tombol "Update Sekarang" HANYA di halaman Installer (Pengaturan → Installer, section 2).
   - Backend: `GET /api/admin/update/status` (enabled bila /var/run/docker.sock ada + HOST_PROJECT_DIR diset), `POST /api/admin/update` (jalankan container `gak-updater` via Docker SDK python: `docker:cli` mount sock + HOST_PROJECT_DIR:/project → `git pull` + `docker compose up -d --build`, detached agar survive rebuild backend). Preview: sock tak ada → 400 pesan ramah "belum aktif". Verified curl + screenshot.

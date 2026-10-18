@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set REPO=https://github.com/taqim2609/POS-grand.git
+set REPO=https://github.com/taqim2609/GrandPosoptima.git
 set APP_DIR=grand-aceh-pos
 echo ============================================
 echo   Grand Aceh Kuliner POS - Bootstrap Windows

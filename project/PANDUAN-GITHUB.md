@@ -8,7 +8,7 @@
 Aplikasi ini di-install dan di-update **sepenuhnya dari GitHub**. Tidak perlu lagi
 menyalin folder secara manual atau mengunduh ZIP.
 
-- **Repository:** `https://github.com/taqim2609/POS-grand.git`
+- **Repository:** `https://github.com/taqim2609/GrandPosoptima.git`
 - **Folder di server (hasil clone):** `~/grand-aceh-pos`
 
 > Sebelum mulai: pastikan kode terbaru sudah ada di GitHub (pakai tombol **Save to Github**
@@ -22,7 +22,7 @@ menyalin folder secara manual atau mengunduh ZIP.
 Masuk ke Pi via SSH, lalu jalankan:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/taqim2609/POS-grand/main/bootstrap-pi.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/taqim2609/GrandPosoptima/main/bootstrap-pi.sh)
 ```
 
 Perintah ini otomatis:
@@ -40,7 +40,7 @@ sudo reboot
 
 ### Alternatif manual (jika sudah punya git)
 ```bash
-git clone https://github.com/taqim2609/POS-grand.git ~/grand-aceh-pos
+git clone https://github.com/taqim2609/GrandPosoptima.git ~/grand-aceh-pos
 cd ~/grand-aceh-pos
 chmod +x bootstrap-pi.sh
 ./bootstrap-pi.sh
@@ -57,7 +57,7 @@ lalu **dobel-klik**. Skrip otomatis: cek git+Docker → `git clone` repo → jal
 
 **Atau manual** di PowerShell / CMD:
 ```bat
-git clone https://github.com/taqim2609/POS-grand.git grand-aceh-pos
+git clone https://github.com/taqim2609/GrandPosoptima.git grand-aceh-pos
 cd grand-aceh-pos
 install-windows.bat
 ```
@@ -149,7 +149,7 @@ saat build frontend).
 
 **Langkah:**
 ```bash
-git clone https://github.com/taqim2609/POS-grand.git
+git clone https://github.com/taqim2609/GrandPosoptima.git
 cd POS-grand/frontend
 yarn install
 REACT_APP_BACKEND_URL="" yarn build
