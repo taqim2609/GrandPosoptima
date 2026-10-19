@@ -61,7 +61,7 @@ Raspberry Pi berfungsi sebagai kasir utama di outlet toko dengan keunggulan tran
    Buka tautan autentikasi Tailscale di browser HP/Laptop untuk mengotorisasi Raspberry Pi (`grandpos-pi`) ke dalam jaringan mesh Tailscale Anda.
 
 3. Alamat server lokal kasir di outlet:
-   - Akses lokal LAN: `http://pos.local:3000` atau `http://<IP_LOKAL_PI>:3000`
+   - Akses lokal LAN: `http://grandpos.local:3000` atau `http://<IP_LOKAL_PI>:3000`
    - Akses via Tailscale: `http://<IP_TAILSCALE_PI>:3000`
 
 ---
@@ -71,7 +71,7 @@ Raspberry Pi berfungsi sebagai kasir utama di outlet toko dengan keunggulan tran
 Untuk perangkat kasir **Sunmi T2** atau Tablet Android:
 
 1. **Target Server Auto-Fallback**:
-   - Aplikasi Android secara otomatis memprioritaskan IP lokal Raspberry Pi (`http://pos.local:3000` / `http://<IP_PI>:3000`).
+   - Aplikasi Android secara otomatis memprioritaskan IP lokal Raspberry Pi (`http://grandpos.local:3000` / `http://<IP_PI>:3000`).
    - Jika Raspberry Pi offline atau sedang di luar toko, aplikasi secara otomatis menggunakan IP Tailscale VPS (`http://100.117.186.13:8000`).
 
 2. **Perangkat Keras Sunmi T2 Native**:
