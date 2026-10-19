@@ -8,11 +8,66 @@ Dokumen ini berisi panduan teknis langkah-demi-langkah untuk memasang (*install*
 
 | Perangkat / Server | Fungsi Utama | Metode Instalasi |
 | :--- | :--- | :--- |
-| **Server VPS Cloud** | Landing Page Publik, Hermes WA Gateway, Engine Sync Cloud | 1-Klik Bootstrap Script (`bootstrap-vps.sh`) |
-| **Raspberry Pi / PC Outlet** | Node Kasir Lokal Toko (Offline-First, Cetak Struk) | 1-Klik Script (`install-pi.sh` / `bootstrap-pi.sh`) |
+| **GitHub Repository** | Kode Sumber & Auto-Update (`git pull`) | Clone & Script (`git clone` & `./update-pi.sh`) |
+| **Server VPS Cloud** | Landing Page Publik, Hermes WA Gateway, Engine Sync Cloud | 1-Klik Bootstrap Script (`bootstrap-vps.sh`) / GitHub |
+| **Raspberry Pi / PC Outlet** | Node Kasir Lokal Toko (Offline-First, Cetak Struk) | 1-Klik Script (`install-pi.sh` / `bootstrap-pi.sh`) / GitHub |
 | **PC / Laptop Windows** | Terminal Kasir Touchscreen / Kasir Kas | Double-click File `.bat` (`Buka-POS-Desktop.bat`) |
 | **Android Sunmi T2 / Tablet** | Kasir Mobile, Printer Thermal Hardware Built-in | File APK (`/apk/Grand-Aceh-Kuliner-POS-v2.10.apk`) |
 | **Komputer Developer** | Pengembangan & Pengujian Kode Lokal | Node.js (`npm install` & `npm run dev`) |
+
+---
+
+## 🐱 Instalasi & Deployment Menggunakan GitHub
+
+Menggunakan GitHub adalah metode paling direkomendasikan untuk mempermudah manajemen kode, kolaborasi, dan pembaruan aplikasi secara otomatis di server VPS maupun Raspberry Pi toko.
+
+### A. Langkah Clone & Instalasi Awal dari GitHub:
+1. Masuk ke server VPS atau Raspberry Pi via SSH / Terminal:
+   ```bash
+   cd ~
+   ```
+2. Clone repositori aplikasi dari GitHub Anda:
+   ```bash
+   git clone https://github.com/USERNAME_ANDA/grand-aceh-kuliner-pos.git grand-pos
+   ```
+3. Masuk ke folder proyek:
+   ```bash
+   cd grand-pos
+   ```
+4. Jalankan skrip installer sesuai perangkat:
+   - **Di VPS Cloud**: `sudo bash bootstrap-vps.sh`
+   - **Di Raspberry Pi / PC Toko**: `sudo bash install-pi.sh`
+
+---
+
+### B. Cara Memperbarui Aplikasi dari GitHub (1-Klik Auto-Update):
+Setiap kali Anda melakukan perubahan kode di komputer lokal dan mengunggahnya ke GitHub (`git push`), Anda cukup menjalankan skrip pembaru otomatis di server:
+
+```bash
+./update-pi.sh
+```
+
+**Yang dilakukan skrip `./update-pi.sh` secara otomatis**:
+1. Menarik pembaruan kode terbaru dari GitHub (`git pull --ff-only`).
+2. Memperbaiki izin hak akses folder dan file Git jika terjadi kendala `sudo`.
+3. Membangun ulang container Docker (`docker compose up -d --build`).
+4. Membersihkan *cache image* lama yang tidak terpakai (`docker image prune`).
+
+---
+
+### C. Otomasi Auto-Update Harian via Cron Job (Opsional):
+Jika Anda ingin VPS atau Raspberry Pi toko secara otomatis memeriksa & menarik update dari GitHub setiap hari tanpa perlu mengetik perintah manual:
+
+1. Buka editor cron daemon:
+   ```bash
+   crontab -e
+   ```
+2. Tambahkan baris jadwal berikut di bagian paling bawah:
+   ```cron
+   # Cek & update otomatis dari GitHub setiap pukul 04:00 subuh
+   0 4 * * * cd /root/grand-pos && ./update-pi.sh >> /tmp/pos-update.log 2>&1
+   ```
+3. Simpan dan keluar. Aplikasi akan selalu dalam versi paling baru secara otomatis.
 
 ---
 
