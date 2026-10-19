@@ -46,7 +46,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
       role: "Engine Kasir Fisik Toko, LAN Offline-First & Struk Sunmi",
       status: "online",
       latency_ms: 1.2,
-      endpoint: "http://pos.local:3000",
+      endpoint: "http://grandpos.local:3000",
       ip: "192.168.1.100 (LAN Toko)",
       hardware: "Raspberry Pi OS 64-bit",
       temp_c: 44.2,
@@ -110,6 +110,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
         const waNode = json.servers?.find((s) => s.id === "whatsapp" || s.category === "gateway");
 
         setStatus((prev) => ({
+          ...prev,
           vps: {
             ...prev.vps,
             latency_ms: vpsNode?.latency_ms ?? 15,
@@ -307,7 +308,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
             <div>
               <div className="text-[10px] font-bold text-neutral-500 uppercase">Latensi LAN Toko:</div>
               <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-2xl font-black text-neutral-900 font-mono">{status.raspberry.latency_ms}</span>
+                <span className="text-2xl font-black text-neutral-900 font-mono">{status.raspberry?.latency_ms ?? 1.2}</span>
                 <span className="text-xs font-bold text-neutral-500">ms</span>
                 <span className="text-[10px] font-semibold text-rose-600 bg-white px-1.5 py-0.5 rounded border border-rose-200 ml-1">
                   Instan (Zero Lag)
@@ -326,7 +327,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
           <div className="p-2.5 rounded-lg bg-white/90 border border-rose-100 text-[11px] text-neutral-600 space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-neutral-400">Endpoint:</span>
-              <span className="font-bold text-neutral-800 font-mono">http://pos.local</span>
+              <span className="font-bold text-neutral-800 font-mono">http://grandpos.local</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-neutral-400">Peran:</span>

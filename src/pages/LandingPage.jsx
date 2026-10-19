@@ -8,9 +8,12 @@ import {
 } from "lucide-react";
 import { rupiah } from "@/lib/format";
 import { toast } from "sonner";
+import { useLandingConfig } from "@/services/landingService";
+import { DEFAULT_LANDING_CONFIG } from "@/config/landing-page.config";
 
 export default function LandingPage({ defaultSection = "hero" }) {
   const navigate = useNavigate();
+  const { config: landingCfg } = useLandingConfig();
 
   // Navigation active state
   const [activeSection, setActiveSection] = useState(defaultSection);
@@ -83,6 +86,69 @@ export default function LandingPage({ defaultSection = "hero" }) {
         console.warn("Failed fetching public tables", err);
       });
   }, [defaultSection]);
+
+  // SEO Dynamic Head Injector
+  useEffect(() => {
+    if (!landingCfg) return;
+    const seo = landingCfg.seo || {};
+    const metaTitle = seo.meta_title || "Grand Aceh Kuliner — Restoran & Mie Aceh Otentik";
+    const metaDesc = seo.meta_description || "Nikmati Kelezatan Mie Aceh Rempah, Nasi Gurih, Kopi Ulee Kareng, dan Ayam Tangkap khas Banda Aceh.";
+
+    document.title = metaTitle;
+
+    // Helper: update or create meta tag
+    const setMeta = (nameAttr, val, isProperty = false) => {
+      if (!val) return;
+      let el = document.querySelector(`meta[${isProperty ? "property" : "name"}="${nameAttr}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(isProperty ? "property" : "name", nameAttr);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", val);
+    };
+
+    const ogImage = seo.og_image_url || landingCfg.hero?.image_url || "https://grandacehkuliner.com/screenshot-desktop.png";
+    const siteName = seo.site_name || "Grand Aceh Kuliner";
+
+    setMeta("description", metaDesc);
+    setMeta("keywords", seo.keywords || "Mie Aceh, Restoran Aceh, Kopi Sanger, Kuliner Banda Aceh");
+    setMeta("og:title", metaTitle, true);
+    setMeta("og:description", metaDesc, true);
+    setMeta("og:site_name", siteName, true);
+    setMeta("og:image", ogImage, true);
+    setMeta("og:type", "website", true);
+    setMeta("twitter:card", "summary_large_image");
+    setMeta("twitter:title", metaTitle);
+    setMeta("twitter:description", metaDesc);
+    setMeta("twitter:image", ogImage);
+    if (seo.twitter_handle) setMeta("twitter:site", seo.twitter_handle);
+
+    // Schema.org Restaurant JSON-LD Structured Data
+    let script = document.getElementById("gak-schema-jsonld");
+    if (!script) {
+      script = document.createElement("script");
+      script.id = "gak-schema-jsonld";
+      script.type = "application/ld+json";
+      document.head.appendChild(script);
+    }
+    script.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Restaurant",
+      "name": "Grand Aceh Kuliner",
+      "image": landingCfg.hero?.image_url || "https://grandacehkuliner.com/screenshot-desktop.png",
+      "description": metaDesc,
+      "servesCuisine": ["Acehnese", "Indonesian", "Halal"],
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": landingCfg.contact_info?.address || "Jl. T. Nyak Arief No. 88",
+        "addressLocality": "Banda Aceh",
+        "addressCountry": "ID"
+      },
+      "telephone": landingCfg.contact_info?.phone || "0812-6900-1234",
+      "openingHours": "Mo-Su 08:00-23:00"
+    });
+  }, [landingCfg]);
 
   // Filtered menu
   const filteredMenu = menuItems.filter((item) => {
@@ -222,33 +288,31 @@ export default function LandingPage({ defaultSection = "hero" }) {
             <div className="lg:col-span-7 space-y-6">
               <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-amber-900 uppercase">
                 <span className="w-2 h-2 rounded-full bg-amber-700" />
-                <span>Otentik Serambi Mekkah</span>
-                <span aria-hidden="true">·</span>
-                <span>Sejak 2018</span>
+                <span>{landingCfg.hero?.badge || "Otentik Serambi Mekkah"}</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-stone-950 leading-[1.12]">
-                Cita Rasa Rempah Warisan Tanah Rencong.
+                {landingCfg.hero?.title || "Cita Rasa Rempah Warisan Tanah Rencong."}
               </h1>
 
               <p className="text-lg sm:text-xl text-stone-600 max-w-2xl leading-relaxed">
-                Nikmati kehangatan Kuah Beulangong berpadu 16 rempah pilihan, Mie Aceh kenyal berkuah kari pekat, Ayam Tangkap berbalut daun temurui renyah, dan kenikmatan Kopi Sanger Khop khas pesisir.
+                {landingCfg.hero?.subtitle || "Nikmati Kelezatan Mie Aceh Rempah, Nasi Gurih, dan Kopi Ulee Kareng Pilihan dengan Suasana Hangat dan Pelayanan Terbaik."}
               </p>
 
               <div className="pt-2 flex flex-wrap items-center gap-4">
                 <button
                   onClick={() => scrollTo("menu")}
-                  className="px-6 py-3.5 text-sm font-semibold text-white bg-amber-800 rounded-xl hover:bg-amber-900 active:scale-95 transition-all shadow-md flex items-center gap-2"
+                  className="px-6 py-3.5 text-sm font-semibold text-white bg-amber-800 rounded-xl hover:bg-amber-900 active:scale-95 transition-all shadow-md flex items-center gap-2 cursor-pointer"
                 >
                   <UtensilsCrossed className="w-4 h-4" />
-                  <span>Jelajahi Menu Pilihan</span>
+                  <span>{landingCfg.hero?.primary_cta?.text || "Jelajahi Menu Pilihan"}</span>
                 </button>
                 <button
                   onClick={() => scrollTo("reservasi")}
-                  className="px-6 py-3.5 text-sm font-semibold text-stone-800 bg-white border border-stone-300 rounded-xl hover:bg-stone-50 active:scale-95 transition-all shadow-sm flex items-center gap-2"
+                  className="px-6 py-3.5 text-sm font-semibold text-stone-800 bg-white border border-stone-300 rounded-xl hover:bg-stone-50 active:scale-95 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
                 >
                   <CalendarCheck className="w-4 h-4 text-amber-800" />
-                  <span>Reservasi Meja Online</span>
+                  <span>{landingCfg.hero?.secondary_cta?.text || "Reservasi Meja Online"}</span>
                 </button>
               </div>
 
@@ -326,6 +390,26 @@ export default function LandingPage({ defaultSection = "hero" }) {
           </div>
         </div>
       </section>
+
+      {/* ==============================================================
+          STATISTIK TOKO & KEUNGGULAN (Dinamis dari config/settings)
+      ============================================================== */}
+      {(landingCfg.stats?.show_section ?? true) && (
+        <section className="bg-stone-900 text-white py-10 border-y border-stone-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+              {(landingCfg.stats?.items || []).map((item, idx) => (
+                <div key={item.id || idx} className="p-4 rounded-2xl bg-stone-800/60 border border-stone-700/60 space-y-1">
+                  <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono">
+                    {item.value} <span className="text-xs text-stone-300 font-sans font-normal">{item.suffix}</span>
+                  </div>
+                  <div className="text-xs text-stone-300 font-medium">{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ==============================================================
           3. MENU SECTION
@@ -483,6 +567,34 @@ export default function LandingPage({ defaultSection = "hero" }) {
       </section>
 
       {/* ==============================================================
+          BANNER PROMO & PENGUMUMAN (Dinamis dari config/settings)
+      ============================================================== */}
+      {(landingCfg.promo_banner?.enabled ?? true) && (
+        <section className="bg-gradient-to-r from-amber-900 via-rose-950 to-stone-900 text-white py-12 border-y border-amber-800/40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-2 text-center md:text-left">
+              <span className="inline-block px-3 py-1 bg-amber-400 text-stone-950 text-[10px] font-black tracking-widest uppercase rounded-full">
+                {landingCfg.promo_banner?.badge || "PROMO BULAN INI"}
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                {landingCfg.promo_banner?.title || "Diskon 15% Paket Mie Aceh Tumis + Es Kopi Sanger"}
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-300 max-w-2xl">
+                {landingCfg.promo_banner?.subtitle || "Berlaku untuk Dine-in & Takeaway setiap hari Senin - Kamis jam 14:00 - 17:00 WIB."}
+              </p>
+            </div>
+
+            <button
+              onClick={() => scrollTo("menu")}
+              className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-black rounded-xl transition-all shadow-md shrink-0 cursor-pointer"
+            >
+              {landingCfg.promo_banner?.cta_text || "Klaim Kupon Member"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* ==============================================================
           4. ARTICLES & HERITAGE STORIES
           Cultural essays on Acehnese Spices, Coffee & Tradition
       ============================================================== */}
@@ -491,13 +603,13 @@ export default function LandingPage({ defaultSection = "hero" }) {
           {/* Header */}
           <div className="space-y-2 max-w-2xl">
             <span className="text-xs font-bold tracking-widest text-amber-800 uppercase">
-              Kisah & Filosofi Kuliner
+              {landingCfg.articles_header?.badge || "Kisah & Filosofi Kuliner"}
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-stone-950">
-              Cerita di Balik Rempah Tanah Rencong
+              {landingCfg.articles_header?.title || "Cerita di Balik Rempah Tanah Rencong"}
             </h2>
             <p className="text-stone-600 text-sm sm:text-base">
-              Setiap mangkuk masakan dan cangkir kopi menyimpan sejarah panjang persilangan budaya pesisir, tradisi kenduri, dan kearifan masyarakat Aceh.
+              {landingCfg.articles_header?.subtitle || "Setiap mangkuk masakan dan cangkir kopi menyimpan sejarah panjang persilangan budaya pesisir, tradisi kenduri, dan kearifan masyarakat Aceh."}
             </p>
           </div>
 
@@ -556,24 +668,24 @@ export default function LandingPage({ defaultSection = "hero" }) {
                 Pemesanan Meja Mandiri
               </span>
               <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
-                Reservasi Meja Santap Keluarga & Kolega
+                {landingCfg.reservation?.title || "Reservasi Meja Santap Keluarga & Kolega"}
               </h2>
               <p className="text-stone-300 text-sm sm:text-base leading-relaxed">
-                Amankan meja Anda sebelum tiba. Kami menyediakan area santap Indoor Ber-AC yang sejuk, ruang VIP untuk acara tertutup, serta area Lesehan khas Aceh yang akrab.
+                {landingCfg.reservation?.subtitle || "Amankan meja Anda sebelum tiba. Kami menyediakan area santap Indoor Ber-AC, ruang VIP, serta area Lesehan khas Aceh yang akrab."}
               </p>
 
               <div className="space-y-4 pt-4 border-t border-stone-800 text-sm text-stone-300">
                 <div className="flex items-center gap-3">
                   <Clock className="w-5 h-5 text-amber-400 shrink-0" />
-                  <span>Buka Setiap Hari: 08:00 – 23:00 WIB</span>
+                  <span>{landingCfg.contact_info?.opening_hours || "Buka Setiap Hari: 08:00 – 23:00 WIB"}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Phone className="w-5 h-5 text-amber-400 shrink-0" />
-                  <span>WhatsApp Layanan Kasir: 0812-6900-1234</span>
+                  <span>WhatsApp Layanan Kasir: {landingCfg.contact_info?.phone || "0812-6900-1234"}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin className="w-5 h-5 text-amber-400 shrink-0" />
-                  <span>Jl. Teuku Umar No. 12, Banda Aceh</span>
+                  <span>{landingCfg.contact_info?.address || "Jl. T. Nyak Arief No. 88, Syiah Kuala, Banda Aceh"}</span>
                 </div>
               </div>
 

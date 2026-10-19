@@ -1,6 +1,6 @@
 {
-  "summary": "Revised implementation plan to replace all Google Cloud/AI Studio references with VPS Mandiri/Server Utama and enable automatic database updates to VPS alongside Google Drive backups.",
-  "updatedAt": "2026-10-18T18:20:53.932568925Z",
+  "summary": "Rencana Implementasi Dashboard Recharts & Real-Time Sync:\n- Visualisasi Tren Transaksi menggunakan Grafik Garis Ganda (Omzet F&B vs Retail).\n- Visualisasi Menu Terlaris menggunakan Kartu Peringkat dengan Indikator Tren (Naik/Turun).\n- Pembaruan data real-time seketika berbasis Server-Sent Events (SSE) saat transaksi selesai.",
+  "updatedAt": "2026-10-19T09:26:56.198580497Z",
   "requestFeedback": true,
   "userFacing": true
 }

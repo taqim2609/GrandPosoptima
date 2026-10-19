@@ -5,7 +5,7 @@ import {
   Users, Armchair, Sparkles, Trash2, MessageCircle, Printer, Bug, Box,
   SlidersHorizontal, LayoutGrid, Palette, ShieldCheck, LayoutTemplate,
   Activity, Store, DatabaseBackup, KeyRound, Cpu, Radio, ChevronRight,
-  Search, AlertCircle, ArrowLeft, X,
+  Search, AlertCircle, ArrowLeft, X, Globe
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { can } from "@/lib/rbac";
@@ -22,6 +22,7 @@ import SettingsIntegrations from "@/pages/SettingsIntegrations";
 import SettingsCustomWidgets from "@/pages/SettingsCustomWidgets";
 import SettingsPlatform from "@/pages/SettingsPlatform";
 import SettingsUI from "@/pages/SettingsUI";
+import SettingsLandingPage from "@/pages/SettingsLandingPage";
 import SettingsRoles from "@/pages/SettingsRoles";
 import WhatsAppReport from "@/pages/WhatsAppReport";
 import DeviceSettings from "@/pages/DeviceSettings";
@@ -65,6 +66,7 @@ const SETTINGS_GROUPS = [
     icon: Palette,
     items: [
       { id: "identity", label: "Branding & Warna", icon: Palette, comp: SettingsPlatform, mod: "pengaturan", desc: "Nama outlet, logo struk, tagline & palet warna tema POS" },
+      { id: "landing-page", label: "Landing Page", icon: Globe, comp: SettingsLandingPage, mod: "pengaturan", desc: "Kelola konten hero banner, statistik, promo & kontak landing page" },
       { id: "menu", label: "Tata Letak Menu UI", icon: LayoutTemplate, comp: SettingsUI, mod: "pengaturan", desc: "Urutan navigasi menu samping & penyesuaian label" },
     ],
   },
@@ -117,6 +119,9 @@ const ITEM_ALIASES = {
   branding: "identity",
   theme: "identity",
   platform: "identity",
+  "landing-page": "landing-page",
+  landing: "landing-page",
+  landingpage: "landing-page",
   ui: "menu",
   menu: "menu",
   wa: "wa",

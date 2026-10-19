@@ -93,19 +93,51 @@ curl http://localhost:8000/v1/chat/completions \
 
 ---
 
-## 4. Pembuatan Bot Profile Khusus POS di Hermes (*Bot Mode*)
+## 4. Pembuatan Agent Profile `business-analyst` Khusus POS di Hermes (*Bot Mode*)
 
-Dalam Hermes Agent, Anda dapat membuat profil bot khusus restoran untuk kepribadian analisis bisnis:
+Dalam Hermes Agent, profil agent utama yang digunakan untuk analisis eksekutif dan pemantauan kinerja restoran/retail adalah **`business-analyst`**:
 
 ```bash
-# Buat profil bot baru khusus POS
-hermes profile create pos-analyst
+# Buat profil agent baru khusus Business Analyst POS
+hermes profile create business-analyst
 ```
 
-Atur System Prompt profil `pos-analyst` di `~/.hermes/profiles/pos-analyst/prompt.txt`:
-> *"Kamu adalah Asisten Eksekutif Restoran Grand Aceh Kuliner di Banda Aceh. Kamu menguasai analisis penjualan makanan F&B dan produk retail, margin laba kotor, pengelolaan stok bahan dapur (beras, bumbu kari, kopi, daging ayam), serta efisiensi shift kasir."*
+### A. System Prompt `business-analyst` (`~/.hermes/profiles/business-analyst/prompt.txt`)
+> *"Kamu adalah Senior Business Analyst & Operational Auditor untuk Grand Aceh Kuliner POS (F&B Restoran & Retail Kelontong). Tugas utamamu adalah menganalisis omzet penjualan, marjin laba kotor, HPP (COGS), rasio resep bahan dapur, potensi kebocoran stok, audit transaksi void/refund, serta rekonsiliasi kas shift kasir dan pembagian hasil vendor titipan."*
 
-Di **Pengaturan AI** pada POS, isi **Model Name**: `pos-analyst`.
+Di **Pengaturan AI** pada POS (`/settings-ai`), isi **Model Name**: `business-analyst`.
+
+### B. Skill Khusus yang Dibutuhkan (`business-analyst`)
+1. **`fnb-retail-analytics`**: Memahami pembagian transaksi F&B (dine-in/take-away) dan Retail, perhitungan timbangan per berat (ons/kg), serta skala HPP & margin proporsional.
+2. **`financial-reconciliation`**: Mengaudit uang bersih shift (`net_cash_fnb = fnb_total - out_fnb`, `net_cash_retail = retail_total - out_retail`), diskon, serta selisih kas fisik.
+3. **`vendor-settlement-audit`**: Mengaudit dokumen `vendor_settlements` (`source="shift_close"`) dan arus kas kategori "Bagi Hasil Vendor".
+4. **`mcp-pos-data-query`**: Mengakses endpoint data real-time via REST API / MCP Server (`http://127.0.0.1:8000` / `http://127.0.0.1:8001/sse`).
+
+### C. Tools & MCP Capabilities yang Dibutuhkan (`business-analyst`)
+- **`get_sales_report(start_date, end_date, category)`**: Mengambil laporan penjualan, omzet kotor/bersih, dan item terlaris.
+- **`get_cogs_and_margin_analysis()`**: Menganalisis HPP resep F&B dan marjin laba kotor produk.
+- **`get_inventory_health()`**: Memantau stok bahan dapur, alert batas minimum, dan resep bahan baku.
+- **`get_void_refund_audit()`**: Mengaudit transaksi void, refund, dan diskon yang melebihi ambang batas bisnis.
+- **`get_shift_reconciliation(shift_id)`**: Memeriksa laporan penutupan shift, selisih kas, dan bagi hasil vendor titipan.
+- **`get_whatsapp_report_summary()`**: Menggenerasi dan memicu pengiriman ringkasan eksekutif ke WhatsApp Owner via Hermes Gateway.
+- **`manage_articles_and_stories(action, payload)`**: Kelola Artikel & Cerita Kuliner Aceh (CRUD, filter kategori, publikasi otomatis, dan AI auto-generasi narasi resep/budaya) via `/api/agent/articles`.
+
+---
+
+## 4.1 Endpoint REST API Kelola Artikel & Cerita Kuliner Aceh (Hermes Agent)
+
+Hermes Agent dapat langsung membaca, menambah, memperbarui, mempublikasikan, dan menggenerasi artikel/cerita warisan kuliner Aceh untuk ditampilkan di Landing Page publik:
+
+| Method | Endpoint | Deskripsi Fungsi |
+| :--- | :--- | :--- |
+| `GET` | `/api/agent/articles` | Mengambil daftar seluruh artikel dengan filter kategori, status (`published`/`draft`), dan kata kunci pencarian. |
+| `GET` | `/api/agent/articles/categories` | Mengambil daftar kategori cerita kuliner khas Aceh. |
+| `GET` | `/api/agent/articles/stats` | Statistik total artikel, status publikasi, dan draf. |
+| `GET` | `/api/agent/articles/:idOrSlug` | Mengambil rincian artikel berdasarkan ID atau slug. |
+| `POST` | `/api/agent/articles` | Membuat artikel/cerita baru (otomatis membuat slug & estimasi waktu baca). |
+| `PUT` | `/api/agent/articles/:id` | Memperbarui judul, narasi, kategori, atau status publikasi artikel. |
+| `DELETE` | `/api/agent/articles/:id` | Menghapus artikel dari repositori. |
+| `POST` | `/api/agent/articles/generate` | Generasi otomatis narasi artikel kuliner Aceh berkualitas tinggi menggunakan AI berdasarkan topik. |
 
 ---
 

@@ -39,7 +39,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         status: "online",
         latency_ms: 1,
         rating: "Aktif Melayani UI Kasir",
-        endpoint: "http://pos.local:3000 (Port 3000)",
+        endpoint: "http://grandpos.local:3000 (Port 3000)",
         database: "IndexedDB Lokal (Offline-First Cache)",
         features: [
           "Melayani tampilan UI web kasir, dapur, dan manajemen",

@@ -13,13 +13,13 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
   // Deteksi otomatis URL server kasir jika sedang dibuka lewat IP lokal / Tailscale
   const detectedPiUrl = typeof window !== "undefined" && !window.location.hostname.includes("run.app") && !window.location.hostname.includes("google")
     ? window.location.origin
-    : "http://pos.local:3000";
+    : "http://grandpos.local:3000";
 
   // Daftar Node Standar Multi-Node (Kasir LAN Toko, VPS Tailscale, Cloud Pusat)
   const NODE_OPTIONS = [
     {
       id: "frontend_app_server",
-      url: "http://pos.local:3000",
+      url: "http://grandpos.local:3000",
       altUrl: "http://localhost:3000",
       title: "Server Frontend & POS App (UI Web Kasir)",
       subtitle: "Port 3000 (UI Web, Offline Cache, Struk Sunmi)",

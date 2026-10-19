@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-19 07:10:48 WIB`
-> Total Berkas Terindeks: **637 berkas**
+> Terakhir diperbarui: `2026-10-19 18:41:16 WIB`
+> Total Berkas Terindeks: **643 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -27,7 +27,7 @@ python3 project/scripts/update_file_index.py
 | **Dokumentasi Teknis** | `14` | Modul dokumentasi teknis sistem POS |
 | **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `258` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `264` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -467,7 +467,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (258 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (264 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -477,6 +477,7 @@ python3 project/scripts/update_file_index.py
 | `INDEX-BERKAS.md` | Buku besar indeks katalog seluruh berkas dalam proyek. |
 | `PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md` | Berkas konfigurasi/data: PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md. |
 | `PANDUAN-HERMES-AGENT.md` | Panduan resmi integrasi Hermes Agent (Nous Research) untuk AI Brain & WA Gateway. |
+| `PANDUAN-INSTALASI-LENGKAP.md` | Berkas konfigurasi/data: PANDUAN-INSTALASI-LENGKAP.md. |
 | `README.md` | Berkas konfigurasi/data: README.md. |
 | `api-server.js` | Berkas konfigurasi/data: api-server.js. |
 | `capacitor.config.json` | Berkas konfigurasi/data: capacitor.config.json. |
@@ -580,6 +581,7 @@ python3 project/scripts/update_file_index.py
 | `src/components/ForceChangePassword.jsx` | Berkas konfigurasi/data: ForceChangePassword.jsx. |
 | `src/components/GDriveBackupManager.jsx` | Berkas konfigurasi/data: GDriveBackupManager.jsx. |
 | `src/components/GlobalErrorDiagnosticPanel.jsx` | Berkas konfigurasi/data: GlobalErrorDiagnosticPanel.jsx. |
+| `src/components/GoogleSearchPreview.jsx` | Berkas konfigurasi/data: GoogleSearchPreview.jsx. |
 | `src/components/HybridSyncDiagnosticPanel.jsx` | Berkas konfigurasi/data: HybridSyncDiagnosticPanel.jsx. |
 | `src/components/Layout.jsx` | Berkas konfigurasi/data: Layout.jsx. |
 | `src/components/LazyProductImage.jsx` | Berkas konfigurasi/data: LazyProductImage.jsx. |
@@ -649,6 +651,7 @@ python3 project/scripts/update_file_index.py
 | `src/components/ui/toggle-group.jsx` | Berkas konfigurasi/data: toggle-group.jsx. |
 | `src/components/ui/toggle.jsx` | Berkas konfigurasi/data: toggle.jsx. |
 | `src/components/ui/tooltip.jsx` | Berkas konfigurasi/data: tooltip.jsx. |
+| `src/config/landing-page.config.js` | Berkas konfigurasi/data: landing-page.config.js. |
 | `src/constants/testIds/auth.js` | Berkas konfigurasi/data: auth.js. |
 | `src/constants/testIds/home.js` | Berkas konfigurasi/data: home.js. |
 | `src/constants/testIds/index.js` | Berkas konfigurasi/data: index.js. |
@@ -668,6 +671,7 @@ python3 project/scripts/update_file_index.py
 | `src/lib/format.js` | Berkas konfigurasi/data: format.js. |
 | `src/lib/gdrive.js` | Berkas konfigurasi/data: gdrive.js. |
 | `src/lib/installers.js` | Berkas konfigurasi/data: installers.js. |
+| `src/lib/landing.js` | Berkas konfigurasi/data: landing.js. |
 | `src/lib/navItems.js` | Berkas konfigurasi/data: navItems.js. |
 | `src/lib/offlineQueue.js` | Berkas konfigurasi/data: offlineQueue.js. |
 | `src/lib/offlineQueue.test.js` | Berkas konfigurasi/data: offlineQueue.test.js. |
@@ -712,6 +716,7 @@ python3 project/scripts/update_file_index.py
 | `src/pages/SettingsData.jsx` | Berkas konfigurasi/data: SettingsData.jsx. |
 | `src/pages/SettingsInstaller.jsx` | Berkas konfigurasi/data: SettingsInstaller.jsx. |
 | `src/pages/SettingsIntegrations.jsx` | Berkas konfigurasi/data: SettingsIntegrations.jsx. |
+| `src/pages/SettingsLandingPage.jsx` | Berkas konfigurasi/data: SettingsLandingPage.jsx. |
 | `src/pages/SettingsPlatform.jsx` | Berkas konfigurasi/data: SettingsPlatform.jsx. |
 | `src/pages/SettingsReport.jsx` | Berkas konfigurasi/data: SettingsReport.jsx. |
 | `src/pages/SettingsRoles.jsx` | Berkas konfigurasi/data: SettingsRoles.jsx. |
@@ -726,6 +731,7 @@ python3 project/scripts/update_file_index.py
 | `src/pages/VoidRefund.jsx` | Berkas konfigurasi/data: VoidRefund.jsx. |
 | `src/pages/WhatsApp.jsx` | Berkas konfigurasi/data: WhatsApp.jsx. |
 | `src/pages/WhatsAppReport.jsx` | Berkas konfigurasi/data: WhatsAppReport.jsx. |
+| `src/services/landingService.js` | Berkas konfigurasi/data: landingService.js. |
 | `tailwind.config.js` | Berkas konfigurasi/data: tailwind.config.js. |
 | `tsconfig.json` | Berkas konfigurasi/data: tsconfig.json. |
 | `vite.config.mjs` | Berkas konfigurasi/data: vite.config.mjs. |

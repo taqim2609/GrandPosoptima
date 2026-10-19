@@ -6,7 +6,7 @@ export const SERVER_PRESETS = [
     id: "frontend_app_server",
     name: "Server Frontend & POS App (UI Web Kasir)",
     subname: "Port 3000 (Vite / React SPA / Local Engine)",
-    defaultUrl: "http://pos.local:3000",
+    defaultUrl: "http://grandpos.local:3000",
     badge: "Frontend & UI App",
     badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
     description: "Server khusus menyajikan Antarmuka Web Kasir (Frontend SPA), PWA, dan Offline-First Queue (Tanpa DB Utama).",

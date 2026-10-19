@@ -1,88 +1,104 @@
-# Rebrand Google Cloud / AI Studio to VPS Mandiri & Auto Database Sync
+# Dashboard POS Kasir & Visualisasi Data Real-Time Recharts
 
-Completely eliminate all user-facing and backend references to Google Cloud and Google AI Studio across the entire codebase, replacing them with **VPS Mandiri** / **Server Utama (Lokal/Cloud VPS)**. Enable automatic database sync and backup updates to the VPS database alongside the confirmed Google Drive backup integration.
+Mengembangkan dan memperbarui halaman Dashboard POS Kasir dengan integrasi **Recharts** untuk visualisasi tren transaksi F&B vs Retail, kartu peringkat menu terlaris dengan indikator tren naik/turun, serta pembaruan data real-time berbasis Server-Sent Events (SSE).
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following updated requirements incorporate the latest user revision requests:
+> Keputusan desain dan fitur utama yang telah dikonfirmasi oleh pengguna pada Phase 1:
 
-- **Decision 1 (Complete Terminology Cleansing)**: Remove all remaining occurrences of "Google Cloud" and "Google AI Studio" in both frontend components (`SettingsInstaller`, `AssistantAI`, `WhatsApp`, `Diagnostik`, `Login`, `Dashboard`, `lib/installers`) and backend responses (`api-server.js`). Replace with "Server VPS Mandiri" or "Server Utama".
-- **Decision 2 (VPS Automatic Database Sync)**: Configure auto-sync and backup triggers so database updates are automatically dispatched to the VPS server database (`/api/backup/send-to-vps` / VPS Primary Node sync) upon shift close and scheduled backups.
-- **Decision 3 (Google Drive Retention)**: Retain Google Drive backup options (`GDriveBackupManager`), allowing store owners to maintain both VPS automatic database sync and Google Drive cloud archives.
+- **Tren Transaksi**: **Grafik Garis Ganda** yang memisahkan omzet F&B dan Retail per rentang jam operasional secara visual dan interaktif.
+- **Visualisasi Menu Terlaris**: **Kartu Visual Peringkat** dilengkapi dengan indikator tren (naik, turun, stabil), lencana peringkat, porsi terjual, dan kontribusi omzet.
+- **Pembaruan Data Real-Time**: **Otomatis via SSE Stream (`/api/system/sync/stream`)** yang langsung memperbarui dataset chart dan kartu statistik seketika saat transaksi baru masuk, dilengkapi efek pulsa (*pulse indicator*).
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: Rebrands the entire update center, diagnostic tools, login server selectors, and installer scripts from Google Cloud / AI Studio to VPS Mandiri / Server Utama. Connects automated database sync directly to the user's VPS database.
-- **Target Audience / Persona**: POS administrators, cashiers, and store managers operating on local PC or Raspberry Pi connected to a dedicated VPS Server.
-- **Key Value**: Delivers a seamless, self-hosted POS experience with clean terminology and dual redundancy (VPS Auto-Sync + Google Drive Backup).
+- **Tujuan Utama**: Memberikan gambaran bisnis real-time dan analitik visual yang responsif bagi kasir, manajer, dan owner restoran/toko dalam memantau penjualan harian, performa menu, dan arus transaksi F&B & Retail.
+- **Target Pengguna**: Kasir POS, Supervisor Outlet, Admin Operasional, dan Owner Restoran.
+- **Nilai Tambah**: Pengambil keputusan dapat mengidentifikasi jam sibuk, perbandingan omzet F&B vs Retail, serta menu terfavorit secara instan tanpa perlu memuat ulang (*refresh*) halaman secara manual.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-- **Key User Flows**:
-  1. **Settings / Installer**: Header changed to "Pusat Update Server VPS Mandiri", removing AI Studio badges. Scripts rebranded to VPS & Raspberry Pi node installers.
-  2. **Automatic Database Sync**: Shift close & manual backup actions show progress: *"Mengirim update database ke VPS Mandiri & Google Drive..."*
-  3. **Diagnostics & Health Panel**: Server health benchmarks rebranded to "Node Kasir LAN" vs "Server VPS Utama".
-  4. **Login Server Selector**: Display mode labels changed from "Google Cloud" to "Server VPS Utama (Internet)".
+- **Alur Pengguna**:
+  1. Pengguna membuka Dashboard (`/dashboard`) dan langsung disambut oleh ringkasan KPI (Omzet Hari Ini, Total Transaksi, Meja Terisi, dan Alert Stok Menipis).
+  2. Bagian utama menampilkan **Grafik Garis Ganda Recharts** (omzet F&B vs Retail per jam) dengan tooltip kustom dalam format Rupiah.
+  3. Bagian kanan/samping menampilkan **Kartu Peringkat Menu Terlaris** dengan lencana porsi, ikon tren (naik/turun), dan persentase kontribusi.
+  4. Ketika ada transaksi baru yang diselesaikan di kasir, stream SSE memicu efek pulsa hijau ("Live Sync") dan grafik/kartu memperbarui nilainya secara halus (*smooth animation*).
 
 - **Visual Identity & Theme**:
-  - *Palette*: Emerald (`#10B981`), Indigo (`#4F46E5`), Red (`#E63946`), Slate (`#0F172A`).
-  - *Typography*: Clean Sans-serif with monospace tabular numerals for version, IP, and sync logs.
+  - *Gaya Visual*: Clean, modern, high-contrast F&B cashier dashboard.
+  - *Skema Warna*:
+    - **F&B Omset**: Merah Khas Grand Aceh (`#E63946` / Crimson Red).
+    - **Retail Omset**: Biru Khas Retail (`#2563EB` / Royal Blue).
+    - **Latar & Kartu**: Neutral White (`#FFFFFF`) dengan border halus (`#E4E4E7`) dan aksen hijau real-time (`#10B981`).
+  - *Tipografi*: Font Sans-Serif tebal untuk angka nominal Rupiah (Font Numeral Monospace/Bold) dan Sans-Serif bersih untuk label.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Direct VPS Auto-Sync Endpoint**:
-  - *Chosen Approach*: Update `/api/backup/send-to-cloud` route alias to `/api/backup/send-to-vps` and wire it to dispatch database snapshots to the configured VPS host.
-  - *Why*: Satisfies "otomatis update ke database di vps juga" without breaking existing button handler bindings.
-- **Decision 2: Comprehensive Codebase Audit**:
-  - *Chosen Approach*: Systematically update string references across `src/pages/`, `src/lib/`, and `api-server.js` in a single coherent pass.
-  - *Why*: Ensures zero residual Google Cloud/AI Studio references remain anywhere in the app UI or system logs.
+1. **Recharts sebagai Library Visualisasi**:
+   - *Pilihan*: Menggunakan Recharts (`ResponsiveContainer`, `LineChart`, `Line`, `XAxis`, `YAxis`, `Tooltip`, `CartesianGrid`).
+   - *Alasan*: Kompatibel penuh dengan React 19, mendukung rendering SVG yang tajam pada layar sentuh Sunmi/POS, dan hemat memori.
+
+2. **Gaya Komponen Menu Terlaris (Kartu Visual vs Chart)**:
+   - *Pilihan*: Kartu Visual Peringkat dengan Indikator Tren (sesuai pilihan pengguna).
+   - *Alasan*: Lebih mudah dibaca dalam waktu singkat oleh kasir dibanding chart lingkaran yang rumit saat transaksi ramai.
+
+3. **Mekanisme Real-Time SSE Stream**:
+   - *Pilihan*: Memanfaatkan endpoint SSE bawaan (`/api/system/sync/stream`) yang sudah ada di backend.
+   - *Alasan*: Bebas overhead polling HTTP, lebih irit daya pada perangkat POS Android/Raspberry Pi, dan langsung bereaksi saat event `order_created` dipancarkan.
 
 ---
 
 ## 4. Technical Architecture & Data Strategy
 
+### System & Event Flow Diagram
+
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          Grand Aceh Kuliner POS                         │
-├───────────────────────────────────┬─────────────────────────────────────┤
-│         Frontend (React 19)       │          FastAPI Backend            │
-│  - SettingsInstaller.jsx          │  - /api/backup/send-to-vps          │
-│  - AssistantAI.jsx                │  - /api/backup/gdrive               │
-│  - WhatsApp.jsx                   │  - /api/diagnostik & /api/health    │
-│  - Diagnostik.jsx & Login.jsx     │  - /api/version & /api/installers   │
-└─────────────────┬─────────────────┴──────────────────┬──────────────────┘
-                  │                                    │
-                  ▼                                    ▼
-       ┌─────────────────────┐              ┌─────────────────────┐
-       │ Google Drive API    │              │ VPS Mandiri Database│
-       │ (Cloud Archive)     │              │ (Primary Node Sync) │
-       └─────────────────────┘              └─────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│           Kasir POS / Pelanggan Web / Mobile           │
+│                 (Transaksi Baru Selesai)               │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│            Backend Express API (`/api/orders`)         │
+│  - Menyimpan transaksi & broadcast real-time SSE event │
+└───────────────────────────┬────────────────────────────┘
+                            │
+              (SSE Event: `order_created`)
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│         Dashboard Frontend (`Dashboard.jsx`)           │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ 1. KPI Cards (Total Omzet, Transaksi, Meja, Stok)│  │
+│  ├──────────────────────────────────────────────────┤  │
+│  │ 2. Dual Line Chart Recharts (F&B vs Retail)     │  │
+│  ├──────────────────────────────────────────────────┤  │
+│  │ 3. Kartu Rank Menu Terlaris (Tren Naik/Turun)    │  │
+│  └──────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────┘
 ```
 
-### Summary of Targeted File Changes:
+### Pemetaan Komponen & State Management
 
-1. **`api-server.js`**:
-   - Rebrand server status messages, benchmark labels, and system health responses ("Google Cloud" -> "Server VPS Utama").
-   - Update backup route `/api/backup/send-to-cloud` message to `"Backup database berhasil disinkronkan ke Server VPS Mandiri"`.
-2. **`src/pages/SettingsInstaller.jsx`**:
-   - Update header title to "Pusat Update Server VPS Mandiri".
-   - Rename buttons from "Kirim Backup ke Google AI Studio" to "Sync Database ke Server VPS Mandiri".
-   - Update installation guide descriptions to refer to VPS server deployment.
-3. **`src/pages/AssistantAI.jsx`**:
-   - Rename feature request modal title to "Usulkan Fitur untuk Server POS Mandiri".
-   - Update toast messages to reference Server VPS.
-4. **`src/pages/WhatsApp.jsx`**:
-   - Update Hermes sync card header & description: "Jalur Sinkronisasi Hermes (Server VPS Utama ↔ Raspberry Pi Toko)".
-5. **`src/pages/Diagnostik.jsx`**:
-   - Rebrand latency and speed test cards to "Server VPS Utama".
-6. **`src/pages/Login.jsx` & `src/lib/api.js`**:
-   - Update offline server warning messages to reference "Server VPS Mandiri".
-7. **`src/lib/installers.js` & `src/lib/diag.js`**:
-   - Rebrand installer shell scripts to "Pusat Update Server VPS Mandiri".
+- **`Dashboard.jsx`**: Main view container yang mendengarkan SSE stream dan mengambil statistik `/api/dashboard` & `/api/reports/range`.
+- **`DashboardCharts.jsx`**: Komponen khusus grafik Recharts yang merender:
+  - `LineChart`: Garis F&B (`#E63946`) & Garis Retail (`#2563EB`).
+  - Kustom Tooltip untuk pemformatan Rupiah instan (`rupiah(...)`).
+- **`TopProductsRankCards.jsx`**: Komponen rendering kartu peringkat menu terlaris dengan lencana `#1`, `#2`, `#3`, persentase, dan indikator tren naik/turun.
+
+---
+
+## Plan Execution Checklist
+
+- [ ] Integrasikan `recharts` pada `DashboardCharts.jsx` dengan tipe grafik Garis Ganda (F&B vs Retail).
+- [ ] Buat komponen Kartu Peringkat Menu Terlaris dengan indikator tren naik/turun dan lencana porsi.
+- [ ] Sambungkan listener SSE `/api/system/sync/stream` untuk memperbarui data dashboard secara real-time saat transaksi selesai.
+- [ ] Jalankan pengujian `compile_applet` dan verifikasi visualisasi data.

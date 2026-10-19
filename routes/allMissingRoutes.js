@@ -62,6 +62,9 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync) {
       layout: 'default',
     };
   }
+  if (!db.landingPageConfig) {
+    db.landingPageConfig = {};
+  }
 
   // ==========================================
   // 1. POS / Orders Endpoints
@@ -1522,6 +1525,19 @@ Terima kasih atas kerja keras hari ini!
   app.put(['/api/settings/dashboard', '/settings/dashboard'], (req, res) => {
     Object.assign(db.dashboardConfig, req.body);
     res.json(db.dashboardConfig);
+  });
+
+  // GET & POST /api/settings/landing-page
+  app.get(['/api/settings/landing-page', '/settings/landing-page'], (req, res) => {
+    res.json(db.landingPageConfig || {});
+  });
+
+  app.post(['/api/settings/landing-page', '/settings/landing-page'], (req, res) => {
+    db.landingPageConfig = req.body || {};
+    if (typeof broadcastRealtimeSync === 'function') {
+      broadcastRealtimeSync('landing_config_updated', db.landingPageConfig);
+    }
+    res.json({ ok: true, data: db.landingPageConfig });
   });
 
   // GET, PUT, POST test /api/settings/webhook

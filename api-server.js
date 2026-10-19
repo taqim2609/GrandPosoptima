@@ -375,8 +375,17 @@ app.use((req, res, next) => {
       return next();
     }
 
-    // Serves public landing page endpoints, uploads, or static asset resources
-    if (cleanPath.startsWith('/api/public') || cleanPath.startsWith('/api/uploads') || cleanPath.startsWith('/api/static')) {
+    // Serves public landing page endpoints, uploads, agent endpoints, or static asset resources
+    if (
+      cleanPath.startsWith('/api/public') ||
+      cleanPath.startsWith('/api/uploads') ||
+      cleanPath.startsWith('/api/static') ||
+      cleanPath.startsWith('/api/agent') ||
+      cleanPath.startsWith('/api/hermes')
+    ) {
+      if (!req.user) {
+        req.user = formatUser(db.users[0]); // Assign superadmin context for agent API executions
+      }
       return next();
     }
 
@@ -3485,6 +3494,46 @@ app.post('/api/reservations', async (req, res) => {
   res.json(r);
 });
 
+app.post(['/api/reservations/:id/send-wa', '/reservations/:id/send-wa'], async (req, res) => {
+  const reservationId = req.params.id;
+  const resObj = (db.reservations || []).find((r) => r.id === reservationId);
+  if (!resObj) {
+    return res.status(404).json({ detail: 'Reservasi tidak ditemukan' });
+  }
+
+  const phone = resObj.phone || resObj.customer_phone || req.body.phone;
+  if (!phone) {
+    return res.status(400).json({ detail: 'Nomor WhatsApp pemesan belum terdaftar pada reservasi ini' });
+  }
+
+  const defaultMsg =
+    `*KONFIRMASI RESERVASI — Grand Aceh Kuliner*\n\n` +
+    `Halo Kak *${resObj.customer_name || resObj.name || 'Tamu'}*,\n` +
+    `Reservasi meja Anda telah dikonfirmasi oleh tim kasir kami:\n\n` +
+    `🔖 *ID Booking:* ${resObj.booking_code || resObj.id}\n` +
+    `📅 *Tanggal:* ${resObj.date}\n` +
+    `⏰ *Waktu:* ${resObj.time} WIB\n` +
+    `🪑 *Meja:* ${resObj.table_name || 'Meja Reguler'}\n` +
+    `👥 *Kapasitas:* ${resObj.pax || resObj.guest_count || 2} Orang\n` +
+    `📝 *Catatan:* ${resObj.note || resObj.notes || '-'}\n\n` +
+    `Tunjukkan pesan ini kepada kasir saat tiba di restoran. Terima kasih atas kunjungan Anda! 😊🙏`;
+
+  const customText = req.body.message || defaultMsg;
+
+  try {
+    const result = await sendWhatsAppMessage(phone, customText);
+    if (result.ok) {
+      resObj.wa_confirmed = true;
+      resObj.wa_confirmed_at = new Date().toISOString();
+      res.json({ ok: true, message: 'Konfirmasi WhatsApp berhasil dikirim ke ' + phone, result });
+    } else {
+      res.status(500).json({ detail: 'Gagal mengirim WhatsApp: ' + (result.error || 'Unknown error') });
+    }
+  } catch (err) {
+    res.status(500).json({ detail: 'Error pengiriman WhatsApp: ' + err.message });
+  }
+});
+
 // ==========================================
 // 10b. Public Landing Page & Article Endpoints
 // ==========================================
@@ -3656,6 +3705,258 @@ app.delete('/api/articles/:id', requireAdmin, (req, res) => {
 
   db.articles.splice(idx, 1);
   res.json({ ok: true });
+});
+
+// ==========================================
+// Hermes Agent — Kelola Artikel & Cerita Kuliner Aceh API Suite
+// ==========================================
+
+// 1. GET /api/agent/articles & /api/hermes/articles — List & filter artikel untuk Hermes Agent
+app.get(['/api/agent/articles', '/api/hermes/articles', '/api/agent/cerita', '/api/hermes/cerita'], (req, res) => {
+  const { category, status, search, limit = 50, offset = 0 } = req.query;
+  let list = db.articles || [];
+
+  if (category) {
+    list = list.filter(a => (a.category || '').toLowerCase() === String(category).toLowerCase());
+  }
+  if (status) {
+    list = list.filter(a => (a.status || 'published').toLowerCase() === String(status).toLowerCase());
+  }
+  if (search) {
+    const q = String(search).toLowerCase();
+    list = list.filter(a =>
+      (a.title || '').toLowerCase().includes(q) ||
+      (a.excerpt || '').toLowerCase().includes(q) ||
+      (a.content || '').toLowerCase().includes(q)
+    );
+  }
+
+  const total = list.length;
+  const paged = list.slice(parseInt(offset, 10) || 0, (parseInt(offset, 10) || 0) + (parseInt(limit, 10) || 50));
+
+  res.json({
+    ok: true,
+    agent_status: 'ready',
+    total,
+    count: paged.length,
+    categories: ['Filosofi Rempah', 'Tradisi Kopi', 'Resep Warisan', 'Kuliner Otentik', 'Sejarah & Budaya', 'Oleh-oleh & Snack'],
+    articles: paged,
+  });
+});
+
+// 2. GET /api/agent/articles/categories / /api/hermes/articles/categories
+app.get(['/api/agent/articles/categories', '/api/hermes/articles/categories'], (req, res) => {
+  const categories = Array.from(new Set((db.articles || []).map(a => a.category).concat([
+    'Filosofi Rempah', 'Tradisi Kopi', 'Resep Warisan', 'Kuliner Otentik', 'Sejarah & Budaya', 'Oleh-oleh & Snack'
+  ])));
+  res.json({
+    ok: true,
+    categories,
+  });
+});
+
+// 3. GET /api/agent/articles/stats / /api/hermes/articles/stats
+app.get(['/api/agent/articles/stats', '/api/hermes/articles/stats'], (req, res) => {
+  const list = db.articles || [];
+  const published = list.filter(a => a.status === 'published').length;
+  const draft = list.filter(a => a.status === 'draft').length;
+  const categoriesCount = new Set(list.map(a => a.category)).size;
+
+  res.json({
+    ok: true,
+    stats: {
+      total_articles: list.length,
+      published,
+      draft,
+      categories_count: categoriesCount,
+      latest_article: list[0] || null,
+    }
+  });
+});
+
+// 4. GET /api/agent/articles/:idOrSlug
+app.get(['/api/agent/articles/:idOrSlug', '/api/hermes/articles/:idOrSlug'], (req, res) => {
+  const param = req.params.idOrSlug;
+  const article = (db.articles || []).find(a => a.id === param || a.slug === param);
+  if (!article) {
+    return res.status(404).json({ ok: false, detail: 'Artikel atau Cerita Kuliner Aceh tidak ditemukan' });
+  }
+  res.json({ ok: true, article });
+});
+
+// 5. POST /api/agent/articles — Buat Artikel Baru dari Hermes Agent
+app.post(['/api/agent/articles', '/api/hermes/articles', '/api/agent/cerita', '/api/hermes/cerita'], (req, res) => {
+  const { title, category, excerpt, content, cover_image, author, read_time, status } = req.body || {};
+  if (!title || !String(title).trim()) {
+    return res.status(400).json({ ok: false, detail: 'Judul artikel wajib diisi oleh Hermes Agent' });
+  }
+
+  const slug = String(title).toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '') || ('art-' + Date.now());
+
+  const wordCount = (content || '').split(/\s+/).filter(Boolean).length;
+  const calculatedReadTime = read_time || `${Math.max(1, Math.ceil(wordCount / 180))} menit baca`;
+
+  const newArt = {
+    id: 'art-' + Date.now(),
+    title: String(title).trim(),
+    slug,
+    category: category || 'Kuliner Otentik',
+    excerpt: excerpt || (content ? String(content).slice(0, 160) + '...' : ''),
+    content: content || '',
+    cover_image: cover_image || '',
+    author: author || 'Hermes Cultural Agent',
+    read_time: calculatedReadTime,
+    status: status === 'draft' ? 'draft' : 'published',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    created_by_agent: true,
+  };
+
+  db.articles = db.articles || [];
+  db.articles.unshift(newArt);
+
+  res.status(201).json({
+    ok: true,
+    message: `Artikel "${newArt.title}" berhasil dibuat dan disimpan`,
+    article: newArt,
+  });
+});
+
+// 6. PUT /api/agent/articles/:id — Update Artikel dari Hermes Agent
+app.put(['/api/agent/articles/:id', '/api/hermes/articles/:id'], (req, res) => {
+  const art = (db.articles || []).find(a => a.id === req.params.id || a.slug === req.params.id);
+  if (!art) {
+    return res.status(404).json({ ok: false, detail: 'Artikel tidak ditemukan' });
+  }
+
+  const { title, category, excerpt, content, cover_image, author, read_time, status } = req.body || {};
+
+  if (title) {
+    art.title = String(title).trim();
+    art.slug = art.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+  }
+  if (category) art.category = category;
+  if (excerpt !== undefined) art.excerpt = excerpt;
+  if (content !== undefined) art.content = content;
+  if (cover_image !== undefined) art.cover_image = cover_image;
+  if (author !== undefined) art.author = author;
+  if (read_time) art.read_time = read_time;
+  if (status) art.status = status;
+  art.updated_at = new Date().toISOString();
+  art.updated_by_agent = true;
+
+  res.json({
+    ok: true,
+    message: `Artikel "${art.title}" berhasil diperbarui`,
+    article: art,
+  });
+});
+
+// 7. DELETE /api/agent/articles/:id — Hapus Artikel dari Hermes Agent
+app.delete(['/api/agent/articles/:id', '/api/hermes/articles/:id'], (req, res) => {
+  const idx = (db.articles || []).findIndex(a => a.id === req.params.id || a.slug === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ ok: false, detail: 'Artikel tidak ditemukan' });
+  }
+
+  const [deleted] = db.articles.splice(idx, 1);
+  res.json({
+    ok: true,
+    message: `Artikel "${deleted.title}" berhasil dihapus`,
+    deleted,
+  });
+});
+
+// 8. POST /api/agent/articles/generate — AI Auto-Generasi Cerita Kuliner Aceh oleh Hermes Agent
+app.post(['/api/agent/articles/generate', '/api/hermes/articles/generate'], async (req, res) => {
+  const { topic, category, auto_save = true, status = 'published' } = req.body || {};
+  if (!topic || !String(topic).trim()) {
+    return res.status(400).json({ ok: false, detail: 'Topik cerita/artikel kuliner Aceh wajib diisi' });
+  }
+
+  let generatedArticle = null;
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { GoogleGenAI } = require('@google/genai');
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const prompt = `Anda adalah penulis esai warisan kuliner dan budaya Aceh terkemuka untuk restoran Grand Aceh Kuliner.
+Tulis artikel/cerita kuliner mendalam dan memikat tentang topik berikut:
+Topik: "${topic}"
+Kategori Target: "${category || 'Kuliner Otentik'}"
+
+Format Output Wajib JSON murni tanpa markdown:
+{
+  "title": "Judul Artikel Menarik (5-10 kata)",
+  "category": "${category || 'Kuliner Otentik'}",
+  "excerpt": "Ringkasan memikat 1-2 kalimat (100-160 karakter)",
+  "content": "Isi narasi cerita lengkap 3-5 paragraf mendalam dengan sejarah, keunikan bumbu rempah, dan filosofi penyajian.",
+  "author": "Hermes Cultural Agent",
+  "read_time": "4 menit baca"
+}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
+
+      const rawJson = (response.text || '').replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(rawJson);
+      if (parsed.title && parsed.content) {
+        generatedArticle = parsed;
+      }
+    } catch (err) {
+      console.warn('[Hermes Article Generator AI Error]:', err.message);
+    }
+  }
+
+  if (!generatedArticle) {
+    const title = `Kearifan & Kelezatan Warisan: ${topic}`;
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    const content = `Kuliner Aceh tidak sekadar memanjakan lidah, melainkan menyimpan jejak sejarah panjang perdagangan maritim Nusantara.\n\nSajikan ${topic} mengombinasikan racikan rempah sangrai khas Tanah Rencong dengan teknik masak tradisional secara perlahan. Keharmonisan rasa gurih, pedas, dan aromatik menjadi ciri khas warisan masakan yang senantiasa dijaga keasliannya di Grand Aceh Kuliner.\n\nNikmati kehangatan sajian otentik ini bersama keluarga dan kerabat di outlet kami.`;
+
+    generatedArticle = {
+      title,
+      category: category || 'Kuliner Otentik',
+      excerpt: `Menelusuri riwayat dan filosofi kelezatan otentik ${topic} khas Tanah Rencong.`,
+      content,
+      author: 'Hermes Cultural Agent',
+      read_time: '3 menit baca',
+    };
+  }
+
+  const slug = generatedArticle.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+  const articleObj = {
+    id: 'art-' + Date.now(),
+    title: generatedArticle.title,
+    slug,
+    category: generatedArticle.category || category || 'Kuliner Otentik',
+    excerpt: generatedArticle.excerpt || '',
+    content: generatedArticle.content || '',
+    cover_image: '',
+    author: generatedArticle.author || 'Hermes Agent',
+    read_time: generatedArticle.read_time || '3 menit baca',
+    status: status === 'draft' ? 'draft' : 'published',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    generated_by_ai: true,
+  };
+
+  if (auto_save) {
+    db.articles = db.articles || [];
+    db.articles.unshift(articleObj);
+  }
+
+  res.json({
+    ok: true,
+    saved: Boolean(auto_save),
+    message: auto_save
+      ? `Artikel "${articleObj.title}" berhasil digenerasi oleh Hermes Agent dan dipublikasikan!`
+      : `Artikel "${articleObj.title}" berhasil digenerasi.`,
+    article: articleObj,
+  });
 });
 
 // Helper pencocokan meja restoran

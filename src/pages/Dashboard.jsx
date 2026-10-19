@@ -449,6 +449,26 @@ export default function Dashboard() {
     else { api.get("/products", { params: { active_only: true } }).then((r) => setProds(r.data || [])).catch(() => {}); }
   }, [loadSummary, hasSummary]);
 
+  // Real-time automatic updates via SSE stream when transactions occur
+  useEffect(() => {
+    if (!hasSummary) return;
+    let es;
+    try {
+      es = new EventSource("/api/system/sync/stream");
+      es.onmessage = (evt) => {
+        try {
+          const parsed = JSON.parse(evt.data);
+          if (parsed.event === "order_created" || parsed.event === "order_paid" || parsed.event === "manual_sync") {
+            loadSummary();
+          }
+        } catch (_) {}
+      };
+    } catch (_) {}
+    return () => {
+      if (es) es.close();
+    };
+  }, [hasSummary, loadSummary]);
+
   // Muat definisi widget kustom (sekali) + isian harian per tanggal yang dipilih.
   useEffect(() => {
     if (!hasSummary) { setCwDefs([]); return; }

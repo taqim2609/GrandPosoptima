@@ -53,6 +53,23 @@ export default function Reservations() {
     time: "12:00",
     note: "",
   });
+  const [sendingWaId, setSendingWaId] = useState(null);
+
+  const sendWaConfirmation = async (r) => {
+    if (!r.phone) {
+      return toast.error("Nomor WhatsApp pemesan belum tersedia pada data reservasi ini");
+    }
+    setSendingWaId(r.id);
+    try {
+      const resp = await api.post(`/reservations/${r.id}/send-wa`);
+      toast.success(resp.data?.message || "Konfirmasi WhatsApp berhasil dikirim ke " + r.phone);
+      load();
+    } catch (e) {
+      toast.error(apiError(e.response?.data?.detail) || "Gagal mengirim konfirmasi WhatsApp");
+    } finally {
+      setSendingWaId(null);
+    }
+  };
 
   // Group reservation rules & keyword state
   const [groupConfig, setGroupConfig] = useState({
@@ -501,13 +518,28 @@ export default function Reservations() {
                     </select>
                   </td>
                   <td className="p-3 text-right">
-                    <button
-                      onClick={() => del(r.id)}
-                      className="tap h-8 w-8 rounded-lg bg-[#FEE2E2] hover:bg-[#FECACA] text-[#EF4444] grid place-items-center"
-                      title="Hapus Reservasi"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => sendWaConfirmation(r)}
+                        disabled={sendingWaId === r.id}
+                        className="tap h-8 px-2.5 rounded-lg bg-[#DCFCE7] hover:bg-[#BBF7D0] text-[#15803D] font-bold text-xs flex items-center gap-1 disabled:opacity-50 shadow-sm"
+                        title="Kirim Konfirmasi WhatsApp Otomatis"
+                      >
+                        {sendingWaId === r.id ? (
+                          <RefreshCw size={13} className="animate-spin" />
+                        ) : (
+                          <Send size={13} />
+                        )}
+                        <span>{r.wa_confirmed ? "Kirim Ulang WA" : "Kirim WA"}</span>
+                      </button>
+                      <button
+                        onClick={() => del(r.id)}
+                        className="tap h-8 w-8 rounded-lg bg-[#FEE2E2] hover:bg-[#FECACA] text-[#EF4444] grid place-items-center"
+                        title="Hapus Reservasi"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

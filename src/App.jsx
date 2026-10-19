@@ -53,22 +53,29 @@ const LoadingFallback = () => (
 function RootRoute() {
   const isCapacitor = typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.() || window.isNativeApp);
   const hostname = typeof window !== "undefined" ? window.location.hostname : "";
-  const isExplicitDisabled = typeof localStorage !== "undefined" && localStorage.getItem("gak_disable_landing_page") === "true";
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const isExplicitDisabled = typeof localStorage !== "undefined" && (localStorage.getItem("gak_disable_landing_page") === "true" || localStorage.getItem("gak_pos_mode") === "true");
   const isEnvDisabled = process.env.REACT_APP_DISABLE_LANDING_PAGE === "true";
+  const isQueryPos = search.includes("pos=1") || search.includes("direct=1");
 
-  // Deteksi lingkungan Raspberry Pi / Server Lokal Kasir / LAN toko:
-  // IP 192.168.x.x, 10.x.x.x, 172.16-31.x.x, localhost, 127.0.0.1, *.local, raspberrypi
+  if (isQueryPos && typeof localStorage !== "undefined") {
+    localStorage.setItem("gak_disable_landing_page", "true");
+  }
+
+  // Deteksi lingkungan Raspberry Pi / Server Lokal Kasir / LAN toko / Tailscale:
   const isLocalOrPi =
     isCapacitor ||
     isExplicitDisabled ||
     isEnvDisabled ||
+    isQueryPos ||
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
     hostname.includes("raspberrypi") ||
     hostname.endsWith(".local") ||
     /^192\.168\./.test(hostname) ||
     /^10\./.test(hostname) ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+    /^100\./.test(hostname);
 
   if (isLocalOrPi) {
     return <Navigate to="/pos" replace />;

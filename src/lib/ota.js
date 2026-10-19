@@ -45,7 +45,7 @@ export async function checkOtaUpdate({ silent = false } = {}) {
     // Prioritaskan server aktif, lalu fallback ke node alternatif (Pi LAN & VPS Tailscale)
     const candidates = [
       base,
-      "http://pos.local:3000",
+      "http://grandpos.local:3000",
       "http://100.117.186.13:8000",
       "",
     ].filter((v, i, a) => a.indexOf(v) === i && (v !== null && v !== undefined));
