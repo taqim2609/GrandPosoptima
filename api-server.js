@@ -135,13 +135,14 @@ cd "$APP_DIR"
 
 cat << 'EOF' > docker-compose.yml
 services:
-  # 1. Grand Aceh Kuliner POS Node.js Server & Web App (Port 3000)
+  # 1. Grand Aceh Kuliner POS Node.js Server & Web App (Port 80 & Port 3000)
   grandpos-app:
     image: node:20-alpine
     container_name: grandpos_web_app
     restart: always
     working_dir: /app
     ports:
+      - "80:3000"
       - "3000:3000"
     environment:
       - NODE_ENV=production

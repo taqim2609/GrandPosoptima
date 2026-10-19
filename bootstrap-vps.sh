@@ -4,7 +4,7 @@ APP_DIR="${APP_DIR:-$HOME/grand-aceh-vps}"
 
 echo "======================================================================"
 echo "  🚀 BOOTSTRAP SERVER CLOUD VPS — GRAND ACEH KULINER POS"
-echo "  (Tanpa Evolution API — Murni Hermes Agent Baileys & POS Engine)"
+echo "  (Murni Hermes Agent Baileys & POS Engine)"
 echo "======================================================================"
 echo "Direktori VPS : $APP_DIR"
 echo "======================================================================"
@@ -12,9 +12,9 @@ echo
 
 if command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update -y
-  sudo apt-get install -y curl git ufw
+  sudo apt-get install -y curl git ufw nginx || true
 elif command -v yum >/dev/null 2>&1; then
-  sudo yum install -y curl git
+  sudo yum install -y curl git nginx || true
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -30,13 +30,14 @@ cd "$APP_DIR"
 
 cat << 'EOF' > docker-compose.yml
 services:
-  # 1. Grand Aceh Kuliner POS Node.js Server & Web App (Port 3000)
+  # 1. Grand Aceh Kuliner POS Node.js Server & Web App (Port 80 & Port 3000)
   grandpos-app:
     image: node:20-alpine
     container_name: grandpos_web_app
     restart: always
     working_dir: /app
     ports:
+      - "80:3000"
       - "3000:3000"
     environment:
       - NODE_ENV=production
@@ -76,7 +77,8 @@ echo
 echo "======================================================================"
 echo "  ✅ SERVER CLOUD VPS BERHASIL DIAKTIFKAN 100%!"
 echo "======================================================================"
-echo " 🌐 Alamat POS & Landing Page: http://$VPS_IP:3000"
+echo " 🌐 Alamat POS & Landing Page: http://$VPS_IP (Port 80 Utama)"
+echo " 🌐 Alamat Port Alternatif   : http://$VPS_IP:3000"
 echo " 🤖 WhatsApp Gateway Engine : Hermes Agent (Baileys Native)"
 echo " 🔄 Watchtower Auto-Update  : Aktif (Otomatis cek update jam 04:00 subuh)"
 echo "======================================================================"
