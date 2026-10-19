@@ -10,12 +10,17 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
   const [probeStatus, setProbeStatus] = useState({ state: "idle", latency: null, text: "" });
   const [probing, setProbing] = useState(false);
 
+  // Deteksi otomatis URL server kasir jika sedang dibuka lewat IP lokal / Tailscale
+  const detectedPiUrl = typeof window !== "undefined" && !window.location.hostname.includes("run.app") && !window.location.hostname.includes("google")
+    ? window.location.origin
+    : "http://pos.local:3000";
+
   // Daftar Node Standar Dual-Node (Pi LAN & VPS Tailscale)
   const NODE_OPTIONS = [
     {
       id: "pi_lan",
-      url: "http://pos.local:3000",
-      altUrl: "http://192.168.1.100:3000",
+      url: detectedPiUrl,
+      altUrl: "http://pos.local:3000",
       title: "Kasir Toko (Pi LAN)",
       subtitle: "Offline-First di Outlet",
       badge: "Lokal Toko",

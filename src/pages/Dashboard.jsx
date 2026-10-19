@@ -473,7 +473,7 @@ export default function Dashboard() {
   }, [role]);
 
   const startUpdate = async () => {
-    if (!window.confirm("Unduh versi terbaru dari Google AI Studio & bangun ulang sekarang? Aplikasi akan restart beberapa menit.")) return;
+    if (!window.confirm("Unduh versi terbaru dari Server VPS Mandiri & bangun ulang sekarang? Aplikasi akan restart beberapa menit.")) return;
     setUpdState("starting");
     const t = toast.loading("Memulai update...");
     try {
@@ -577,7 +577,7 @@ export default function Dashboard() {
       case "vps_analytics":
         return <VpsAnalyticsCard />;
       case "cloud_sync":
-      case "firestore":
+      case "vps_sync":
         return <VisualSyncStatusCard />;
       case "kpi":
         return data && <WidgetKpi data={data} view={view} lb={lb} />;

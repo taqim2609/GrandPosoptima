@@ -148,8 +148,8 @@ export function applyTheme(p) {
 }
 
 export function logoUrl(cfg) {
-  const u = cfg?.logo_url || "";
-  if (!u) return "";
+  const u = typeof cfg === "string" ? cfg : cfg?.logo_url || "";
+  if (!u || typeof u !== "string" || u === "undefined" || u === "null" || u === "[object Object]") return "";
   if (u.startsWith("data:") || u.startsWith("blob:") || /^https?:\/\//i.test(u)) return u;
   const srv = getServerUrl() || "";
   if (u.startsWith("/")) return srv ? `${srv}${u}` : u;

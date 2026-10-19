@@ -5,7 +5,7 @@ import {
   MessageCircle, Loader2, Save, Send, RefreshCw, CheckCircle2,
   KeyRound, Sliders, Zap, Search, ShieldAlert, PhoneCall, CheckCheck,
   Receipt, FileText, Bookmark, Settings, Layers, AlertTriangle, ArrowRight,
-  Server, ShieldCheck, PanelLeftClose, PanelLeftOpen, Info
+  Server, ShieldCheck, PanelLeftClose, PanelLeftOpen, Info, Globe
 } from "lucide-react";
 
 export default function WhatsApp() {
@@ -26,6 +26,14 @@ export default function WhatsApp() {
   // Gateway Status & Configuration States
   const [statusState, setStatusState] = useState("disconnected");
   const [statusChecking, setStatusChecking] = useState(false);
+  const [provider, setProvider] = useState("hermes");
+  const [hermesUrl, setHermesUrl] = useState("http://127.0.0.1:8644/webhooks/grandpos-outbox");
+  const [hermesSecret, setHermesSecret] = useState("");
+  const [evolutionUrl, setEvolutionUrl] = useState("http://localhost:8080");
+  const [evolutionKey, setEvolutionKey] = useState("");
+  const [evolutionInstance, setEvolutionInstance] = useState("grand-aceh-pos");
+  const [savingConfig, setSavingConfig] = useState(false);
+
   const [hermes, setHermes] = useState({
     configured: false,
     state: "unconfigured",
@@ -141,6 +149,13 @@ export default function WhatsApp() {
       setRejectPrivate(c.reject_private_booking !== false);
       if (c.phone) setTestNo(c.phone);
 
+      setProvider(c.provider || "hermes");
+      setHermesUrl(c.hermes_url || "http://127.0.0.1:8644/webhooks/grandpos-outbox");
+      setHermesSecret(c.hermes_secret || "");
+      setEvolutionUrl(c.evolution_url || "http://localhost:8080");
+      setEvolutionKey(c.evolution_api_key_masked || c.evolution_api_key || "");
+      setEvolutionInstance(c.evolution_instance || "grand-aceh-pos");
+
       setWacloud({
         api_key: c.api_key_masked || "",
         base_url: c.base_url || "https://app.wacloud.id/api/v1",
@@ -155,6 +170,27 @@ export default function WhatsApp() {
       toast.error(apiError(e.response?.data?.detail));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveGatewayEndpoint = async () => {
+    setSavingConfig(true);
+    const t = toast.loading("Menyimpan pengaturan endpoint WhatsApp gateway...");
+    try {
+      await api.put("/whatsapp/config", {
+        provider,
+        hermes_url: hermesUrl,
+        hermes_secret: hermesSecret,
+        evolution_url: evolutionUrl,
+        evolution_api_key: evolutionKey,
+        evolution_instance: evolutionInstance,
+      });
+      toast.success("Konfigurasi Endpoint Baileys/Hermes WhatsApp berhasil disimpan!", { id: t });
+      await loadAllConfig();
+    } catch (e) {
+      toast.error(apiError(e.response?.data?.detail) || "Gagal menyimpan endpoint", { id: t });
+    } finally {
+      setSavingConfig(false);
     }
   };
 
@@ -258,7 +294,7 @@ export default function WhatsApp() {
       const r = await api.post("/whatsapp/outbox/sync-upstream");
       const d = r.data || {};
       if (d.mode === "upstream_sync") {
-        toast.success(`Sinkronisasi beda server ke Google Cloud berhasil! Sent: ${d.sent || 0}`);
+        toast.success(`Sinkronisasi beda server ke Server VPS Mandiri berhasil! Sent: ${d.sent || 0}`);
       } else {
         toast.info(`Outbox diproses (${d.sent || 0} terkirim)`);
       }
@@ -750,6 +786,119 @@ export default function WhatsApp() {
             </div>
           </div>
 
+          {/* CARD CONFIGURATION: ATUR ENDPOINT & PROVIDER BAILEYS HERMES / EVOLUTION API */}
+          <div className="bg-white rounded-2xl border p-6 space-y-4 shadow-sm" data-testid="wa-endpoint-config-card">
+            <div className="flex items-center justify-between gap-3 border-b pb-3">
+              <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
+                <Globe size={18} className="text-emerald-600" />
+                Atur Endpoint Gateway WhatsApp (Baileys / Hermes / Evolution API)
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase font-mono">
+                {provider} Active
+              </span>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Pilihan Provider */}
+              <div className="space-y-1.5">
+                <label className="font-extrabold text-slate-900 block">Pilih Gateway WhatsApp Utama:</label>
+                <select
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  className="w-full h-11 rounded-xl border border-slate-200 px-3 font-bold text-slate-800 outline-none focus:border-emerald-600 bg-white"
+                >
+                  <option value="hermes">Hermes Agent (Baileys Node.js Gateway &amp; Bridge Webhook)</option>
+                  <option value="evolution">Evolution API (Docker REST API v2)</option>
+                  <option value="wacloud">wacloud.id (Cloud REST API Gateway)</option>
+                </select>
+              </div>
+
+              {/* Form Input Hermes / Baileys */}
+              {provider === "hermes" && (
+                <div className="space-y-3.5 bg-emerald-50/50 border border-emerald-200/80 p-4 rounded-xl">
+                  <div className="space-y-1.5">
+                    <label className="font-extrabold text-slate-900 block">Endpoint Webhook Outbox Hermes / Baileys:</label>
+                    <input
+                      type="text"
+                      value={hermesUrl}
+                      onChange={(e) => setHermesUrl(e.target.value)}
+                      placeholder="http://127.0.0.1:8644/webhooks/grandpos-outbox"
+                      className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3.5 font-mono text-xs outline-none focus:border-emerald-600"
+                    />
+                    <p className="text-[11px] text-slate-500">
+                      Format: <code className="font-mono text-slate-800">http://[IP-Server]:8644/webhooks/grandpos-outbox</code> (Bisa diisi IP Pi toko, Tailscale IP <code className="font-mono">http://100.x.x.x:8644</code>, atau domain Anda).
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-extrabold text-slate-900 block">Secret Key Otorisasi Hermes:</label>
+                    <input
+                      type="password"
+                      value={hermesSecret}
+                      onChange={(e) => setHermesSecret(e.target.value)}
+                      placeholder="GrandAcehSecretKey2026"
+                      className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3.5 font-mono text-xs outline-none focus:border-emerald-600"
+                    />
+                    <p className="text-[11px] text-slate-500">
+                      Token rahasia pencocokan header <code className="font-mono">X-Hermes-Secret</code> untuk keamanan lalu lintas pesan.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Form Input Evolution API */}
+              {provider === "evolution" && (
+                <div className="space-y-3.5 bg-indigo-50/50 border border-indigo-200/80 p-4 rounded-xl">
+                  <div className="space-y-1.5">
+                    <label className="font-extrabold text-slate-900 block">Evolution API Base URL:</label>
+                    <input
+                      type="text"
+                      value={evolutionUrl}
+                      onChange={(e) => setEvolutionUrl(e.target.value)}
+                      placeholder="http://localhost:8080"
+                      className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3.5 font-mono text-xs outline-none focus:border-indigo-600"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="font-extrabold text-slate-900 block">API Key Evolution:</label>
+                      <input
+                        type="password"
+                        value={evolutionKey}
+                        onChange={(e) => setEvolutionKey(e.target.value)}
+                        placeholder="Masukkan API Key Evolution"
+                        className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3.5 font-mono text-xs outline-none focus:border-indigo-600"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="font-extrabold text-slate-900 block">Nama Instance:</label>
+                      <input
+                        type="text"
+                        value={evolutionInstance}
+                        onChange={(e) => setEvolutionInstance(e.target.value)}
+                        placeholder="grand-aceh-pos"
+                        className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3.5 font-mono text-xs outline-none focus:border-indigo-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveGatewayEndpoint}
+                  disabled={savingConfig}
+                  className="h-11 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-2 shadow-xs disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {savingConfig ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  Simpan Konfigurasi Endpoint Gateway
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* CARD 2: FAILOVER WACLOUD.ID CONFIGURATION */}
           <div className="bg-white rounded-2xl border p-6 space-y-4 shadow-sm">
             <div className="flex items-center justify-between gap-3 border-b pb-3">
@@ -852,7 +1001,7 @@ export default function WhatsApp() {
             <div className="flex items-center justify-between gap-3 border-b pb-3">
               <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
                 <RefreshCw size={18} className="text-emerald-600" />
-                Jalur Sinkronisasi Hermes Beda Server (Google Cloud ↔ Raspberry Pi)
+                Jalur Sinkronisasi Hermes Beda Server (Server VPS Utama ↔ Raspberry Pi)
               </div>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 Outbox Sync Active
@@ -861,7 +1010,7 @@ export default function WhatsApp() {
 
             <div className="space-y-3 text-xs">
               <p className="text-slate-600 leading-relaxed">
-                Jalur ini menghubungkan aplikasi POS di **Google Cloud** dengan gateway Hermes yang berjalan di **Raspberry Pi toko**. Pesan transaksi yang dibuat di cloud otomatis ditarik dan dikirim oleh Hermes Pi melalui API Outbox &amp; token sinkronisasi.
+                Jalur ini menghubungkan aplikasi POS di **Server VPS Utama** dengan gateway Hermes yang berjalan di **Raspberry Pi toko**. Pesan transaksi yang dibuat di VPS otomatis ditarik dan dikirim oleh Hermes Pi melalui API Outbox &amp; token sinkronisasi.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">

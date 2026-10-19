@@ -10,33 +10,38 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
   const [probeStatus, setProbeStatus] = useState({ state: "idle", latency: null, text: "" });
   const [probing, setProbing] = useState(false);
 
-  // Daftar Node Standar Dual-Node (Pi LAN & VPS Tailscale)
+  // Deteksi otomatis URL server kasir jika sedang dibuka lewat IP lokal / Tailscale
+  const detectedPiUrl = typeof window !== "undefined" && !window.location.hostname.includes("run.app") && !window.location.hostname.includes("google")
+    ? window.location.origin
+    : "http://pos.local:3000";
+
+  // Daftar Node Standar Multi-Node (Kasir LAN Toko, VPS Tailscale, Cloud Pusat)
   const NODE_OPTIONS = [
     {
-      id: "pi_lan",
+      id: "frontend_app_server",
       url: "http://pos.local:3000",
-      altUrl: "http://192.168.1.100:3000",
-      title: "Kasir Toko (Pi LAN)",
-      subtitle: "Offline-First di Outlet",
-      badge: "Lokal Toko",
+      altUrl: "http://localhost:3000",
+      title: "Server Frontend & POS App (UI Web Kasir)",
+      subtitle: "Port 3000 (UI Web, Offline Cache, Struk Sunmi)",
+      badge: "Frontend UI Only",
       badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
       icon: Wifi,
     },
     {
-      id: "vps_tailscale",
+      id: "vps_database_server",
       url: "http://100.117.186.13:8000",
-      title: "VPS Go-Live (Tailscale)",
-      subtitle: "FastAPI + PostgreSQL 16",
-      badge: "VPS Online",
+      title: "Server VPS Database Khusus (Remote DB Only)",
+      subtitle: "Port 8000 (FastAPI + Database MongoDB/PostgreSQL)",
+      badge: "Database Murni",
       badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
       icon: Server,
     },
     {
       id: "cloud_primary",
       url: "",
-      title: "Cloud Pusat (Standby)",
-      subtitle: "Google Cloud / AI Studio",
-      badge: "Cloud 24/7",
+      title: "Server Hybrid Auto-Fallback",
+      subtitle: "Mode Siaga (Same Origin)",
+      badge: "Hybrid Standby",
       badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
       icon: Globe,
     },
@@ -105,7 +110,7 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
       {/* Header & Status Indicator */}
       <div className="flex items-center justify-between">
         <label className="text-xs uppercase tracking-wider font-black text-[#52525B] flex items-center gap-1.5">
-          <Server size={13} className="text-[#E63946]" /> Node Server &amp; Failover (Dual-Node)
+          <Server size={13} className="text-[#E63946]" /> Pilihan Server Kasir (Multi-Node &amp; Failover)
         </label>
 
         <div className="flex items-center gap-1.5">
@@ -125,7 +130,7 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
             </span>
           ) : (
             <span className="text-[10px] text-slate-500 font-bold bg-slate-50 px-2 py-0.5 rounded-full border border-slate-200">
-              Dual-Node Siaga
+              Multi-Node Siaga
             </span>
           )}
         </div>
@@ -224,7 +229,7 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
           <div className="space-y-1">
             <p className="font-extrabold">Gagal menghubungi Node terpilih!</p>
             <p className="text-rose-800 text-[11px] leading-relaxed">
-              Jika kasir berada di toko, pastikan terhubung ke Wi-Fi toko untuk akses <strong>Kasir Toko (Pi LAN)</strong>, atau beralih ke <strong>VPS Go-Live (Tailscale)</strong> atau <strong>Cloud Pusat</strong> untuk melanjutkan transaksi.
+              Jika kasir berada di toko, pastikan terhubung ke Wi-Fi toko untuk akses <strong>Server Kasir Toko (LAN)</strong>, atau beralih ke <strong>Server VPS Gudang-644</strong> atau <strong>Server Cloud Pusat</strong> untuk melanjutkan transaksi.
             </p>
           </div>
         </div>

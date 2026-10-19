@@ -60,17 +60,34 @@ export default function SettingsPlatform() {
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); } finally { setSaving(false); }
   };
 
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [form.logo_url]);
+
   const uploadLogo = async (file) => {
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ukuran file logo maksimal 5MB");
+      return;
+    }
     setUploading(true);
+    setImgError(false);
     const fd = new FormData();
     fd.append("file", file);
     try {
       const { data } = await api.post("/settings/platform/logo", fd);
-      setForm((f) => ({ ...f, logo_url: data.url }));
-      toast.success("Logo diunggah — klik Simpan untuk memberlakukan");
+      const newUrl = data.url || data.logo_url;
+      if (newUrl) {
+        setForm((f) => ({ ...f, logo_url: newUrl }));
+        applyTheme({ ...form, logo_url: newUrl });
+        toast.success("Logo berhasil diunggah — klik Simpan Tampilan untuk memberlakukan permanen");
+      } else {
+        toast.error("Gagal mendapatkan URL logo dari server");
+      }
     } catch (e) {
-      toast.error(apiError(e.response?.data?.detail));
+      toast.error(apiError(e.response?.data?.detail) || "Gagal mengunggah logo");
     } finally { setUploading(false); }
   };
 
@@ -111,28 +128,33 @@ export default function SettingsPlatform() {
           <div className="bg-white rounded-2xl border p-5">
             <h3 className="font-extrabold mb-3">Logo</h3>
             <div className="flex items-center gap-4 flex-wrap">
-              {preview.logo_url ? (
-                <img src={logoUrl(preview)} alt="logo pratinjau" className="h-16 w-16 rounded-xl border object-contain bg-white" />
+              {preview.logo_url && logoUrl(preview) && !imgError ? (
+                <img
+                  src={logoUrl(preview)}
+                  alt="logo pratinjau"
+                  onError={() => setImgError(true)}
+                  className="h-16 w-16 rounded-xl border object-contain bg-white p-1"
+                />
               ) : (
-                <div className="h-16 w-16 rounded-xl grid place-items-center text-white font-heading font-extrabold text-2xl"
+                <div className="h-16 w-16 rounded-xl grid place-items-center text-white font-heading font-extrabold text-2xl shadow-sm"
                   style={{ backgroundColor: preview.primary }}>
                   {(preview.app_name || "G").trim().charAt(0).toUpperCase()}
                 </div>
               )}
               <div className="space-y-2">
-                <label className="tap inline-flex h-10 items-center gap-2 rounded-xl bg-[#0A0A0A] text-white font-bold text-sm px-4 cursor-pointer">
+                <label className="tap inline-flex h-10 items-center gap-2 rounded-xl bg-[#0A0A0A] text-white font-bold text-sm px-4 cursor-pointer hover:bg-neutral-800 transition-colors">
                   {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
                   {preview.logo_url ? "Ganti Logo" : "Upload Logo"}
                   <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden"
                     onChange={(e) => uploadLogo(e.target.files?.[0])} />
                 </label>
                 {preview.logo_url && (
-                  <button onClick={() => set({ logo_url: "" })} className="tap block text-xs font-bold text-[#EF4444] hover:underline">
+                  <button onClick={() => { set({ logo_url: "" }); setImgError(false); }} className="tap block text-xs font-bold text-[#EF4444] hover:underline">
                     Hapus logo (pakai inisial)
                   </button>
                 )}
                 <p className="text-[11px] text-[#a1a1aa] max-w-xs flex items-center gap-1">
-                  <ImageIcon size={12} /> PNG/JPG/WEBP/GIF maks 2MB. Logo tampil di layar login & menu samping.
+                  <ImageIcon size={12} /> PNG/JPG/WEBP/GIF maks 5MB. Logo tampil di layar login & menu samping.
                 </p>
               </div>
             </div>

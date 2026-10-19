@@ -12,6 +12,8 @@ import {
   deleteBackupFromDrive,
   getDriveSchedule,
   saveDriveSchedule,
+  isRawIpOrigin,
+  saveManualAuthSession,
 } from "@/lib/gdrive";
 import {
   Cloud,
@@ -30,6 +32,11 @@ import {
   FolderLock,
   Loader2,
   FolderCheck,
+  Globe,
+  Key,
+  ExternalLink,
+  Copy,
+  AlertCircle,
 } from "lucide-react";
 
 export default function GDriveBackupManager() {
@@ -50,6 +57,13 @@ export default function GDriveBackupManager() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // IP OAuth Dialog & Manual Token states
+  const [showIpOAuthDialog, setShowIpOAuthDialog] = useState(false);
+  const [showManualTokenInput, setShowManualTokenInput] = useState(false);
+  const [manualToken, setManualToken] = useState("");
+  const [manualEmail, setManualEmail] = useState("");
+  const [savingManualToken, setSavingManualToken] = useState(false);
 
   // Load server config and schedule
   const loadServerConfig = useCallback(async () => {
@@ -107,11 +121,15 @@ export default function GDriveBackupManager() {
   }, [loadServerConfig, loadDriveFiles]);
 
   // Handle Google Sign-in with scopes
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async (bypassCheck = false) => {
+    if (isRawIpOrigin() && !bypassCheck) {
+      setShowIpOAuthDialog(true);
+      return;
+    }
     setIsLoggingIn(true);
     const t = toast.loading("Menghubungkan ke akun Google Drive...");
     try {
-      const result = await googleSignIn();
+      const result = await googleSignIn(bypassCheck);
       if (result) {
         setUser(result.user);
         setToken(result.accessToken);
@@ -120,9 +138,39 @@ export default function GDriveBackupManager() {
       }
     } catch (err) {
       console.error("Login failed:", err);
-      toast.error(err.message || "Gagal menghubungkan Google Drive. Pastikan popup tidak diblokir.", { id: t });
+      toast.dismiss(t);
+      if (err.code === "RAW_IP_OAUTH_BLOCKED" || isRawIpOrigin() || String(err.message).includes("GeneralOAuthFlow") || String(err.message).includes("origin_mismatch")) {
+        setShowIpOAuthDialog(true);
+      } else {
+        toast.error(err.message || "Gagal menghubungkan Google Drive. Pastikan popup tidak diblokir.", { id: t });
+      }
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  // Handle Save Manual Access Token (untuk mengatasi blokir IP mentah)
+  const handleSaveManualToken = async (e) => {
+    e.preventDefault();
+    if (!manualToken.trim()) {
+      toast.error("Masukkan Access Token Google Drive terlebih dahulu");
+      return;
+    }
+    setSavingManualToken(true);
+    const t = toast.loading("Memverifikasi token Google Drive...");
+    try {
+      const res = await saveManualAuthSession(manualToken.trim(), manualEmail.trim());
+      setUser(res.user);
+      setToken(res.accessToken);
+      toast.success(`Berhasil terhubung sebagai ${res.user.displayName || res.user.email}!`, { id: t });
+      setShowIpOAuthDialog(false);
+      setShowManualTokenInput(false);
+      setManualToken("");
+      await loadDriveFiles(res.accessToken);
+    } catch (err) {
+      toast.error(`Token tidak valid: ${err.message}`, { id: t });
+    } finally {
+      setSavingManualToken(false);
     }
   };
 
@@ -358,30 +406,60 @@ export default function GDriveBackupManager() {
                 Amankan database POS secara berkala langsung ke akun Google Drive Anda. Folder penyimpanan otomatis:{" "}
                 <b className="font-mono text-[#1E3A8A]">Grand Aceh POS Backups</b>.
               </p>
+
+              {isRawIpOrigin() && (
+                <div className="mt-2.5 bg-amber-50/90 border border-amber-200/90 rounded-xl p-3 text-xs text-amber-900 space-y-1">
+                  <div className="font-extrabold flex items-center gap-1.5 text-amber-900">
+                    <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                    <span>Akses Alamat IP: <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-[11px]">{typeof window !== "undefined" ? window.location.hostname : "IP"}</code></span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Google OAuth melarang otentikasi browser dari alamat IP angka (Error: <code className="font-mono text-[10px] bg-amber-100 px-1 rounded">origin_mismatch / GeneralOAuthFlow</code>). Gunakan <b>Token Akses Manual</b> atau tombol <b>Cloud Backup Bawaan POS</b> di bawah.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowIpOAuthDialog(true)}
+                    className="mt-1 text-[11px] font-bold text-amber-900 hover:text-amber-950 flex items-center gap-1 cursor-pointer underline"
+                  >
+                    <Key size={12} /> Buka Solusi IP &amp; Input Token Manual &rarr;
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           {/* AKSI KONEKSI / LOGIN GOOGLE */}
           <div className="shrink-0 flex items-center gap-2">
             {!user ? (
-              <button
-                data-testid="gdrive-signin-btn"
-                onClick={handleGoogleLogin}
-                disabled={isLoggingIn}
-                className="tap h-11 px-4 rounded-xl bg-white hover:bg-[#F8FAFC] text-[#1F2937] font-bold text-xs border border-[#CBD5E1] shadow-sm flex items-center gap-2.5 transition-all disabled:opacity-50"
-              >
-                {isLoggingIn ? (
-                  <Loader2 size={16} className="animate-spin text-[#2563EB]" />
-                ) : (
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                  </svg>
+              <div className="flex flex-col items-end gap-1.5">
+                <button
+                  data-testid="gdrive-signin-btn"
+                  onClick={() => handleGoogleLogin(false)}
+                  disabled={isLoggingIn}
+                  className="tap h-11 px-4 rounded-xl bg-white hover:bg-[#F8FAFC] text-[#1F2937] font-bold text-xs border border-[#CBD5E1] shadow-sm flex items-center gap-2.5 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isLoggingIn ? (
+                    <Loader2 size={16} className="animate-spin text-[#2563EB]" />
+                  ) : (
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                    </svg>
+                  )}
+                  <span>Masuk dengan Google</span>
+                </button>
+                {isRawIpOrigin() && (
+                  <button
+                    type="button"
+                    onClick={() => setShowIpOAuthDialog(true)}
+                    className="text-[11px] text-amber-700 hover:text-amber-900 font-extrabold flex items-center gap-1 cursor-pointer underline"
+                  >
+                    <AlertCircle size={12} /> Solusi Error IP ({typeof window !== "undefined" ? window.location.hostname : "IP"})
+                  </button>
                 )}
-                <span>Masuk dengan Google</span>
-              </button>
+              </div>
             ) : (
               <div className="flex items-center gap-2 bg-white/90 border border-[#BFDBFE] px-3 py-1.5 rounded-xl shadow-xs">
                 {user.photoURL ? (
@@ -750,6 +828,167 @@ export default function GDriveBackupManager() {
               >
                 {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                 <span>{deleting ? "Menghapus..." : "Hapus File"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DIALOG PANDUAN SOLUSI ERROR IP GOOGLE OAUTH */}
+      {showIpOAuthDialog && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-white rounded-2xl p-6 shadow-2xl space-y-5 border border-[#CBD5E1] max-h-[90vh] overflow-y-auto">
+            {/* Header Dialog */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-100 text-amber-800 grid place-items-center shrink-0 shadow-xs">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#1E293B]">Solusi Google OAuth: Akses Alamat IP</h3>
+                  <div className="text-xs text-amber-800 font-mono font-bold mt-0.5">
+                    origin={typeof window !== "undefined" ? window.location.origin : "http://..."} (flowName=GeneralOAuthFlow)
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIpOAuthDialog(false)}
+                className="text-[#64748B] hover:text-[#0F172A] font-extrabold text-sm p-1 rounded-lg hover:bg-[#F1F5F9]"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Penjelasan Ringkas Kebijakan Google */}
+            <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-xl p-3.5 text-xs text-[#92400E] space-y-1.5 leading-relaxed">
+              <div className="font-extrabold text-[#78350F] flex items-center gap-1.5">
+                <Globe size={14} /> Mengapa Google Memblokir Login IP Angka?
+              </div>
+              <p>
+                Kebijakan keamanan global Google (Google Identity Services) <b>melarang otentikasi OAuth browser langsung</b> dari alamat IP mentah seperti <code className="font-mono bg-white/80 px-1 py-0.5 rounded border border-[#FDE68A]">{typeof window !== "undefined" ? window.location.hostname : "100.x.x.x"}</code>. Google mewajibkan nama domain resmi atau Token Akses Manual.
+              </p>
+            </div>
+
+            {/* 3 PILIHAN SOLUSI BESAR */}
+            <div className="space-y-4">
+              {/* OPSI 1: INPUT TOKEN AKSES MANUAL */}
+              <div className="border border-[#CBD5E1] bg-[#F8FAFC] rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-extrabold text-xs text-[#0F172A] flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#2563EB] text-white text-[11px] font-black grid place-items-center">1</span>
+                    <span>Hubungkan dengan Access Token Google Drive Manual (Instan)</span>
+                  </div>
+                  <a
+                    href="https://developers.google.com/oauthplayground"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-[#2563EB] font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    Google OAuth Playground <ExternalLink size={11} />
+                  </a>
+                </div>
+
+                <p className="text-[11px] text-[#475569] leading-relaxed">
+                  Dapatkan Access Token Google Drive sementara/permanen untuk mengotorisasi POS langsung tanpa melalui popup browser IP:
+                </p>
+
+                <form onSubmit={handleSaveManualToken} className="space-y-2.5 pt-1">
+                  <div>
+                    <label className="text-[11px] font-bold text-[#334155] block mb-1">
+                      Access Token Google Drive (<code className="font-mono text-[#2563EB]">ya29...</code>):
+                    </label>
+                    <input
+                      type="text"
+                      value={manualToken}
+                      onChange={(e) => setManualToken(e.target.value)}
+                      placeholder="Tempelkan Access Token di sini (misal: ya29.a0AfH6SM...)"
+                      className="w-full h-10 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs font-mono font-medium focus:ring-2 focus:ring-[#2563EB] outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-[#334155] block mb-1">Email Google (Opsional):</label>
+                      <input
+                        type="email"
+                        value={manualEmail}
+                        onChange={(e) => setManualEmail(e.target.value)}
+                        placeholder="kasir@grandpos.id"
+                        className="w-full h-9 px-3 rounded-lg border border-[#CBD5E1] bg-white text-xs font-sans outline-none"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="submit"
+                        disabled={savingManualToken || !manualToken.trim()}
+                        className="tap h-9 w-full rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-extrabold text-xs inline-flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        {savingManualToken ? <Loader2 size={13} className="animate-spin" /> : <Key size={13} />}
+                        <span>Simpan &amp; Verifikasi Token</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              {/* OPSI 2: BACKUP CLOUD BAWAAN POS */}
+              <div className="border border-[#BBF7D0] bg-[#F0FDF4] rounded-xl p-3.5 space-y-2">
+                <div className="font-extrabold text-xs text-[#166534] flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#16A34A] text-white text-[11px] font-black grid place-items-center">2</span>
+                  <span>Gunakan Cloud Backup Bawaan POS (Bebas OAuth Browser)</span>
+                </div>
+                <p className="text-[11px] text-[#15803D] leading-relaxed">
+                  Sistem POS Grand Aceh Kuliner telah dilengkapi endpoint cloud backup terintegrasi yang mengirim data snapshot server langsung ke cloud tanpa memerlukan otorisasi OAuth dari browser kasir.
+                </p>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setShowIpOAuthDialog(false);
+                      const t = toast.loading("Membuat & mengirim update database ke Server VPS Mandiri...");
+                      try {
+                        const r = await api.post("/backup/send-to-cloud");
+                        toast.success(r.data?.message || "Backup database sedang dikirim ke Server VPS Mandiri", { id: t, duration: 8000 });
+                      } catch (e) {
+                        toast.error(e.response?.data?.detail || "Gagal membuat backup cloud", { id: t });
+                      }
+                    }}
+                    className="tap h-9 px-4 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-xs inline-flex items-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    <CloudUpload size={14} />
+                    <span>Jalankan Cloud Backup Sekarang</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* OPSI 3: DOMAIN TAILSCALE / LOCALHOST */}
+              <div className="border border-[#E2E8F0] bg-white rounded-xl p-3.5 space-y-1.5 text-xs text-[#475569]">
+                <div className="font-extrabold text-[#1E293B] flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#64748B] text-white text-[11px] font-black grid place-items-center">3</span>
+                  <span>Akses via Nama Domain / Tailscale MagicDNS</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  Jika ingin tetap menggunakan login tombol Google langsung: buka POS menggunakan domain Tailscale MagicDNS (misal <code className="font-mono bg-[#F1F5F9] px-1 py-0.5 rounded text-[#0F172A]">https://pos.tailnet.ts.net</code>) atau akses langsung via <code className="font-mono bg-[#F1F5F9] px-1 py-0.5 rounded text-[#0F172A]">http://localhost:3000</code> di PC utama.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-[#E2E8F0]">
+              <button
+                type="button"
+                onClick={() => handleGoogleLogin(true)}
+                className="text-xs font-bold text-[#64748B] hover:text-[#0F172A] underline cursor-pointer"
+              >
+                Tetap Coba Buka Popup Google &rarr;
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowIpOAuthDialog(false)}
+                className="tap h-9 px-5 rounded-xl border border-[#CBD5E1] bg-white hover:bg-[#F8FAFC] text-xs font-extrabold text-[#334155] shadow-2xs cursor-pointer"
+              >
+                Tutup
               </button>
             </div>
           </div>

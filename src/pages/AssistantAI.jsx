@@ -195,7 +195,7 @@ export default function AssistantAI() {
     const msg = featText.trim();
     if (!msg) return toast.error("Tulis permintaan fitur dulu");
     setFeatSending(true);
-    const t = toast.loading("Mengirim permintaan fitur ke Google AI Studio...");
+    const t = toast.loading("Mengirim permintaan fitur ke Server VPS Mandiri...");
     try {
       let context = "";
       try {
@@ -203,7 +203,7 @@ export default function AssistantAI() {
         context = `Platform: ${v.native ? `APK v${v.apk}` : "Web"} | Bundle: ${v.bundle} | Server: ${v.serverVersion || "-"} | OTA: ${v.otaInstalled || "-"}`;
       } catch (_) {}
       await api.post("/feature-request/send", { message: msg, context });
-      toast.success("Permintaan fitur terkirim ke Google AI Studio — sebutkan di chat bahwa Anda sudah mengirimnya", { id: t, duration: 8000 });
+      toast.success("Permintaan fitur terkirim ke Server VPS Mandiri — sebutkan di chat bahwa Anda sudah mengirimnya", { id: t, duration: 8000 });
       setFeatOpen(false); setFeatText("");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Gagal mengirim (periksa internet server)", { id: t, duration: 10000 });
@@ -385,19 +385,7 @@ export default function AssistantAI() {
 
       {/* Control Strip for Model & Role Selection */}
       <div className="bg-white border-b px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-[#71717A]">Model Gemini:</span>
-          <select
-            data-testid="chatbot-model-select"
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="text-xs font-bold bg-[#FAFAFA] border-2 border-[#D4D4D8] rounded-lg px-2.5 py-1.5 focus:border-[#E63946] focus:outline-none"
-          >
-            <option value="gemini-3.5-flash">Umum (Gemini 3.5 Flash)</option>
-            <option value="gemini-3.1-pro-preview">Kompleks (Gemini 3.1 Pro)</option>
-            <option value="gemini-3.1-flash-lite">Cepat (Gemini 3.1 Flash Lite)</option>
-          </select>
-        </div>
+
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-[#71717A]">Peran Chatbot:</span>
@@ -542,9 +530,9 @@ export default function AssistantAI() {
       <Dialog open={featOpen} onOpenChange={setFeatOpen}>
         <DialogContent data-testid="feature-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Lightbulb size={18} className="text-[#4F46E5]" /> Usulkan Fitur untuk Google AI Studio</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Lightbulb size={18} className="text-[#4F46E5]" /> Usulkan Fitur untuk Server POS Mandiri</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[#52525B] -mt-2">Jelaskan fitur yang Anda inginkan. Permintaan ini dikirim ke Google AI Studio untuk dipelajari, lalu kodenya diperbarui dan disiapkan lewat update berikutnya.</p>
+          <p className="text-sm text-[#52525B] -mt-2">Jelaskan fitur yang Anda inginkan. Permintaan ini dikirim ke Server VPS Mandiri untuk dipelajari, lalu kodenya diperbarui dan disiapkan lewat update berikutnya.</p>
           <textarea
             data-testid="feature-input"
             value={featText}

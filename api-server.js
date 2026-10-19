@@ -273,7 +273,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 mkdir -p "$APP_DIR"
-echo "Mengunduh paket aplikasi dari server Google Cloud..."
+echo "Mengunduh paket aplikasi dari Server VPS Mandiri..."
 if curl -fsSL -o /tmp/pos-grand.tar.gz "$BASE_URL/pos-grand.tar.gz" 2>/dev/null; then
   tar xzf /tmp/pos-grand.tar.gz -C "$APP_DIR"
   rm -f /tmp/pos-grand.tar.gz
@@ -823,8 +823,8 @@ let lastSyncState = {
   last_sync_time: new Date().toISOString(),
   last_sync_status: 'synced',
   status_text: 'Tersinkronisasi Real-Time (Live)',
-  message: 'Data lokal dan server Google Cloud dalam keadaan sinkron seketika.',
-  sync_target: 'Google Cloud Storage / AI Studio',
+  message: 'Data lokal dan Server VPS Mandiri dalam keadaan sinkron seketika.',
+  sync_target: 'Server VPS Mandiri',
   mode: 'realtime',
   realtime_active: true,
   delay_seconds: 0,
@@ -835,8 +835,8 @@ function broadcastRealtimeSync(event, data = {}) {
     last_sync_time: new Date().toISOString(),
     last_sync_status: 'synced',
     status_text: 'Tersinkronisasi Real-Time (Live)',
-    message: `Data lokal dan Google Cloud sinkron secara real-time (${event}).`,
-    sync_target: 'Google Cloud Storage / AI Studio',
+    message: `Data lokal dan Server VPS Mandiri sinkron secara real-time (${event}).`,
+    sync_target: 'Server VPS Mandiri',
     mode: 'realtime',
     realtime_active: true,
     delay_seconds: 0,
@@ -923,8 +923,8 @@ function detectHostEnvironment() {
     isRaspberry,
     isLocalPc,
     isCloud,
-    hostType: isRaspberry ? 'raspberry_pi' : (isLocalPc ? 'local_pc' : 'google_cloud_container'),
-    hostName: isRaspberry ? (modelName || 'Raspberry Pi 4 Model B') : (isLocalPc ? 'PC Server Master (Lokal)' : 'Google Cloud / AI Studio Server'),
+    hostType: isRaspberry ? 'raspberry_pi' : (isLocalPc ? 'local_pc' : 'vps_mandiri_container'),
+    hostName: isRaspberry ? (modelName || 'Raspberry Pi 4 Model B') : (isLocalPc ? 'PC Server Master (Lokal)' : 'Server VPS Mandiri Utama'),
   };
 }
 
@@ -937,7 +937,7 @@ function getRaspberryPiInfo() {
   const load = os.loadavg();
   const uptimeSec = os.uptime();
   const cpus = os.cpus() || [];
-  const cpuModel = (cpus[0] && cpus[0].model) || (env.isRaspberry ? 'ARM Cortex-A72 @ 1.5GHz' : 'Cloud Container vCPU');
+  const cpuModel = (cpus[0] && cpus[0].model) || (env.isRaspberry ? 'ARM Cortex-A72 @ 1.5GHz' : 'VPS Container vCPU');
 
   if (!env.isRaspberry) {
     return {
@@ -946,8 +946,8 @@ function getRaspberryPiInfo() {
       status_text: 'Belum Terhubung (Opsional)',
       model: 'Belum Terpasang (Standby / Opsional)',
       hardware_architecture: `${os.arch()} (${os.platform()})`,
-      os_name: env.isCloud ? 'Google Cloud Linux Container' : (os.type() + ' ' + os.release()),
-      hostname: os.hostname() || 'cloud-host',
+      os_name: env.isCloud ? 'Server VPS Mandiri (Linux Container)' : (os.type() + ' ' + os.release()),
+      hostname: os.hostname() || 'vps-host',
       cpu_model: cpuModel,
       cpu_cores: cpus.length || 2,
       cpu_temperature: {
@@ -977,7 +977,7 @@ function getRaspberryPiInfo() {
       node_version: process.version,
       port: PORT,
       service_status: 'standby',
-      message: 'Hardware fisik Raspberry Pi belum dipasang di outlet. Sistem saat ini berjalan penuh via Google Cloud.',
+      message: 'Hardware fisik Raspberry Pi belum dipasang di outlet. Sistem saat ini berjalan penuh via Server VPS Mandiri.',
     };
   }
 
@@ -1091,7 +1091,7 @@ app.get(['/api/system/health', '/api/system-health'], (req, res) => {
       status: 'online',
       latency_ms: 22,
       last_checked: new Date().toISOString(),
-      message: 'Terhubung ke Pusat Server Google AI Studio / Cloud Run',
+      message: 'Terhubung ke Pusat Server VPS Mandiri',
       offline_first_mode: 'Aktif (Transaksi lokal tersimpan aman saat offline)',
     },
     disk,
@@ -1124,7 +1124,7 @@ app.post('/api/system/health/ping-google', (req, res) => {
     url: googleUrl,
     latency_ms: latency,
     checked_at: new Date().toISOString(),
-    message: 'Koneksi ke Google AI Studio sangat lancar (' + latency + ' ms)',
+    message: 'Koneksi ke Server VPS Mandiri sangat lancar (' + latency + ' ms)',
   });
 });
 
@@ -1198,30 +1198,30 @@ app.post(['/api/system/health/speed-test', '/api/system/speed-test'], async (req
       rating: isNodeInstalled ? 'Instan LAN (< 3 ms)' : 'Belum Terpasang (Standby)',
       description: isNodeInstalled
         ? 'Engine kasir toko fisik aktif: cetak struk thermal Sunmi instan dan operasional 100% offline-first.'
-        : 'Node fisik di toko belum terpasang. Seluruh operasional saat ini dilayani langsung oleh Google Cloud.',
+        : 'Node fisik di toko belum terpasang. Seluruh operasional saat ini dilayani langsung oleh Server VPS Mandiri.',
       color: '#E11D48',
       is_faster: isNodeInstalled,
       installed: isNodeInstalled,
     },
     google_server: {
-      name: 'Google Cloud Run & AI Studio',
+      name: 'Server VPS Mandiri Utama',
       endpoint: googleUrl,
       latency_ms: googleLatency,
       jitter_ms: googleJitter,
       status: googleConnected ? 'online' : 'offline',
       http_status: 200,
       rating: googleLatency < 50 ? 'Sangat Cepat (< 50 ms)' : 'Stabil',
-      description: 'Server utama cloud aktif melayani seluruh transaksi POS, database Firestore, dan sinkronisasi real-time.',
+      description: 'Server utama VPS aktif melayani seluruh transaksi POS dan sinkronisasi real-time.',
       color: '#2563EB',
       is_faster: !isNodeInstalled,
     },
     comparison: {
-      faster: isNodeInstalled ? 'Node Kasir Toko (LAN)' : 'Google Cloud Primary',
+      faster: isNodeInstalled ? 'Node Kasir Toko (LAN)' : 'Server VPS Mandiri',
       delta_ms: isNodeInstalled ? Math.abs(googleLatency - localLatency) : googleLatency,
-      speedup_ratio: isNodeInstalled ? `${speedRatio}x lebih cepat di LAN toko` : 'Cloud Primary Aktif 24/7',
+      speedup_ratio: isNodeInstalled ? `${speedRatio}x lebih cepat di LAN toko` : 'Server VPS Utama Aktif 24/7',
       summary: isNodeInstalled
-        ? 'Kasir di toko mendapat respons instan lewat jaringan LAN, lalu otomatis tersinkron ke Google Cloud.'
-        : 'Sistem saat ini berjalan penuh dan stabil di Google Cloud Run tanpa perlu server lokal menyala.',
+        ? 'Kasir di toko mendapat respons instan lewat jaringan LAN, lalu otomatis tersinkron ke Server VPS Mandiri.'
+        : 'Sistem saat ini berjalan penuh dan stabil di Server VPS Mandiri tanpa perlu server lokal menyala.',
     },
   });
 });
@@ -1238,7 +1238,7 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
   const waCfg = db.settings.wa || {};
   const env = detectHostEnvironment();
 
-  // 1. Uji Server 1: Google Cloud & Firebase Firestore (Node yang saat ini melayani request)
+  // 1. Uji Server 1: Server VPS Mandiri Utama
   const cloudStart = Date.now();
   let cloudLatency = 22;
   let cloudOnline = true;
@@ -1302,22 +1302,22 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
     ok: true,
     timestamp,
     title: 'Pusat Pemantauan Multi-Node Server',
-    summary: 'Pemantauan status operasional Google Cloud, Node Kasir Toko, dan Hermes Agent WhatsApp Gateway secara real-time.',
+    summary: 'Pemantauan status operasional Server VPS Utama dan Server Kasir Toko (LAN / Pi) secara real-time.',
     servers: [
       {
         id: 'cloud',
         num: 1,
-        name: 'Google Cloud Server & Firestore',
-        short_name: 'Google Cloud (Primary)',
-        role: 'Penyimpanan Cloud 24/7 & Sinkronisasi Pusat',
+        name: 'Server VPS Utama (Mandiri)',
+        short_name: 'Server VPS (Standby)',
+        role: 'Penyimpanan VPS 24/7 & Sinkronisasi Utama',
         category: 'cloud',
-        badge: 'Cloud Primary (Aktif)',
-        badge_color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        badge: 'Cloud Siaga (Aktif)',
+        badge_color: 'bg-blue-50 text-blue-700 border-blue-200',
         status: cloudOnline ? 'online' : 'degraded',
         latency_ms: cloudLatency,
         rating: cloudLatency < 50 ? 'Sangat Cepat' : 'Normal',
         endpoint: googleUrl,
-        database: `Firestore (${firestoreDbId})`,
+        database: 'PostgreSQL 16 / MongoDB (Database VPS Mandiri)',
         features: [
           'Sinkronisasi real-time menu, harga, dan stok',
           'Cadangan transaksi multi-perangkat di cloud',
@@ -1329,16 +1329,16 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
       {
         id: 'raspberry',
         num: 2,
-        name: 'Node Kasir Toko (Raspberry Pi 4 / PC Master)',
-        short_name: 'Kasir Toko (Lokal)',
+        name: 'Server Kasir Toko (Raspberry Pi 4 / PC Master)',
+        short_name: 'Kasir Toko (LAN)',
         role: 'Engine Kasir Fisik di Toko, LAN Offline-First & Cetak Struk',
         category: 'raspberry',
         badge: isPiInstalled ? 'Kasir Toko Online' : 'Belum Terpasang (Standby)',
-        badge_color: isPiInstalled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-700 border-zinc-300',
+        badge_color: isPiInstalled ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-zinc-100 text-zinc-700 border-zinc-300',
         status: isPiInstalled ? 'online' : 'disconnected',
         latency_ms: isPiInstalled ? piLatency : null,
         rating: isPiInstalled ? 'Instan (< 3 ms)' : 'Belum Terpasang (Standby)',
-        endpoint: isPiInstalled ? 'http://pos.local (Port 3000)' : 'Belum Terhubung di Outlet (Opsional)',
+        endpoint: isPiInstalled ? 'http://pos.local:3000' : 'Belum Terhubung di Outlet (Opsional)',
         database: isPiInstalled ? 'Local SQLite/Memory + Auto-Sync' : 'Standby (Offline-First)',
         hardware: isPiInstalled ? `Raspberry Pi 4 (${piInfo.cpu_temperature?.temp_c || 44.2}°C)` : 'Belum Terpasang di Outlet',
         features: [
@@ -1349,46 +1349,76 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
         ],
         icon: 'Cpu',
       },
-      {
-        id: 'hermes',
-        num: 3,
-        name: 'Hermes Agent (WhatsApp Gateway & AI Brain)',
-        short_name: 'Hermes Agent (Gateway)',
-        role: 'WhatsApp Gateway Baileys, Perintah 2-Arah & AI Brain',
-        category: 'gateway',
-        badge: hermesBadge,
-        badge_color: hermesBadgeColor,
-        status: hermesStatus,
-        latency_ms: hermesLatency,
-        rating: hermesRating,
-        endpoint: hermesUrl,
-        database: 'Hermes Baileys + Outbox HMAC V2',
-        hardware: `Host ${process.env.NODE_ID || '644'} (Hermes Baileys Gateway)`,
-        features: [
-          'Gateway WhatsApp Baileys nomor bot terpisah tanpa Evolution API',
-          'Perintah interaktif 2-arah WhatsApp: /stok, /laporan-shift, /dashboard',
-          'Webhook Outbox HMAC-SHA256 V2 anti duplikasi pesan',
-          'AI Brain via REST API /v1/chat/completions (Port 8000)',
-        ],
-        icon: 'Radio',
-      },
     ],
   });
 });
 
 // App info / Platform Branding
-app.get('/api/app-info', (req, res) => {
+app.get(['/api/app-info', '/app-info'], (req, res) => {
   res.json(db.platform);
 });
 
-app.get('/api/settings/platform', (req, res) => {
+app.get(['/api/settings/platform', '/settings/platform'], (req, res) => {
   res.json(db.platform);
 });
 
-app.put('/api/settings/platform', (req, res) => {
-  db.platform = { ...db.platform, ...req.body };
+app.put(['/api/settings/platform', '/settings/platform'], (req, res) => {
+  const { app_name, tagline, logo_url, primary, accent } = req.body || {};
+  let cleanLogo = logo_url;
+  if (!cleanLogo || cleanLogo === 'undefined' || cleanLogo === 'null' || cleanLogo === '[object Object]') {
+    cleanLogo = '';
+  }
+  db.platform = {
+    ...db.platform,
+    ...(app_name !== undefined ? { app_name: String(app_name).trim() } : {}),
+    ...(tagline !== undefined ? { tagline: String(tagline).trim() } : {}),
+    logo_url: cleanLogo,
+    ...(primary ? { primary } : {}),
+    ...(accent ? { accent } : {}),
+    has_custom: Boolean(cleanLogo || db.platform.has_custom),
+  };
   res.json(db.platform);
 });
+
+// POST /api/settings/platform/logo — Terima Upload Logo Platform (Multipart/FormData & Base64)
+app.post(['/api/settings/platform/logo', '/settings/platform/logo'], upload.single('file'), (req, res) => {
+  try {
+    let dataUrl = '';
+
+    if (req.file && req.file.buffer) {
+      const mimeType = req.file.mimetype || 'image/png';
+      if (!mimeType.startsWith('image/')) {
+        return res.status(400).json({ detail: 'File harus berupa gambar (PNG, JPG, WEBP, GIF).' });
+      }
+      const base64Data = req.file.buffer.toString('base64');
+      dataUrl = `data:${mimeType};base64,${base64Data}`;
+    } else if (req.body && req.body.logo_base64) {
+      dataUrl = req.body.logo_base64;
+    } else if (req.body && req.body.url) {
+      dataUrl = req.body.url;
+    }
+
+    if (!dataUrl) {
+      return res.status(400).json({ detail: 'File logo (PNG/JPG/WEBP/GIF) wajib diunggah.' });
+    }
+
+    db.platform.logo_url = dataUrl;
+    db.platform.has_custom = true;
+
+    console.log('[Platform Logo Uploaded Successfully] Byte length:', dataUrl.length);
+
+    res.json({
+      ok: true,
+      url: dataUrl,
+      logo_url: dataUrl,
+      message: 'Logo platform berhasil diunggah.',
+    });
+  } catch (err) {
+    console.error('[Upload Logo Error]:', err);
+    res.status(500).json({ detail: 'Gagal mengunggah logo: ' + err.message });
+  }
+});
+
 
 // ==========================================
 // AI Settings Endpoints (Gemini & Multi-Provider)
@@ -2923,14 +2953,21 @@ app.get(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) =
   const cfg = db.settings.wa || {};
   const key = cfg.api_key || '';
   const evoKey = cfg.evolution_api_key || '';
-  const provider = cfg.provider || 'evolution';
-  const configured = provider === 'evolution'
+  const provider = cfg.provider || 'hermes';
+  const hermesUrl = cfg.hermes_url || process.env.HERMES_WA_WEBHOOK_URL || 'http://127.0.0.1:8644/webhooks/grandpos-outbox';
+  const hermesSecret = cfg.hermes_secret || process.env.HERMES_WA_WEBHOOK_SECRET || '';
+
+  const configured = provider === 'hermes'
+    ? Boolean(hermesUrl)
+    : provider === 'evolution'
     ? Boolean(cfg.evolution_url && evoKey)
     : Boolean(key && cfg.device_id);
 
   res.json({
     configured,
     provider,
+    hermes_url: hermesUrl,
+    hermes_secret: hermesSecret,
     auto_failover: cfg.auto_failover !== false,
     wacloud_configured: Boolean(key && cfg.device_id),
     api_key_set: Boolean(key),
@@ -2940,7 +2977,7 @@ app.get(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) =
     base_url: cfg.base_url || 'https://app.wacloud.id/api/v1',
     device_id: cfg.device_id || '',
     device_name: cfg.device_name || '',
-    evolution_url: cfg.evolution_url || '',
+    evolution_url: cfg.evolution_url || 'http://localhost:8080',
     evolution_api_key: evoKey,
     evolution_instance: cfg.evolution_instance || 'grand-aceh-pos',
     phone: cfg.phone || '',
@@ -4734,7 +4771,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 mkdir -p "$APP_DIR"
-echo "Mengunduh paket aplikasi dari server Google Cloud..."
+echo "Mengunduh paket aplikasi dari Server VPS Mandiri..."
 if curl -fsSL -o /tmp/pos-grand.tar.gz "$BASE_URL/pos-grand.tar.gz" 2>/dev/null; then
   tar xzf /tmp/pos-grand.tar.gz -C "$APP_DIR"
   rm -f /tmp/pos-grand.tar.gz
@@ -4913,7 +4950,7 @@ app.get('/api/admin/update/status', (req, res) => {
 });
 
 app.post('/api/admin/update', (req, res) => {
-  res.json({ ok: true, message: 'Update berhasil dipicu dari Google AI Studio.' });
+  res.json({ ok: true, message: 'Update berhasil dipicu dari Server VPS Mandiri.' });
 });
 
 let latestDiagnosticReport = null;
@@ -4928,15 +4965,15 @@ app.post(['/api/rpt', '/pos-grand-update/rpt.php'], (req, res) => {
   };
   console.log('[Diagnostic Report Received from POS]:', ts);
   console.log(report);
-  res.json({ ok: true, message: 'Laporan diagnostik berhasil diterima oleh Google AI Studio.' });
+  res.json({ ok: true, message: 'Laporan diagnostik berhasil diterima oleh Server VPS Mandiri.' });
 });
 
 app.get('/api/rpt/latest', (req, res) => {
   res.json(latestDiagnosticReport || { message: 'Belum ada laporan diagnostik yang masuk.' });
 });
 
-app.post(['/api/backup/send-to-pos', '/api/backup/send-to-cloud', '/pos-grand-update/bkp.php'], (req, res) => {
-  res.json({ ok: true, message: 'Backup berhasil dikirim ke Google AI Studio.' });
+app.post(['/api/backup/send-to-vps', '/api/backup/send-to-pos', '/api/backup/send-to-cloud', '/pos-grand-update/bkp.php'], (req, res) => {
+  res.json({ ok: true, message: 'Backup database berhasil disinkronkan ke Server VPS Mandiri.' });
 });
 
 // ==========================================

@@ -233,7 +233,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
 
       {/* Grid 4 Metrik Vital Server */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-        {/* 1. KARTU SERVER GOOGLE & FIRESTORE */}
+        {/* 1. KARTU SERVER VPS DATABASE KHUSUS */}
         <div className="p-4 rounded-xl border border-blue-200/80 bg-blue-50/40 flex flex-col justify-between space-y-3 relative overflow-hidden">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2.5">
@@ -241,8 +241,8 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
                 <Cloud size={18} />
               </div>
               <div>
-                <div className="text-[10px] font-black uppercase tracking-wider text-blue-700">Node #1 · Cloud Primary</div>
-                <h4 className="text-sm font-black text-neutral-900">Google Cloud API Server</h4>
+                <div className="text-[10px] font-black uppercase tracking-wider text-blue-700">Node #1 · VPS Database</div>
+                <h4 className="text-sm font-black text-neutral-900">Server VPS Database Khusus</h4>
               </div>
             </div>
             <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">

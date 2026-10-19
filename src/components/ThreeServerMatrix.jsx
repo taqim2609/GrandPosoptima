@@ -25,71 +25,48 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [serverData, setServerData] = useState({
     title: "Pusat Pemantauan Multi-Node Server — Grand Aceh Kuliner",
-    summary: "Node server mandiri gudang-644 (PostgreSQL 16 & FastAPI), Node Kasir Toko, dan Hermes Agent WhatsApp Gateway terhubung dan termonitor dalam 1 layar.",
+    summary: "Pemisahan terstruktur: Server Frontend (Aplikasi UI Kasir) dan Server VPS Database Khusus (Penyimpanan Transaksi Murni).",
     servers: [
       {
-        id: "gudang_644",
+        id: "frontend_app",
         num: 1,
-        name: "Server Gudang-644 (PostgreSQL 16 & FastAPI)",
-        short_name: "Gudang-644 (Tailscale)",
-        role: "Database Mandiri & Engine Transaksi Utama (Tanpa Firebase)",
-        category: "cloud",
-        badge: "Postgres 16 (Aktif)",
+        name: "Server Frontend & POS App (UI Web Kasir)",
+        short_name: "Frontend UI App (Port 3000)",
+        role: "Menyajikan Antarmuka Web Kasir, PWA, Peta Meja, Struk & Cache Offline",
+        category: "frontend",
+        badge: "Frontend & UI App",
+        badge_color: "bg-purple-50 text-purple-700 border-purple-200",
+        status: "online",
+        latency_ms: 1,
+        rating: "Aktif Melayani UI Kasir",
+        endpoint: "http://pos.local:3000 (Port 3000)",
+        database: "IndexedDB Lokal (Offline-First Cache)",
+        features: [
+          "Melayani tampilan UI web kasir, dapur, dan manajemen",
+          "Pencetakan struk printer thermal Sunmi & dapur seketika",
+          "Cache offline-first agar kasir tetap transaksi saat internet terputus",
+          "Bisa dipasang di Raspberry Pi, PC Master toko, atau Web Server lokal",
+        ],
+      },
+      {
+        id: "vps_database",
+        num: 2,
+        name: "Server VPS Database Khusus (Remote DB Only)",
+        short_name: "VPS Database Murni (Port 8000)",
+        role: "Penyimpanan Database Utama 24/7, Query REST API, & Multi-Branch Sync",
+        category: "database",
+        badge: "Database Murni (24/7)",
         badge_color: "bg-emerald-50 text-emerald-700 border-emerald-200",
         status: "online",
-        latency_ms: 12,
-        rating: "Aktif & Terhubung",
-        endpoint: "http://100.117.186.13:8000",
-        database: "PostgreSQL 16 (Bind 127.0.0.1 - Hardened)",
+        latency_ms: 22,
+        rating: "Aktif & Siaga 24/7",
+        endpoint: "http://100.117.186.13:8000 (FastAPI / DB Engine)",
+        database: "MongoDB 4.4+ / PostgreSQL 16 (Dokumen & Transaksi)",
         features: [
-          "Database mandiri PostgreSQL 16 dengan 24 tabel transaksi & 4 view analitik",
-          "FastAPI backend teruji 131 test dengan varians kas Rp0",
-          "Pemisahan shift per-kasir & optimistic concurrency control meja",
-          "100% Arsitektur Mandiri & Teruji (Self-Hosted PostgreSQL 16 & FastAPI)",
-        ],
-      },
-      {
-        id: "raspberry",
-        num: 2,
-        name: "Node Kasir Toko (Raspberry Pi 4 / PC Master)",
-        short_name: "Kasir Toko (Lokal)",
-        role: "Engine Kasir Fisik Toko, LAN Offline-First & Struk Sunmi",
-        category: "raspberry",
-        badge: "Belum Terpasang (Standby)",
-        badge_color: "bg-zinc-100 text-zinc-700 border-zinc-300",
-        status: "disconnected",
-        latency_ms: null,
-        rating: "Belum Terpasang (Standby)",
-        endpoint: "Belum Terhubung di Outlet (Opsional)",
-        database: "Standby (Offline-First)",
-        hardware: "Belum Terpasang di Outlet",
-        features: [
-          "100% Offline-First: kasir tetap transaksi lancar saat internet mati",
-          "Pencetakan struk printer thermal Sunmi & dapur seketika tanpa jeda",
-          "Akses jaringan LAN WiFi toko via http://pos.local",
-          "Pembaruan 1-klik via SSH: bash update-pi.sh",
-        ],
-      },
-      {
-        id: "hermes",
-        num: 3,
-        name: "Hermes Agent (WhatsApp Gateway & AI Brain)",
-        short_name: "Hermes Agent (Gateway)",
-        role: "WhatsApp Gateway Baileys, Perintah 2-Arah & AI Brain",
-        category: "gateway",
-        badge: "Belum Terhubung (Standby)",
-        badge_color: "bg-zinc-100 text-zinc-700 border-zinc-300",
-        status: "disconnected",
-        latency_ms: null,
-        rating: "Perlu Pasang Hermes",
-        endpoint: "http://127.0.0.1:8644/webhooks/grandpos-outbox",
-        database: "Hermes Baileys + Outbox HMAC V2",
-        hardware: "Host 644 / Local Gateway",
-        features: [
-          "Gateway WhatsApp Baileys nomor bot terpisah tanpa Evolution API",
-          "Perintah interaktif 2-arah WhatsApp: /stok, /laporan-shift, /dashboard",
-          "Webhook Outbox HMAC-SHA256 V2 anti duplikasi pesan",
-          "AI Brain via REST API /v1/chat/completions (Port 8000)",
+          "Murni melayani database query, otentikasi, dan penyimpanan transaksi",
+          "Tanpa beban menyajikan file static frontend (performa DB maksimal)",
+          "Menampung sinkronisasi otomatis dari seluruh kasir cabang",
+          "Backup berkala otomatis ke Google Drive & penyimpanan terenkripsi",
         ],
       },
     ],
@@ -173,9 +150,9 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                 : item
             ),
           }));
-          toast.success(`Google Cloud Server Terhubung (${Math.round(res.latencyMs)} ms)`, { id: toastId });
+          toast.success(`Server VPS Mandiri Terhubung (${Math.round(res.latencyMs)} ms)`, { id: toastId });
         } else {
-          toast.warning("Google Cloud Offline / Cache Lokal", { id: toastId });
+          toast.warning("Server VPS Mandiri Offline / Cache Lokal", { id: toastId });
         }
       } else if (serverId === "raspberry") {
         const r = await fetch("/api/system/health", { cache: "no-store" });
@@ -183,7 +160,14 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         if (j.raspberry_pi && j.raspberry_pi.installed) {
           toast.success(`Node Raspberry Pi Toko Terhubung (${j.raspberry_pi.cpu_temperature?.temp_c || 45}°C)`, { id: toastId });
         } else {
-          toast.info("Node fisik Raspberry Pi belum dipasang di outlet (Saat ini sistem berjalan penuh via Google Cloud)", { id: toastId, duration: 4000 });
+          toast.info("Node fisik Raspberry Pi belum dipasang di outlet (Saat ini sistem berjalan penuh via Server VPS Mandiri)", { id: toastId, duration: 4000 });
+        }
+      } else if (serverId === "vps" || serverId === "gudang_644") {
+        const r = await fetch("/api/health", { cache: "no-store" }).catch(() => null);
+        if (r && r.ok) {
+          toast.success("Server VPS Gudang-644 Terhubung via Tailscale (100.117.186.13:8000)!", { id: toastId });
+        } else {
+          toast.info("Server VPS Gudang-644 siaga di Tailscale (100.117.186.13:8000)", { id: toastId, duration: 4000 });
         }
       } else if (serverId === "hermes" || serverId === "whatsapp") {
         const r = await fetch("/api/whatsapp/status", { cache: "no-store" });
@@ -286,7 +270,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                   const onlineCount = (serverData.servers || []).filter(
                     (s) => s.status === "online" || s.status === "connected"
                   ).length;
-                  const total = serverData.servers?.length || 4;
+                  const total = serverData.servers?.length || 2;
                   return (
                     <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -296,7 +280,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                 })()}
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Pantau status operasional <b>Google Cloud API Server</b>, <b>Node Kasir Toko (Raspberry Pi 4 / PC Master)</b>, dan <b>Hermes Agent (WhatsApp Gateway Baileys &amp; AI Brain)</b> dalam 1 tampilan.
+                Pantau status operasional <b>Server Cloud Pusat (Google Cloud)</b> dan <b>Server Kasir Toko (Raspberry Pi 4 / PC Master)</b> dalam 1 tampilan.
               </p>
             </div>
           </div>
@@ -315,8 +299,8 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
         </div>
       )}
 
-      {/* Grid Multi-Server (3 Columns) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* Grid Multi-Server (2 Columns) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {serverData.servers.map((s) => {
           const style = getStatusColor(s.status);
           const isTestingCurrent = testingId === s.id;
@@ -335,7 +319,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
                     </div>
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-neutral-500">
-                        Node #{s.num} · {s.category === "cloud" ? "Google Cloud Primary" : s.category === "raspberry" ? "Node Kasir Toko" : "Hermes Gateway"}
+                        Node #{s.num} · {s.category === "cloud" ? "Google Cloud Primary" : "Node Kasir Toko"}
                       </span>
                       <h4 className="text-sm font-black text-neutral-900 leading-tight mt-0.5">
                         {s.short_name}
@@ -426,22 +410,6 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
             </div>
           );
         })}
-      </div>
-
-      {/* Footer Info & Latency Comparison Bar */}
-      <div className="mt-5 p-4 rounded-xl bg-neutral-50 border border-neutral-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-600">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="flex items-center gap-1 font-bold text-neutral-900">
-            <Zap size={14} className="text-amber-500" />
-            Arsitektur Cloud &amp; VPS Mandiri:
-          </span>
-          <span>
-            Sistem beroperasi di <b>Server Cloud VPS (24/7)</b> dan <b>Google Cloud Run</b>, terhubung langsung ke <b>Evolution API di VPS</b> untuk WhatsApp Gateway &amp; Otomasi n8n.
-          </span>
-        </div>
-        <div className="text-[11px] text-neutral-400 font-mono shrink-0">
-          Diperbarui: {lastUpdated.toLocaleTimeString("id-ID")} WIB
-        </div>
       </div>
     </div>
   );

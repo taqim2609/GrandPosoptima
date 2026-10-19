@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import api, { apiError, getServerUrl, setServerUrl, discoverServer } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, Lock, Mail, Server, Radar, Download, Globe, Smartphone, Bug, KeyRound, Shield, Delete, UserCheck, Sparkles } from "lucide-react";
+import { Loader2, Lock, Mail, Radar, Download, Globe, Smartphone, KeyRound, Shield, Delete, UserCheck, Sparkles } from "lucide-react";
 import { collectVersions, APK_VERSION, APK_FILENAME, APK_DOWNLOAD_URL } from "@/lib/versions";
 import { usePlatform, logoUrl, brandTitle } from "@/lib/platform";
 import { isSuperAdmin } from "@/lib/rbac";
@@ -36,13 +36,12 @@ export default function Login() {
   // PIN Mode States
   const [pin, setPin] = useState("");
   const [pinUsers, setPinUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null); // null = auto detect user by PIN
+  const [selectedUser, setSelectedUser] = useState(null);
   const [pinLoading, setPinLoading] = useState(false);
   const [pinErrorShake, setPinErrorShake] = useState(false);
   const pinInputRef = useRef(null);
   
   const [loading, setLoading] = useState(false);
-  const [showSrv, setShowSrv] = useState(false);
   const [srv, setSrv] = useState(getServerUrl());
   const [showTs, setShowTs] = useState(false);
   const [tsUrl, setTsUrl] = useState(() => {
@@ -52,8 +51,12 @@ export default function Login() {
   const [scanning, setScanning] = useState(false);
   const [testing, setTesting] = useState(false);
   const [version, setVersion] = useState(null);
-  const [loginDiagSending, setLoginDiagSending] = useState(false);
   const [loginFailedServer, setLoginFailedServer] = useState(false);
+  const [logoError, setLogoError] = useState(false);
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [platform?.logo_url]);
 
   // Load list of available users for PIN login
   useEffect(() => {
@@ -110,12 +113,17 @@ export default function Login() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [loginMode, pinLoading]);
 
-  // Handle PIN verification when 6 digits are reached
+  // Handle PIN verification when 6 digits are reached (hanya untuk akun kasir yang dipilih)
   const submitPin = useCallback(async (pinCode, userObj = selectedUser) => {
     if (!pinCode || pinCode.length !== 6) return;
+    if (!userObj || !userObj.username) {
+      toast.error("Silakan pilih akun kasir/staf terlebih dahulu sebelum memasukkan PIN");
+      setPin("");
+      return;
+    }
     setPinLoading(true);
     try {
-      const u = await loginPin(pinCode, userObj?.username || null);
+      const u = await loginPin(pinCode, userObj.username);
       toast.success(`Selamat datang, ${u.name}!`);
       nav(u.role === "admin" || u.role === "superadmin" || u.is_superadmin || isSuperAdmin(u) ? "/dashboard" : u.role === "input" ? "/products" : "/pos");
     } catch (err) {
@@ -124,7 +132,7 @@ export default function Login() {
       setPin("");
       if (!err.response) {
         setLoginFailedServer(true);
-        toast.error(`Tidak bisa terhubung ke server (${getServerUrl() || "Google Cloud"}). Server sedang offline. Silakan pilih server lain.`, { duration: 8000 });
+        toast.error(`Tidak bisa terhubung ke server (${getServerUrl() || "Server VPS Mandiri"}). Server sedang offline. Silakan pilih server lain.`, { duration: 8000 });
       } else {
         toast.error(apiError(err.response?.data?.detail) || "PIN 6 digit salah");
       }
@@ -152,73 +160,6 @@ export default function Login() {
         return prev;
       });
     }
-  };
-
-  // Kirim laporan diagnostik TANPA login — langsung ke Google AI Studio.
-  const sendLoginDiag = async () => {
-    setLoginDiagSending(true);
-    const t = toast.loading("Mengirim laporan diagnostik...");
-    try {
-      const v = await collectVersions();
-      const parts = [
-        "=== LAPORAN DIAGNOSTIK (dari layar login) ===",
-        `Waktu: ${new Date().toLocaleString("id-ID")}`,
-        `Bundle frontend: ${v.bundle}`,
-        `Platform: ${v.native ? `APK (Capacitor) v${v.apk}` : "Web"}`,
-        `URL server: ${v.serverUrl}`,
-        `OTA server: ${v.otaServer || "-"} | OTA lokal: ${v.otaLocal || "-"} | OTA terpasang: ${v.otaInstalled || "-"}`,
-        `User-Agent: ${navigator.userAgent || "-"}`,
-        `Layar: ${window.screen?.width || "-"}x${window.screen?.height || "-"} (dpr ${window.devicePixelRatio || 1})`,
-        `Online: ${navigator.onLine ? "ya" : "tidak"}`,
-      ];
-      // Probe koneksi ke server (biar laporan mencerminkan kondisi nyata)
-      const base = v.serverUrl;
-      if (base && base.startsWith("http")) {
-        try {
-          const r = await fetch(`${base}/api/health`, { cache: "no-store" });
-          const j = await r.json().catch(() => ({}));
-          parts.push(`Server /api/health: HTTP ${r.status} -> ${JSON.stringify(j)}`);
-        } catch (e) {
-          parts.push(`Server /api/health: GAGAL -> ${(e && e.message) || e}`);
-        }
-      }
-      const report = parts.join("\n");
-      const endpoint = typeof window !== "undefined" && window.location?.origin
-        ? `${window.location.origin}/api/rpt`
-        : "/api/rpt";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Gak-Token": "gak_rpt_7f3c9e1b" },
-        body: JSON.stringify({ ts: new Date().toISOString(), report }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      toast.success("Laporan terkirim ke Google AI Studio — sebutkan di chat bahwa Anda mengirimnya", { id: t, duration: 8000 });
-    } catch (e) {
-      toast.error(`Gagal mengirim: ${(e && e.message) || e}. Butuh internet server untuk mengirim.`, { id: t, duration: 9000 });
-    } finally {
-      setLoginDiagSending(false);
-    }
-  };
-
-  const testConn = async () => {
-    const base = (srv || getServerUrl()).replace(/\/+$/, "");
-    if (!base) { toast.error("Isi alamat server dulu"); return; }
-    setTesting(true);
-    const t = toast.loading(`Menghubungi ${base} ...`);
-    try {
-      const res = await fetch(`${base}/api/health`);
-      const txt = await res.text();
-      if (isKnownHealthResponse(res, txt)) toast.success("Server terhubung! ✅ Silakan login.", { id: t, duration: 6000 });
-      else toast.error(`Server menjawab tapi tidak dikenal (HTTP ${res.status}). Cek alamat server.`, { id: t, duration: 8000 });
-    } catch (e) {
-      toast.error(`Gagal menghubungi server: ${e.message}. Cek IP & koneksi, pastikan diawali http://`, { id: t, duration: 9000 });
-    } finally { setTesting(false); }
-  };
-
-  const saveSrv = () => {
-    setServerUrl(srv);
-    toast.success("Alamat server disimpan. Memuat ulang...");
-    setTimeout(() => window.location.reload(), 700);
   };
 
   const saveTs = () => {
@@ -284,7 +225,7 @@ export default function Login() {
     } catch (err) {
       if (!err.response) {
         setLoginFailedServer(true);
-        toast.error(`Tidak bisa terhubung ke server (${getServerUrl() || "Google Cloud"}). Server sedang offline. Silakan pilih server lain pada panel di atas.`, { duration: 9000 });
+        toast.error(`Tidak bisa terhubung ke server (${getServerUrl() || "Server VPS Mandiri"}). Server sedang offline. Silakan pilih server lain pada panel di atas.`, { duration: 9000 });
       } else if (err.response.status === 401) {
         toast.error("Username atau password salah.");
       } else {
@@ -302,8 +243,13 @@ export default function Login() {
         <div className="absolute -right-20 -top-20 h-80 w-80 rounded-full bg-[#F97316]/40 blur-3xl" />
         <div className="absolute -left-24 -bottom-24 h-96 w-96 rounded-full bg-[#4F46E5]/30 blur-3xl" />
         <div className="flex items-center gap-3 relative">
-          {platform?.logo_url ? (
-            <img src={logoUrl(platform)} alt="logo" className="h-12 w-12 rounded-xl object-contain bg-white/95 p-1" />
+          {platform?.logo_url && logoUrl(platform) && !logoError ? (
+            <img
+              src={logoUrl(platform)}
+              alt="logo"
+              onError={() => setLogoError(true)}
+              className="h-12 w-12 rounded-xl object-contain bg-white/95 p-1"
+            />
           ) : (
             <div className="h-12 w-12 rounded-xl grid place-items-center font-heading font-extrabold text-xl" style={{ backgroundColor: "var(--gak-p)" }}>
               {(platform?.app_name || "G").trim().charAt(0).toUpperCase()}
@@ -394,14 +340,12 @@ export default function Login() {
                   <div className="relative">
                     <select
                       data-testid="pin-user-dropdown"
-                      value={selectedUser ? (selectedUser.username || selectedUser.id) : (selectedUser === "auto" ? "auto" : "")}
+                      value={selectedUser ? (selectedUser.username || selectedUser.id) : ""}
                       onChange={(e) => {
                         const val = e.target.value;
                         setPin("");
                         if (!val) {
                           setSelectedUser(null);
-                        } else if (val === "auto") {
-                          setSelectedUser("auto");
                         } else {
                           const found = pinUsers.find((u) => (u.username || u.id) === val);
                           setSelectedUser(found || null);
@@ -410,7 +354,6 @@ export default function Login() {
                       className="w-full h-12 rounded-xl border border-[#D4D4D8] px-3.5 bg-white text-sm font-bold text-[#09090B] focus:border-[#E63946] focus:ring-2 focus:ring-[#E63946]/20 outline-none shadow-xs"
                     >
                       <option value="">-- Pilih Akun yang Menggunakan PIN --</option>
-                      <option value="auto">⚡ Deteksi Otomatis (Auto PIN Semua Akun)</option>
                       {pinUsers.map((u) => (
                         <option key={u.id} value={u.username || u.id}>
                           {u.name} (@{u.username || u.email}) — {u.role_name || u.role}
@@ -421,7 +364,7 @@ export default function Login() {
                 </div>
 
                 {/* Info Card Akun Terpilih */}
-                {selectedUser && selectedUser !== "auto" && (
+                {selectedUser && (
                   <div className="p-3 bg-[#F4F4F5] rounded-xl border border-[#E4E4E7] flex items-center justify-between animate-in fade-in duration-200">
                     <div className="flex items-center gap-2.5">
                       <div className="h-9 w-9 rounded-full bg-[#E63946] text-white font-extrabold text-sm flex items-center justify-center shadow-xs">
@@ -440,7 +383,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => { setSelectedUser(null); setPin(""); }}
-                      className="text-xs text-[#E63946] font-bold hover:underline"
+                      className="text-xs text-[#E63946] font-bold hover:underline cursor-pointer"
                     >
                       Ganti Akun
                     </button>
@@ -453,11 +396,7 @@ export default function Login() {
                     {/* 6 Digit PIN Display Boxes */}
                     <div className="text-center py-1">
                       <div className="text-xs font-bold text-[#71717A] mb-2.5">
-                        {selectedUser === "auto" ? (
-                          <span>Ketik PIN 6 digit akun kasir Anda:</span>
-                        ) : (
-                          <span>Masukkan 6 digit PIN untuk <b>{selectedUser.name}</b>:</span>
-                        )}
+                        <span>Masukkan 6 digit PIN untuk <b>{selectedUser.name}</b>:</span>
                       </div>
 
                       <div
@@ -611,63 +550,32 @@ export default function Login() {
               </form>
             )}
 
-            {/* Baris 1: Cari Server Otomatis | Atur Server Manual */}
+            {/* Baris Tombol Server & Unduh APK */}
             <div className="grid grid-cols-2 gap-3 mt-4">
               <button
                 type="button" data-testid="server-scan-btn" onClick={scan} disabled={scanning}
-                className="tap h-11 rounded-xl border-2 border-[#E63946] text-[#E63946] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight disabled:opacity-60"
+                className="tap h-11 rounded-xl border-2 border-[#E63946] text-[#E63946] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight disabled:opacity-60 cursor-pointer"
               >
                 {scanning ? <Loader2 size={15} className="animate-spin" /> : <Radar size={15} />} Cari Server Otomatis
               </button>
-              <button
-                type="button" data-testid="server-config-toggle" onClick={() => setShowSrv((v) => !v)}
-                className="tap h-11 rounded-xl border-2 border-[#71717A] text-[#52525B] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight hover:bg-[#52525B] hover:text-white transition-colors"
-              >
-                <Server size={15} /> Atur Server Manual
-              </button>
-            </div>
-            {showSrv && (
-              <div className="mt-3 rounded-xl border border-[#E4E4E7] bg-[#FAFAFA] p-3" data-testid="server-config-panel">
-                <label className="text-xs uppercase tracking-wider font-bold text-[#52525B]">Alamat Server</label>
-                <input
-                  data-testid="server-url-input" value={srv} onChange={(e) => setSrv(e.target.value)}
-                  placeholder="http://192.168.1.100"
-                  className="w-full h-11 px-3 mt-1.5 rounded-lg border border-[#E4E4E7] text-sm font-mono outline-none focus:border-[#E63946]"
-                />
-                <p className="text-[11px] text-[#a1a1aa] mt-1.5 leading-snug">
-                  Kosongkan untuk memakai server yang sama dengan aplikasi. Isi IP komputer server saat memakai APK Android di jaringan toko.
-                </p>
-                <button
-                  type="button" data-testid="server-url-save" onClick={saveSrv}
-                  className="tap mt-2 w-full h-10 rounded-lg bg-[#0A0A0A] text-white font-bold text-sm"
-                >
-                  Simpan &amp; Hubungkan
-                </button>
-                <button
-                  type="button" data-testid="server-test-btn" onClick={testConn} disabled={testing}
-                  className="tap mt-2 w-full h-10 rounded-lg border-2 border-[#0A0A0A] text-[#0A0A0A] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-60"
-                >
-                  {testing ? <Loader2 size={15} className="animate-spin" /> : <Radar size={15} />} Tes Koneksi
-                </button>
-              </div>
-            )}
-
-            {/* Baris 2: Unduh Aplikasi | Koneksi via Tailscale */}
-            <div className="grid grid-cols-2 gap-3 mt-3">
               <a
                 href={version?.latestApk?.url || APK_DOWNLOAD_URL}
                 download={version?.latestApk?.filename || APK_FILENAME}
                 target="_blank" rel="noopener noreferrer" data-testid="download-app-btn"
-                className="tap h-11 rounded-xl border-2 border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight hover:bg-[#0A0A0A] hover:text-white transition-colors"
+                className="tap h-11 rounded-xl border-2 border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight hover:bg-[#0A0A0A] hover:text-white transition-colors cursor-pointer"
                 title={`Unduh file instalasi APK Android versi ${version?.latestApk?.version || APK_VERSION}`}
               >
                 <Download size={15} /> Unduh APK v{version?.latestApk?.version || APK_VERSION}
               </a>
+            </div>
+
+            {/* Tombol Akses Tailscale Funnel (Opsional dari luar toko) */}
+            <div className="mt-3">
               <button
                 type="button" data-testid="tailscale-toggle" onClick={() => setShowTs((v) => !v)}
-                className="tap h-11 rounded-xl border-2 border-[#2563EB] text-[#2563EB] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight hover:bg-[#2563EB] hover:text-white transition-colors"
+                className="tap w-full h-10 rounded-xl border-2 border-[#2563EB] text-[#2563EB] font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 text-center leading-tight hover:bg-[#2563EB] hover:text-white transition-colors cursor-pointer"
               >
-                <Globe size={15} /> Koneksi via Tailscale
+                <Globe size={15} /> Koneksi via Tailscale Funnel
               </button>
             </div>
             {showTs && (
@@ -683,13 +591,13 @@ export default function Login() {
                 </p>
                 <button
                   type="button" data-testid="tailscale-save" onClick={saveTs}
-                  className="tap mt-2 w-full h-10 rounded-lg bg-[#2563EB] text-white font-bold text-sm"
+                  className="tap mt-2 w-full h-10 rounded-lg bg-[#2563EB] text-white font-bold text-sm cursor-pointer"
                 >
                   Simpan &amp; Hubungkan
                 </button>
                 <button
                   type="button" data-testid="tailscale-test" onClick={testTs} disabled={testing}
-                  className="tap mt-2 w-full h-10 rounded-lg border-2 border-[#2563EB] text-[#2563EB] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+                  className="tap mt-2 w-full h-10 rounded-lg border-2 border-[#2563EB] text-[#2563EB] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
                 >
                   {testing ? <Loader2 size={15} className="animate-spin" /> : <Radar size={15} />} Tes Koneksi
                 </button>
@@ -697,7 +605,7 @@ export default function Login() {
             )}
           </div>
 
-          {/* Footer versi + Diagnostik — tampil di layar login (bertumpuk) */}
+          {/* Footer versi info */}
           <div className="mt-4 text-center text-[11px] text-[#8b87a8] font-mono" data-testid="login-version">
             <div className="flex items-center justify-center gap-1.5">
               <Smartphone size={11} />
@@ -709,17 +617,6 @@ export default function Login() {
             {version?.native && version.otaServer && version.otaInstalled && version.otaServer > version.otaInstalled && (
               <div className="mt-1 text-[10px] text-[#B45309]">Update OTA tersedia ({version.otaServer}) — buka aplikasi untuk memasang.</div>
             )}
-            {/* Diagnostik tanpa login */}
-            <button
-              type="button"
-              data-testid="login-diag-btn"
-              onClick={sendLoginDiag}
-              disabled={loginDiagSending}
-              className="tap mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#4F46E5] text-[#4F46E5] font-bold text-xs px-3 py-2 hover:bg-[#EEF2FF] disabled:opacity-50"
-            >
-              {loginDiagSending ? <Loader2 size={13} className="animate-spin" /> : <Bug size={13} />}
-              {loginDiagSending ? "Mengirim..." : "Kirim Laporan Diagnostik"}
-            </button>
           </div>
         </div>
       </div>

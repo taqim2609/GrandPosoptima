@@ -416,6 +416,7 @@ export default function Layout({ children }) {
   const [pwOpen, setPwOpen] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       return localStorage.getItem("gak_sidebar_collapsed") === "true";
@@ -423,6 +424,10 @@ export default function Layout({ children }) {
       return false;
     }
   });
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [platform?.logo_url]);
 
   useEffect(() => {
     try {
@@ -470,8 +475,13 @@ export default function Layout({ children }) {
         <div className={`px-4 py-4 border-b border-white/10 flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}>
           {!isCollapsed && (
             <div className="flex items-center gap-2.5 min-w-0">
-              {platform?.logo_url ? (
-                <img src={logoUrl(platform)} alt="logo" className="h-9 w-9 rounded-lg object-contain bg-white/95 p-0.5 shrink-0" />
+              {platform?.logo_url && logoUrl(platform) && !logoError ? (
+                <img
+                  src={logoUrl(platform)}
+                  alt="logo"
+                  onError={() => setLogoError(true)}
+                  className="h-9 w-9 rounded-lg object-contain bg-white/95 p-0.5 shrink-0"
+                />
               ) : (
                 <div className="h-9 w-9 rounded-lg grid place-items-center font-heading font-extrabold shrink-0" style={{ backgroundColor: "var(--gak-p)" }}>
                   {(platform?.app_name || "G").trim().charAt(0).toUpperCase()}

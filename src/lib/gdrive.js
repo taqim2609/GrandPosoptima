@@ -71,9 +71,66 @@ export const initAuth = (
   return () => authListeners.delete(listener);
 };
 
+export const isRawIpOrigin = () => {
+  if (typeof window === "undefined") return false;
+  const hostname = window.location.hostname;
+  return /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
+};
+
+export const saveManualAuthSession = async (tokenInput, customEmail = "") => {
+  const token = (tokenInput || "").trim();
+  if (!token) throw new Error("Access Token tidak boleh kosong");
+
+  let user = {
+    displayName: "Google Drive Terhubung",
+    email: customEmail || "drive@grandpos.id",
+    photoURL: "",
+  };
+
+  try {
+    const uRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (uRes.ok) {
+      const uData = await uRes.json();
+      user = {
+        displayName: uData.name || uData.email,
+        email: uData.email,
+        photoURL: uData.picture || "",
+      };
+    }
+  } catch (_) {}
+
+  cachedAccessToken = token;
+  currentUser = user;
+  try {
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({
+        token,
+        user,
+        expiresAt: Date.now() + 7 * 24 * 3600 * 1000,
+      })
+    );
+  } catch (_) {}
+  notifyAuthListeners();
+  return { user, accessToken: token };
+};
+
 // Google Sign-In with popup via standard Google Identity Services / OAuth2
-export const googleSignIn = async () => {
+export const googleSignIn = async (bypassIpCheck = false) => {
   if (isSigningIn) return null;
+
+  if (isRawIpOrigin() && !bypassIpCheck) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "IP";
+    const err = new Error(
+      `Google OAuth memblokir login dari alamat IP mentah (${origin}). Google mewajibkan nama domain atau Tailscale MagicDNS (bukan IP angka 100.x.x.x / 192.x.x.x).`
+    );
+    err.code = "RAW_IP_OAUTH_BLOCKED";
+    err.origin = origin;
+    throw err;
+  }
+
   isSigningIn = true;
   try {
     const oauth2 = await loadGisScript();
@@ -84,7 +141,11 @@ export const googleSignIn = async () => {
           scope: SCOPES,
           callback: async (resp) => {
             if (resp.error) {
-              return reject(new Error(resp.error_description || resp.error));
+              const err = new Error(resp.error_description || resp.error);
+              if (String(resp.error).includes("origin_mismatch") || String(resp.error_description).includes("origin_mismatch") || String(resp.error).includes("GeneralOAuthFlow")) {
+                err.code = "RAW_IP_OAUTH_BLOCKED";
+              }
+              return reject(err);
             }
             cachedAccessToken = resp.access_token;
             let user = {

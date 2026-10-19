@@ -200,8 +200,8 @@ export default function Diagnostik() {
         updateStep(
           "internet",
           "success",
-          `Terhubung ke internet dengan latensi ${latency} ms ke server Google Cloud.`,
-          "Koneksi Anda sangat prima untuk fitur AI dan singkronisasi cloud."
+          `Terhubung ke internet dengan latensi ${latency} ms ke Server VPS Mandiri.`,
+          "Koneksi Anda sangat prima untuk fitur AI dan sinkronisasi server VPS."
         );
       } else if (isOnline) {
         updateStep(
@@ -686,14 +686,14 @@ export default function Diagnostik() {
   const copy = async () => {
     if (!report) return toast.error("Belum ada laporan");
     const ok = await copyText(report);
-    if (ok) toast.success("Laporan disalin — tempelkan ke chat Google AI Studio");
+    if (ok) toast.success("Laporan disalin — tempelkan ke chat Server VPS Mandiri");
     else toast.error("Gagal menyalin otomatis — blok teks & salin manual");
   };
 
   const sendReportToStudio = async () => {
     if (!report) return toast.error("Belum ada laporan");
     setSending(true);
-    const t = toast.loading("Mengirim laporan ke Google AI Studio...");
+    const t = toast.loading("Mengirim laporan ke Server VPS Mandiri...");
     try {
       const endpoint = typeof window !== "undefined" && window.location?.origin
         ? `${window.location.origin}/api/rpt`
@@ -704,7 +704,7 @@ export default function Diagnostik() {
         body: JSON.stringify({ ts: new Date().toISOString(), report }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      toast.success("Laporan terkirim ke Google AI Studio — sebutkan di chat bahwa Anda sudah mengirimnya", { id: t, duration: 8000 });
+      toast.success("Laporan terkirim ke Server VPS Mandiri — sebutkan di chat bahwa Anda sudah mengirimnya", { id: t, duration: 8000 });
     } catch (e) {
       toast.error(`Gagal mengirim: ${(e && e.message) || e} (butuh internet untuk mengirim)`, { id: t, duration: 10000 });
     } finally {
@@ -772,7 +772,7 @@ export default function Diagnostik() {
   };
 
   useEffect(() => {
-    if (activeTab === "cloud-logs" || activeTab === "firestore-logs") {
+    if (activeTab === "cloud-logs" || activeTab === "vps-logs") {
       loadRemoteLogs();
     }
   }, [activeTab]);
@@ -874,12 +874,12 @@ export default function Diagnostik() {
           <button
             onClick={() => setActiveTab("cloud-logs")}
             className={`px-5 py-3 font-bold text-sm whitespace-nowrap transition relative flex items-center gap-2 ${
-              activeTab === "cloud-logs" || activeTab === "firestore-logs"
+              activeTab === "cloud-logs" || activeTab === "vps-logs"
                 ? "text-zinc-950 border-b-2 border-zinc-950"
                 : "text-zinc-400 hover:text-zinc-600"
             }`}
           >
-            <Flame size={16} className={activeTab === "cloud-logs" || activeTab === "firestore-logs" ? "text-amber-600" : ""} />
+            <Flame size={16} className={activeTab === "cloud-logs" || activeTab === "vps-logs" ? "text-amber-600" : ""} />
             Remote Error Telemetry
             {unresolvedCount > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white">
@@ -1020,7 +1020,7 @@ export default function Diagnostik() {
           </div>
         )}
 
-        {(activeTab === "cloud-logs" || activeTab === "firestore-logs") && (
+        {(activeTab === "cloud-logs" || activeTab === "vps-logs") && (
           <div className="space-y-4">
             {/* Header & Controls Bar */}
             <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">

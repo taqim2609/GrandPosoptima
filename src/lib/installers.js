@@ -1,5 +1,5 @@
 // Embedded 1-click installer scripts (source of truth for in-app download).
-// Sumber update Google AI Studio.
+// Sumber update Server VPS Mandiri.
 
 export const AISTUDIO_DEFAULT_URL = typeof window !== "undefined" && window.location?.origin
   ? window.location.origin
@@ -7,11 +7,11 @@ export const AISTUDIO_DEFAULT_URL = typeof window !== "undefined" && window.loca
 
 export const getBootstrapPiSh = (baseUrl = AISTUDIO_DEFAULT_URL) => `#!/usr/bin/env bash
 set -e
-# Install Grand Aceh POS LANGSUNG dari Google AI Studio / Google Cloud.
+# Install Grand Aceh POS LANGSUNG dari Server VPS Mandiri.
 BASE_URL="\${AISTUDIO_URL:-${baseUrl}}"
 APP_DIR="\${APP_DIR:-$HOME/grand-aceh-pos}"
 
-echo "=== Bootstrap Grand Aceh POS (Raspberry Pi / Google AI Studio) ==="
+echo "=== Bootstrap Grand Aceh POS (Raspberry Pi / Server VPS Mandiri) ==="
 echo "Sumber : $BASE_URL"
 echo "Folder : $APP_DIR"
 echo
@@ -25,9 +25,9 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "[OK] Docker terpasang."
 fi
 
-# 2. Unduh kode terbaru dari Google AI Studio
+# 2. Unduh kode terbaru dari Server VPS Mandiri
 mkdir -p "$APP_DIR"
-echo "Mengunduh kode dari Google AI Studio..."
+echo "Mengunduh kode dari Server VPS Mandiri..."
 curl -fsSL -o /tmp/pos-grand.tar.gz "$BASE_URL/pos-grand.tar.gz"
 tar xzf /tmp/pos-grand.tar.gz -C "$APP_DIR"
 rm -f /tmp/pos-grand.tar.gz
@@ -48,7 +48,7 @@ if "%BASE_URL%"=="" set BASE_URL=${baseUrl}
 set APP_DIR=grand-aceh-pos
 echo ============================================
 echo   Grand Aceh Kuliner POS - Bootstrap Windows
-echo   Sumber: Google AI Studio
+echo   Sumber: Server VPS Mandiri
 echo ============================================
 echo.
 
@@ -68,10 +68,10 @@ if errorlevel 1 (
 )
 
 if not exist "%APP_DIR%" mkdir "%APP_DIR%"
-echo Mengunduh kode dari Google AI Studio...
+echo Mengunduh kode dari Server VPS Mandiri...
 curl -fsSL -o "%APP_DIR%\\pos-grand.tar.gz" "%BASE_URL%/pos-grand.tar.gz"
 if errorlevel 1 (
-  echo [ERROR] Gagal mengunduh dari Google AI Studio. Cek internet lalu ulangi.
+  echo [ERROR] Gagal mengunduh dari Server VPS Mandiri. Cek internet lalu ulangi.
   pause
   exit /b 1
 )

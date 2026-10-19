@@ -311,7 +311,7 @@ export async function buildDiagReport() {
     const url = base ? `${base}/api/update/check` : "/api/update/check";
     const r = await axios.get(url, { timeout: 12000 });
     const d = r.data || {};
-    out.push(`Server mode: ${d.enabled ? "Google AI Studio" : "Lokal / Git"}`);
+    out.push(`Server mode: ${d.enabled ? "Server VPS Mandiri" : "Lokal / Git"}`);
     out.push(`Versi server: ${d.current || d.current_version || "-"} | terbaru: ${d.latest || d.latest_version || "-"}${d.updateAvailable || d.update_available ? " (UPDATE TERSEDIA)" : ""} | update center: ${d.updateCenterReachable === undefined ? "n/a" : d.updateCenterReachable ? "dijangkau" : "tidak dijangkau"}`);
   } catch (e) {
     const status = e.response && e.response.status;

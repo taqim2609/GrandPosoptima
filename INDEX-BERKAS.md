@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-18 23:06:24 WIB`
-> Total Berkas Terindeks: **636 berkas**
+> Terakhir diperbarui: `2026-10-19 01:53:40 WIB`
+> Total Berkas Terindeks: **637 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -25,7 +25,7 @@ python3 project/scripts/update_file_index.py
 | **Integrasi Hermes Agent** | `2` | Modul integrasi hermes agent sistem POS |
 | **Planora Framework** | `48` | Modul planora framework sistem POS |
 | **Dokumentasi Teknis** | `14` | Modul dokumentasi teknis sistem POS |
-| **Deployment & DevOps** | `64` | Modul deployment & devops sistem POS |
+| **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
 | **Berkas Pendukung / Konfigurasi** | `258` | Modul berkas pendukung / konfigurasi sistem POS |
 
@@ -341,13 +341,14 @@ python3 project/scripts/update_file_index.py
 | `project/docs/RANCANGAN-VOID-PESANAN.md` | Dokumen acuan teknis operasional: RANCANGAN-VOID-PESANAN.md. |
 | `project/docs/RANCANGAN-WINDOWS-UTAMA-PI-CADANGAN.md` | Dokumen acuan teknis operasional: RANCANGAN-WINDOWS-UTAMA-PI-CADANGAN.md. |
 
-### 📁 Deployment & DevOps (64 berkas)
+### 📁 Deployment & DevOps (65 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
 | `Buat-Shortcut-Desktop.bat` | Skrip otomatisasi Windows Server: Buat-Shortcut-Desktop.bat. |
 | `Buka-POS-Desktop.bat` | Skrip otomatisasi Windows Server: Buka-POS-Desktop.bat. |
 | `Buka-POS-KioskPrint.bat` | Skrip otomatisasi Windows Server: Buka-POS-KioskPrint.bat. |
+| `backup-pi-to-vps.sh` | Skrip otomatisasi Linux/Raspberry Pi: backup-pi-to-vps.sh. |
 | `backup-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: backup-pi.sh. |
 | `backup-to-cloud.sh` | Skrip otomatisasi Linux/Raspberry Pi: backup-to-cloud.sh. |
 | `bootstrap-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-pi.sh. |

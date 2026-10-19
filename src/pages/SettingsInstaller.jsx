@@ -79,7 +79,7 @@ export default function SettingsInstaller() {
   };
 
   const updateNow = async () => {
-    if (!window.confirm("Unduh versi terbaru dari Google AI Studio & bangun ulang sekarang? Aplikasi akan restart beberapa menit.")) return;
+    if (!window.confirm("Unduh versi terbaru dari Server VPS Mandiri & bangun ulang sekarang? Aplikasi akan restart beberapa menit.")) return;
     setUpdating(true); setLog(""); setPhase("Memulai update...");
     const t = toast.loading("Memulai update...");
     try {
@@ -112,11 +112,11 @@ export default function SettingsInstaller() {
   };
 
   const backupToCloud = async () => {
-    if (!window.confirm("Buat backup database di server lalu kirim salinannya ke Google AI Studio? Backup lokal tetap dibuat di folder backups/.")) return;
-    const t = toast.loading("Membuat & mengirim backup ke Google AI Studio...");
+    if (!window.confirm("Buat backup database di server lalu kirim salinannya ke Server VPS Mandiri? Backup lokal tetap dibuat di folder backups/.")) return;
+    const t = toast.loading("Membuat & mengirim update database ke Server VPS Mandiri...");
     try {
       const r = await api.post("/backup/send-to-cloud");
-      toast.success(r.data?.message || "Backup sedang dibuat & dikirim di server", { id: t, duration: 9000 });
+      toast.success(r.data?.message || "Backup sedang dibuat & disinkronkan ke Server VPS Mandiri", { id: t, duration: 9000 });
     } catch (e) {
       toast.error(e.response?.data?.detail || "Gagal memulai backup (periksa internet server)", { id: t, duration: 10000 });
     }
@@ -141,16 +141,16 @@ export default function SettingsInstaller() {
   return (
     <div className="h-full overflow-y-auto p-6 lg:p-8" data-testid="settings-installer">
       <div className="max-w-3xl space-y-8">
-        {/* HEADER AISTUDIO */}
-        <div className="rounded-2xl border-2 border-[#E63946] bg-[#FEF2F2] p-5" data-testid="aistudio-repo-box">
-          <div className="flex items-center gap-2 font-extrabold text-[#0A0A0A]"><Globe size={20} className="text-[#E63946]" /> Pusat Update Google AI Studio</div>
-          <p className="text-sm text-[#52525B] mt-1">Seluruh kode &amp; update server diunduh langsung dari Google AI Studio ini. Versi dicek otomatis dari <code className="font-mono text-xs">version.json</code>.</p>
+        {/* HEADER VPS */}
+        <div className="rounded-2xl border-2 border-[#10B981] bg-[#F0FDF4] p-5" data-testid="aistudio-repo-box">
+          <div className="flex items-center gap-2 font-extrabold text-[#0A0A0A]"><Globe size={20} className="text-[#10B981]" /> Pusat Update Server VPS Mandiri</div>
+          <p className="text-sm text-[#52525B] mt-1">Seluruh kode &amp; update server diunduh langsung dari Server VPS Mandiri. Versi dicek otomatis dari <code className="font-mono text-xs">version.json</code>.</p>
           <div className="mt-2 text-xs font-bold text-[#52525B]">Alamat pusat update:</div>
           <Code>{AISTUDIO_URL}</Code>
         </div>
 
         {/* INSTALL */}
-        <Section n="1" title="Instal Server (pertama kali)" icon={Globe} desc="Unduh kode langsung dari Google AI Studio, lalu jalankan. Sekali perintah untuk Raspberry Pi.">
+        <Section n="1" title="Instal Server (pertama kali)" icon={Globe} desc="Unduh kode langsung dari Server VPS Mandiri, lalu jalankan. Sekali perintah untuk Raspberry Pi.">
           {/* SCRIPT PRODUKSI PC & RASP PI */}
           <div className="rounded-xl border-2 border-[#10B981] bg-[#F0FDF4] p-5 space-y-4 shadow-sm" data-testid="unified-installers-box">
             <div className="flex items-center gap-2 font-extrabold text-[#111827]">
@@ -158,7 +158,7 @@ export default function SettingsInstaller() {
               Unified POS Node Scripts (PC &amp; Raspberry Pi)
             </div>
             <p className="text-xs text-[#4B5563]">
-              Gunakan script di bawah ini untuk menginstal dan menjalankan model <b>Hybrid Lokal + Cloud</b> dengan PC Utama bertindak sebagai Node Evolution API (WhatsApp Gateway) dan Raspberry Pi sebagai Client Ringan terdedikasi.
+              Gunakan script di bawah ini untuk menginstal dan menjalankan model <b>Hybrid Lokal + VPS</b> dengan PC Utama bertindak sebagai Node Evolution API (WhatsApp Gateway) dan Raspberry Pi sebagai Client Ringan terdedikasi.
             </p>
             
             <div className="grid md:grid-cols-2 gap-4">
@@ -203,7 +203,7 @@ export default function SettingsInstaller() {
           {/* 1. SERVER CLOUD VPS 1-CLICK CURL */}
           <div className="rounded-xl border-2 border-[#4F46E5] bg-[#EEF2FF] p-4 space-y-2">
             <div className="flex items-center gap-2 font-extrabold text-[#3730A3]">
-              <Cloud size={18} className="text-[#4F46E5]" /> 1. Server Cloud VPS (Ubuntu / Debian) — 1 Perintah via SSH
+              <Cloud size={18} className="text-[#4F46E5]" /> 1. Server VPS Mandiri (Ubuntu / Debian) — 1 Perintah via SSH
             </div>
             <p className="text-xs text-[#52525B]">
               Otomatis memasang <b>Docker</b>, menjalankan <b>Evolution API v2 (Port 8080)</b>, dukungan <b>Hermes Agent AI Gateway</b>, dan <b>Watchtower</b> untuk pembaruan container otomatis setiap hari.
@@ -220,7 +220,7 @@ export default function SettingsInstaller() {
               <Cpu size={18} className="text-[#E63946]" /> 2. Raspberry Pi 4 Toko (Node Kasir Fisik) — 1 Perintah via SSH
             </div>
             <p className="text-xs text-[#52525B]">
-              Memasang <b>Docker &amp; Node.js</b>, mengunduh kode dari Google Cloud ke <code>{APP_DIR}</code>, mengaktifkan offline-first, dan menyetel auto-update otomatis jam 03:30 dini hari.
+              Memasang <b>Docker &amp; Node.js</b>, mengunduh kode dari Server VPS Mandiri ke <code>{APP_DIR}</code>, mengaktifkan offline-first, dan menyetel auto-update otomatis jam 03:30 dini hari.
             </p>
             <Code>{`bash <(curl -fsSL ${AISTUDIO_URL}/bootstrap-pi.sh)`}</Code>
             <button data-testid="download-bootstrap-pi" onClick={() => { downloadText("bootstrap-pi.sh", BOOTSTRAP_PI_SH); toast.success("bootstrap-pi.sh diunduh"); }}
@@ -232,7 +232,7 @@ export default function SettingsInstaller() {
           {/* 3. KOMPUTER WINDOWS */}
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 space-y-2 text-sm text-[#3f3f46]">
             <div className="font-bold flex items-center gap-1.5"><Monitor size={14} /> 3. Komputer Windows (Instalasi Standalone)</div>
-            <p className="text-xs text-[#52525B]">Pastikan <b>Docker Desktop</b> terpasang. Cara termudah: unduh skrip bootstrap lalu <b>dobel-klik</b> — otomatis unduh dari Google Cloud + install.</p>
+            <p className="text-xs text-[#52525B]">Pastikan <b>Docker Desktop</b> terpasang. Cara termudah: unduh skrip bootstrap lalu <b>dobel-klik</b> — otomatis unduh dari Server VPS Mandiri + install.</p>
             <button data-testid="download-bootstrap-windows" onClick={() => { downloadText("bootstrap-windows.bat", BOOTSTRAP_WINDOWS_BAT); toast.success("bootstrap-windows.bat diunduh"); }}
               className="tap h-9 px-3 rounded-lg bg-white border border-[#0A0A0A] text-[#0A0A0A] font-bold text-xs inline-flex items-center gap-1.5">
               <Download size={13} /> Unduh bootstrap-windows.bat
@@ -275,10 +275,10 @@ install-windows.bat`}</Code>
         </Section>
 
         {/* UPDATE */}
-        <Section n="2" title="Perbarui Server" icon={RefreshCw} desc="Ambil versi terbaru dari Google AI Studio. Data Anda tetap aman.">
+        <Section n="2" title="Perbarui Server" icon={RefreshCw} desc="Ambil versi terbaru dari Server VPS Mandiri. Data Anda tetap aman.">
           <div className="rounded-xl border-2 border-[#E63946] bg-[#FEF2F2] p-4 space-y-2" data-testid="update-oneclick-box">
             <div className="flex items-center gap-2 font-extrabold"><RefreshCw size={18} className="text-[#E63946]" /> Update 1-Klik</div>
-            <p className="text-xs text-[#52525B]">Unduh versi terbaru dari Google AI Studio &amp; bangun ulang otomatis di server — tanpa SSH. Tunggu 2–10 menit lalu muat ulang halaman.</p>
+            <p className="text-xs text-[#52525B]">Unduh versi terbaru dari Server VPS Mandiri &amp; bangun ulang otomatis di server — tanpa SSH. Tunggu 2–10 menit lalu muat ulang halaman.</p>
             <button data-testid="inapp-update-btn" disabled={updating} onClick={updateNow}
               className="tap h-11 px-5 rounded-xl bg-[#E63946] text-white font-bold inline-flex items-center gap-2 disabled:opacity-60">
               <RefreshCw size={16} className={updating ? "animate-spin" : ""} /> {updating ? "Sedang update..." : "Update Sekarang"}
@@ -330,7 +330,7 @@ install-windows.bat`}</Code>
             </div>
             <div className="flex flex-wrap gap-2 pt-1">
               <button data-testid="inapp-backup" onClick={backupNow} className="tap h-10 px-4 rounded-lg bg-[#10B981] hover:bg-[#059669] text-white font-bold text-sm inline-flex items-center gap-2 shadow-xs"><DatabaseBackup size={15} /> Unduh Backup (.zip)</button>
-              <button data-testid="inapp-backup-cloud" onClick={backupToCloud} className="tap h-10 px-4 rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold text-sm inline-flex items-center gap-2 shadow-xs"><CloudUpload size={15} /> Kirim Backup ke Google AI Studio</button>
+              <button data-testid="inapp-backup-cloud" onClick={backupToCloud} className="tap h-10 px-4 rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold text-sm inline-flex items-center gap-2 shadow-xs"><CloudUpload size={15} /> Sync Database ke Server VPS Mandiri</button>
               <button data-testid="inapp-restore" onClick={() => fileRef.current?.click()} className="tap h-10 px-4 rounded-lg bg-white border border-[#CBD5E1] hover:bg-[#F8FAFC] font-bold text-sm text-[#334155] shadow-xs">Restore dari File Lokal (.zip)...</button>
               <input ref={fileRef} type="file" accept=".zip" className="hidden" onChange={restoreFile} data-testid="inapp-restore-input" />
             </div>
@@ -377,9 +377,9 @@ install-windows.bat`}</Code>
         </Section>
 
         {/* DIAGNOSTIK */}
-        <Section n="5" title="Diagnostik & Lapor Bug" icon={Bug} desc="Kirim info teknis ke Google AI Studio untuk analisis.">
+        <Section n="5" title="Diagnostik & Lapor Bug" icon={Bug} desc="Kirim info teknis ke Server VPS Mandiri untuk analisis.">
           <div className="rounded-xl border border-[#E4E4E7] bg-white p-4 text-sm text-[#3f3f46]">
-            <p className="text-[#52525B] text-xs mb-2">Laporan dikirim langsung ke Google AI Studio (internet), tanpa lewat server Pi — bisa dilakukan meski koneksi server bermasalah.</p>
+            <p className="text-[#52525B] text-xs mb-2">Laporan dikirim langsung ke Server VPS Mandiri (internet), tanpa lewat server Pi — bisa dilakukan meski koneksi server bermasalah.</p>
             <button data-testid="goto-diagnostik" onClick={() => nav("/settings?tab=diagnostik")}
               className="tap h-10 px-4 rounded-lg bg-[#4F46E5] text-white font-bold text-sm inline-flex items-center gap-2">
               <Bug size={15} /> Buka Diagnostik
@@ -392,7 +392,7 @@ install-windows.bat`}</Code>
           <div className="font-extrabold mb-2 flex items-center gap-2"><CheckCircle2 size={16} className="text-[#10B981]" /> Ringkasan alur</div>
           <ol className="space-y-2 text-sm text-[#3f3f46]">
             {[
-              "Di Raspberry Pi via SSH, jalankan 1 perintah bootstrap (pasang Docker, unduh kode dari Google AI Studio, install).",
+              "Di Raspberry Pi via SSH, jalankan 1 perintah bootstrap (pasang Docker, unduh kode dari Server VPS Mandiri, install).",
               "Isi backend/.env.docker saat editor terbuka (JWT_SECRET, email/password admin), simpan.",
               "Akses http://IP-server di POS komputer / atur di APK Android.",
               "Update: cd ~/grand-aceh-pos && bash update-pi.sh (otomatis menarik pembaruan terbaru dari Git).",
