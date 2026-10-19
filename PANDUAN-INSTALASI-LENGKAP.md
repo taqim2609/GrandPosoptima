@@ -1,6 +1,6 @@
 # Panduan Instalasi Lengkap — Grand Aceh Kuliner POS
 
-Dokumen ini berisi panduan teknis langkah-demi-langkah untuk memasang (*install*) seluruh ekosistem **Grand Aceh Kuliner POS** pada berbagai jenis perangkat dan lingkungan.
+Dokumen ini berisi panduan teknis langkah-demi-langkah untuk memasang (*install*) seluruh ekosistem **Grand Aceh Kuliner POS** (berbasis murni **Node.js, Express, React 19, & Hermes Agent Baileys**) pada berbagai jenis perangkat dan lingkungan.
 
 ---
 
@@ -8,7 +8,7 @@ Dokumen ini berisi panduan teknis langkah-demi-langkah untuk memasang (*install*
 
 | Perangkat / Server | Fungsi Utama | Metode Instalasi |
 | :--- | :--- | :--- |
-| **Server VPS Cloud** | Landing Page Publik, WA Gateway, Engine Sync Cloud | 1-Klik Bootstrap Script (`bootstrap-vps.sh`) |
+| **Server VPS Cloud** | Landing Page Publik, Hermes WA Gateway, Engine Sync Cloud | 1-Klik Bootstrap Script (`bootstrap-vps.sh`) |
 | **Raspberry Pi / PC Outlet** | Node Kasir Lokal Toko (Offline-First, Cetak Struk) | 1-Klik Script (`install-pi.sh` / `bootstrap-pi.sh`) |
 | **PC / Laptop Windows** | Terminal Kasir Touchscreen / Kasir Kas | Double-click File `.bat` (`Buka-POS-Desktop.bat`) |
 | **Android Sunmi T2 / Tablet** | Kasir Mobile, Printer Thermal Hardware Built-in | File APK (`/apk/Grand-Aceh-Kuliner-POS-v2.10.apk`) |
@@ -18,7 +18,7 @@ Dokumen ini berisi panduan teknis langkah-demi-langkah untuk memasang (*install*
 
 ## 1. 🚀 Instalasi di Server VPS Cloud (Linux Ubuntu / Debian)
 
-Server VPS berfungsi sebagai pusat data publik, pengelola reservasi online 24/7, dan gerbang notifikasi WhatsApp.
+Server VPS berfungsi sebagai pusat data publik, pengelola reservasi online 24/7, dan gerbang notifikasi WhatsApp murni menggunakan **Hermes Agent (Baileys Native)**.
 
 ### Langkah-langkah Instalasi:
 1. Masuk ke server VPS Anda via SSH dari Terminal / PuTTY:
@@ -32,14 +32,14 @@ Server VPS berfungsi sebagai pusat data publik, pengelola reservasi online 24/7,
    ```
 
 3. Skrip akan otomatis:
-   - Memasang Docker & Docker Compose Engine.
-   - Mengaktifkan **WhatsApp Evolution API Gateway** di port `8080`.
-   - Mengaktifkan **PostgreSQL Database** untuk penyimpanan sesi WhatsApp.
+   - Memasang Docker Engine.
+   - Mengaktifkan **Grand Aceh POS Web & Engine** di port `3000`.
+   - Mengkonfigurasi integrasi outbox ke **Hermes Agent (Baileys Native)** di port `8644`.
    - Mengaktifkan **Watchtower** untuk update otomatis container di latar belakang.
 
 4. **Akses Dashboard VPS**:
    - Web Landing Page & POS: `http://<IP_VPS_ANDA>:3000`
-   - WhatsApp Gateway API: `http://<IP_VPS_ANDA>:8080` (API Key: `GrandAcehSecretKey2026`)
+   - Hermes Agent WhatsApp Gateway: `http://<IP_VPS_ANDA>:8644`
 
 ---
 

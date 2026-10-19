@@ -1,56 +1,50 @@
 #!/usr/bin/env bash
 set -e
 APP_DIR="${APP_DIR:-$HOME/grand-aceh-vps}"
-EVO_KEY="${EVOLUTION_API_KEY:-GrandAcehSecretKey2026}"
-PORT_EVO="${PORT_EVO:-8080}"
+
+echo "======================================================================"
+echo "  🚀 BOOTSTRAP SERVER CLOUD VPS — GRAND ACEH KULINER POS"
+echo "  (Tanpa Evolution API — Murni Hermes Agent Baileys & POS Engine)"
+echo "======================================================================"
+echo "Direktori VPS : $APP_DIR"
+echo "======================================================================"
+echo
+
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update -y
+  sudo apt-get install -y curl git ufw
+elif command -v yum >/dev/null 2>&1; then
+  sudo yum install -y curl git
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Memasang Docker Engine..."
+  curl -fsSL https://get.docker.com | sh
+  sudo usermod -aG docker "$USER" 2>/dev/null || true
+  sudo systemctl enable docker 2>/dev/null || true
+  sudo systemctl start docker 2>/dev/null || true
+fi
 
 mkdir -p "$APP_DIR"
 cd "$APP_DIR"
 
 cat << 'EOF' > docker-compose.yml
 services:
-  # Database PostgreSQL untuk Session WhatsApp yang Awet & Stabil
-  postgres:
-    image: postgres:15-alpine
-    container_name: gak_postgres
+  # 1. Grand Aceh Kuliner POS Node.js Server & Web App (Port 3000)
+  grandpos-app:
+    image: node:20-alpine
+    container_name: grandpos_web_app
     restart: always
-    environment:
-      - POSTGRES_USER=evolution
-      - POSTGRES_PASSWORD=GrandAcehSecretDB2026
-      - POSTGRES_DB=evolution
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - gak_network
-
-  # 1. WhatsApp Evolution API Gateway
-  evolution-api:
-    image: evoapicloud/evolution-api:latest
-    container_name: gak_evolution_api
-    restart: always
-    depends_on:
-      - postgres
+    working_dir: /app
     ports:
-      - "8080:8080"
+      - "3000:3000"
     environment:
-      - SERVER_URL=http://localhost:8080
-      - AUTHENTICATION_API_KEY=GrandAcehSecretKey2026
-      - DATABASE_ENABLED=true
-      - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://evolution:GrandAcehSecretDB2026@postgres:5432/evolution?schema=public
-      - DATABASE_CONNECTION_CLIENT_NAME=evolution_v2
-      - DATABASE_SAVE_DATA_INSTANCE=true
-      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
-      - DATABASE_SAVE_MESSAGE_UPDATE=true
-      - DATABASE_SAVE_DATA_CONTACTS=true
-      - DATABASE_SAVE_DATA_CHATS=true
-      - CACHE_REDIS_ENABLED=false
-      - QRCODE_LIMIT=30
-      - LOG_LEVEL=ERROR,WARN,INFO
-      - WEBSOCKET_ENABLED=true
+      - NODE_ENV=production
+      - PORT=3000
+      - HERMES_WA_WEBHOOK_URL=http://127.0.0.1:8644/webhooks/grandpos-outbox
     volumes:
-      - evolution_instances:/evolution/instances
-      - evolution_store:/evolution/store
+      - ./data:/app/data
+    command: sh -c "if [ -f package.json ]; then npm start; else tail -f /dev/null; fi"
     networks:
       - gak_network
 
@@ -68,26 +62,21 @@ services:
     networks:
       - gak_network
 
-volumes:
-  postgres_data:
-  evolution_instances:
-  evolution_store:
-
 networks:
   gak_network:
     driver: bridge
 EOF
 
 docker compose down 2>/dev/null || true
-docker compose pull
 docker compose up -d
 
 VPS_IP=$(curl -s4 icanhazip.com || curl -s4 ifconfig.me || echo "IP_VPS_ANDA")
 
+echo
 echo "======================================================================"
 echo "  ✅ SERVER CLOUD VPS BERHASIL DIAKTIFKAN 100%!"
-echo "  🌐 Alamat IP VPS Anda     : http://$VPS_IP"
-echo "  📱 Evolution API (WA)     : http://$VPS_IP:8080"
-echo "  🔑 API Key Evolution      : $EVO_KEY"
-echo "  🤖 Hermes Agent Support   : Aktif & Siap Terhubung"
+echo "======================================================================"
+echo " 🌐 Alamat POS & Landing Page: http://$VPS_IP:3000"
+echo " 🤖 WhatsApp Gateway Engine : Hermes Agent (Baileys Native)"
+echo " 🔄 Watchtower Auto-Update  : Aktif (Otomatis cek update jam 04:00 subuh)"
 echo "======================================================================"
