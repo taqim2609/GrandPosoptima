@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import {
   Globe,
   Save,
@@ -25,7 +26,7 @@ import { DEFAULT_LANDING_CONFIG } from "@/config/landing-page.config";
 import GoogleSearchPreview from "@/components/GoogleSearchPreview";
 
 export default function SettingsLandingPage() {
-  const { config: initialConfig, loading: isServiceLoading } = useLandingConfig();
+  const { config: initialConfig, loading } = useLandingConfig();
   const [config, setConfig] = useState(DEFAULT_LANDING_CONFIG);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("hero");
@@ -430,7 +431,7 @@ export default function SettingsLandingPage() {
             </div>
 
             <div>
-              <label className="text-xs font-bold text-neutral-700 block mb-1">Nomor WhatsApp Hotlline</label>
+              <label className="text-xs font-bold text-neutral-700 block mb-1">Nomor WhatsApp Hotline</label>
               <input
                 type="text"
                 value={config.contact_info?.whatsapp || ""}

@@ -81,19 +81,27 @@ Server VPS berfungsi sebagai pusat data publik, pengelola reservasi online 24/7,
    ssh root@<IP_VPS_ANDA>
    ```
 
-2. Jalankan perintah instalasi otomatis 1-klik berikut:
+2. Clone repositori dari GitHub:
    ```bash
-   curl -fsSL https://ais-pre-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app/bootstrap-vps.sh | bash
+   cd ~
+   git clone https://github.com/taqim2609/grand-aceh-kuliner-pos.git grand-pos
+   cd grand-pos
    ```
 
-3. Skrip akan otomatis:
-   - Memasang Docker Engine.
+3. Jalankan skrip bootstrap VPS:
+   ```bash
+   sudo bash bootstrap-vps.sh
+   ```
+
+4. Skrip akan otomatis:
+   - Memasang Docker Engine & Nginx.
    - Mengaktifkan **Grand Aceh POS Web & Engine** di port `3000`.
+   - Mengonfigurasi Nginx port 80 -> port 3000 otomatis.
    - Mengkonfigurasi integrasi outbox ke **Hermes Agent (Baileys Native)** di port `8644`.
    - Mengaktifkan **Watchtower** untuk update otomatis container di latar belakang.
 
-4. **Akses Dashboard VPS**:
-   - Web Landing Page & POS: `http://<IP_VPS_ANDA>:3000`
+5. **Akses Dashboard VPS**:
+   - Web Landing Page & POS: `http://<IP_VPS_ANDA>` atau `http://<IP_VPS_ANDA>:3000`
    - Hermes Agent WhatsApp Gateway: `http://<IP_VPS_ANDA>:8644`
 
 ---
@@ -103,12 +111,19 @@ Server VPS berfungsi sebagai pusat data publik, pengelola reservasi online 24/7,
 Raspberry Pi atau PC Mini di outlet berfungsi sebagai server lokal kasir. Transaksi tetap berjalan 100% lancar meskipun koneksi internet toko terputus (Offline-First).
 
 ### Langkah-langkah Instalasi:
-1. Buka Terminal di Raspberry Pi / Linux PC outlet.
-2. Jalankan perintah installer 1-klik:
+1. Buka Terminal di Raspberry Pi / Linux PC outlet (atau SSH dari komputer kasir):
    ```bash
-   curl -fsSL https://ais-pre-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app/bootstrap-pi.sh | bash
+   ssh pi@raspberrypi.local
    ```
-   *Atau jika berkas repositori sudah diunduh di komputer:*
+
+2. Clone repositori dari GitHub:
+   ```bash
+   cd ~
+   git clone https://github.com/taqim2609/grand-aceh-kuliner-pos.git grand-pos
+   cd grand-pos
+   ```
+
+3. Jalankan skrip installer Raspberry Pi:
    ```bash
    sudo bash install-pi.sh
    ```

@@ -27,6 +27,11 @@
     })();
   }
 
+  // ---------- process.env runtime shim ----------
+  if (typeof window !== "undefined" && typeof window.process === "undefined") {
+    window.process = { env: {} };
+  }
+
   // ---------- React Refresh shims (safety for production bundles) ----------
   if (typeof window !== "undefined") {
     if (typeof window.$RefreshSig$ === "undefined") {

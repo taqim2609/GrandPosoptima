@@ -97,16 +97,47 @@ export async function fetchLandingConfig(forceServer = false) {
 /**
  * Pengambil data internal dari endpoint REST API backend.
  */
+const DEFAULT_API_KEY = "65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551b";
+
+function getApiKey() {
+  try {
+    if (typeof process !== "undefined" && process.env?.REACT_APP_GRANDPOS_API_KEY) {
+      return process.env.REACT_APP_GRANDPOS_API_KEY;
+    }
+  } catch (_) {}
+  return DEFAULT_API_KEY;
+}
+
+function getAuthToken() {
+  try {
+    if (typeof localStorage !== "undefined") {
+      return localStorage.getItem("gak_token") || localStorage.getItem("token") || "";
+    }
+  } catch (_) {}
+  return "";
+}
+
+/**
+ * Pengambil data internal dari endpoint REST API backend.
+ */
 async function fetchLandingConfigFromServer() {
   try {
     const srv = getServerUrl();
-    const res = await fetch(`${srv}/api/settings/landing-page`, {
+    let res = await fetch(`${srv}/api/settings/landing-page`, {
       method: "GET",
       headers: {
         "Cache-Control": "no-cache",
-        "X-API-Key": process.env.REACT_APP_GRANDPOS_API_KEY || "65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551b",
+        "X-API-Key": getApiKey(),
       },
     });
+
+    if (!res.ok) {
+      // Fallback ke endpoint publik
+      res = await fetch(`${srv}/api/public/landing-config`, {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache" },
+      });
+    }
 
     if (res.ok) {
       const data = await res.json();
@@ -130,13 +161,16 @@ export async function updateLandingConfig(updatedConfig) {
   let successServer = false;
   try {
     const srv = getServerUrl();
+    const token = getAuthToken();
+    const headers = {
+      "Content-Type": "application/json",
+      "X-API-Key": getApiKey(),
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch(`${srv}/api/settings/landing-page`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("gak_token") || ""}`,
-        "X-API-Key": process.env.REACT_APP_GRANDPOS_API_KEY || "65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551b",
-      },
+      headers,
       body: JSON.stringify(merged),
     });
 
@@ -161,13 +195,16 @@ export async function resetLandingConfigService() {
   saveToLocalAndNotify(DEFAULT_LANDING_CONFIG);
   try {
     const srv = getServerUrl();
+    const token = getAuthToken();
+    const headers = {
+      "Content-Type": "application/json",
+      "X-API-Key": getApiKey(),
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     await fetch(`${srv}/api/settings/landing-page`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("gak_token") || ""}`,
-        "X-API-Key": process.env.REACT_APP_GRANDPOS_API_KEY || "65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551b",
-      },
+      headers,
       body: JSON.stringify(DEFAULT_LANDING_CONFIG),
     });
   } catch (e) {}

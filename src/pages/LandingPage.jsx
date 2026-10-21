@@ -4,7 +4,8 @@ import {
   UtensilsCrossed, CalendarCheck, Clock, MapPin, Phone,
   Sparkles, ChevronRight, CheckCircle2, MessageCircle,
   Search, BookOpen, Coffee, Award, Users, ArrowRight,
-  Flame, HeartHandshake, ShieldCheck, X, Share2
+  Flame, HeartHandshake, ShieldCheck, X, Share2, Menu as MenuIcon,
+  ExternalLink
 } from "lucide-react";
 import { rupiah } from "@/lib/format";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
 
   // Navigation active state
   const [activeSection, setActiveSection] = useState(defaultSection);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Menu state
   const [menuItems, setMenuItems] = useState([]);
@@ -44,6 +46,40 @@ export default function LandingPage({ defaultSection = "hero" }) {
   });
   const [submittingBooking, setSubmittingBooking] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
+
+  // Keyboard and scroll lock for article modal
+  useEffect(() => {
+    if (!selectedArticle) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setSelectedArticle(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [selectedArticle]);
+
+  const handleShareArticle = (art) => {
+    if (!art) return;
+    const url = window.location.origin + "/cerita";
+    if (navigator.share) {
+      navigator.share({
+        title: art.title,
+        text: art.excerpt || art.title,
+        url,
+      }).catch(() => {});
+    } else {
+      try {
+        navigator.clipboard.writeText(`${art.title} — ${url}`);
+        toast.success("Tautan artikel berhasil disalin!");
+      } catch (_) {
+        toast.info("Tautan artikel: " + url);
+      }
+    }
+  };
 
   // Fetch Public Data on mount
   useEffect(() => {
@@ -261,17 +297,67 @@ export default function LandingPage({ defaultSection = "hero" }) {
             </button>
           </nav>
 
-          {/* Zone 3: 1 primary action */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Zone 3: 1 primary action & Mobile Menu Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               onClick={() => navigate("/login")}
-              className="px-4 py-2 text-xs font-semibold text-white bg-amber-800 rounded-lg hover:bg-amber-900 active:scale-95 transition-all shadow-sm whitespace-nowrap shrink-0 flex items-center gap-1.5"
+              className="px-3 sm:px-4 py-2 text-xs font-semibold text-white bg-amber-800 rounded-lg hover:bg-amber-900 active:scale-95 transition-all shadow-sm whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer"
             >
               <span>Masuk POS</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="md:hidden p-2 text-stone-700 hover:text-stone-950 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+              aria-label="Buka menu navigasi"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <MenuIcon className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer Dropdown */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-stone-200/80 bg-[#FAF8F5] px-4 py-3 space-y-1 animate-in slide-in-from-top-2 duration-200 shadow-lg">
+            <button
+              onClick={() => { scrollTo("menu"); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-colors cursor-pointer ${
+                activeSection === "menu" ? "bg-amber-800 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
+              }`}
+            >
+              <UtensilsCrossed className="w-4 h-4 text-amber-500" />
+              <span>Menu Pilihan</span>
+            </button>
+            <button
+              onClick={() => { scrollTo("cerita"); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-colors cursor-pointer ${
+                activeSection === "cerita" ? "bg-amber-800 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
+              }`}
+            >
+              <BookOpen className="w-4 h-4 text-amber-500" />
+              <span>Cerita Rempah</span>
+            </button>
+            <button
+              onClick={() => { scrollTo("reservasi"); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-colors cursor-pointer ${
+                activeSection === "reservasi" ? "bg-amber-800 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
+              }`}
+            >
+              <CalendarCheck className="w-4 h-4 text-amber-500" />
+              <span>Reservasi Meja Online</span>
+            </button>
+            <button
+              onClick={() => { scrollTo("lokasi"); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-colors cursor-pointer ${
+                activeSection === "lokasi" ? "bg-amber-800 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
+              }`}
+            >
+              <MapPin className="w-4 h-4 text-amber-500" />
+              <span>Lokasi &amp; Jam Buka</span>
+            </button>
+          </div>
+        )}
       </header>
 
       {/* ==============================================================
@@ -448,7 +534,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             <button
               onClick={() => setSelectedCat("all")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCat === "all"
                   ? "bg-amber-800 text-white shadow-sm"
                   : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
@@ -458,7 +544,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
             </button>
             <button
               onClick={() => setSelectedCat("makanan")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCat === "makanan"
                   ? "bg-amber-800 text-white shadow-sm"
                   : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
@@ -468,7 +554,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
             </button>
             <button
               onClick={() => setSelectedCat("minuman")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCat === "minuman"
                   ? "bg-amber-800 text-white shadow-sm"
                   : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
@@ -478,7 +564,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
             </button>
             <button
               onClick={() => setSelectedCat("retail")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCat === "retail"
                   ? "bg-amber-800 text-white shadow-sm"
                   : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
@@ -486,6 +572,21 @@ export default function LandingPage({ defaultSection = "hero" }) {
             >
               Oleh-oleh & Retail
             </button>
+            {categories
+              .filter((c) => !["makanan", "minuman", "retail"].includes(c.id))
+              .map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCat(c.id)}
+                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    selectedCat === c.id
+                      ? "bg-amber-800 text-white shadow-sm"
+                      : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
           </div>
 
           {/* Menu Grid */}
@@ -508,18 +609,34 @@ export default function LandingPage({ defaultSection = "hero" }) {
                   className="group bg-white rounded-2xl border border-stone-200/90 hover:border-amber-700/50 p-5 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl hover:shadow-amber-950/10 flex flex-col justify-between cursor-pointer will-change-transform motion-reduce:transition-none motion-reduce:transform-none"
                 >
                   <div className="space-y-3">
-                    {/* Visual container with styled gradient fallback and smooth hover scaling */}
+                    {/* Visual container with image support or styled gradient fallback */}
                     <div className="w-full h-44 rounded-xl bg-gradient-to-tr from-stone-900 via-amber-950 to-stone-900 relative overflow-hidden flex items-center justify-center p-4 text-center">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                      <div className="space-y-1 transform group-hover:scale-105 transition-transform duration-300 ease-out">
-                        <UtensilsCrossed className="w-8 h-8 text-amber-400 mx-auto opacity-75 group-hover:opacity-100 group-hover:scale-110 group-hover:text-amber-300 transition-all duration-300" />
-                        <span className="block text-xs font-bold text-amber-200 tracking-wide">
+                      {item.image && (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          loading="lazy"
+                          className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                      <div className="relative z-10 space-y-1 transform group-hover:scale-105 transition-transform duration-300 ease-out">
+                        {!item.image && (
+                          <UtensilsCrossed className="w-8 h-8 text-amber-400 mx-auto opacity-75 group-hover:opacity-100 group-hover:scale-110 group-hover:text-amber-300 transition-all duration-300" />
+                        )}
+                        <span className="block text-xs font-bold text-amber-200 tracking-wide drop-shadow-sm">
                           {item.category_name}
                         </span>
                       </div>
                       {item.is_best_seller && (
-                        <div className="absolute top-3 left-3 bg-amber-600 group-hover:bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wide uppercase shadow-sm transition-colors duration-200">
+                        <div className="absolute top-3 left-3 z-20 bg-amber-600 group-hover:bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wide uppercase shadow-sm transition-colors duration-200">
                           Favorit Tamu
+                        </div>
+                      )}
+                      {item.sold_out && (
+                        <div className="absolute top-3 right-3 z-20 bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wide uppercase shadow-sm">
+                          Habis Hari Ini
                         </div>
                       )}
                     </div>
@@ -546,6 +663,10 @@ export default function LandingPage({ defaultSection = "hero" }) {
 
                     <button
                       onClick={() => {
+                        if (item.sold_out) {
+                          toast.error(`Maaf, menu "${item.name}" sedang habis hari ini.`);
+                          return;
+                        }
                         setBookingForm((prev) => ({
                           ...prev,
                           note: `Ingin memesan menu: ${item.name}`,
@@ -553,10 +674,15 @@ export default function LandingPage({ defaultSection = "hero" }) {
                         scrollTo("reservasi");
                         toast.info(`Menu "${item.name}" ditambahkan ke catatan reservasi meja`);
                       }}
-                      className="px-3.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 group-hover:bg-amber-800 group-hover:text-white rounded-lg transition-all duration-200 flex items-center gap-1 shadow-sm group-hover:shadow"
+                      disabled={Boolean(item.sold_out)}
+                      className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 flex items-center gap-1 shadow-sm cursor-pointer ${
+                        item.sold_out
+                          ? "bg-stone-100 text-stone-400 cursor-not-allowed"
+                          : "text-amber-800 bg-amber-50 group-hover:bg-amber-800 group-hover:text-white group-hover:shadow"
+                      }`}
                     >
-                      <span>Booking Meja</span>
-                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-200" />
+                      <span>{item.sold_out ? "Habis" : "Booking Meja"}</span>
+                      {!item.sold_out && <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-200" />}
                     </button>
                   </div>
                 </div>
@@ -865,10 +991,10 @@ export default function LandingPage({ defaultSection = "hero" }) {
                             onClick={() =>
                               setBookingForm((prev) => ({
                                 ...prev,
-                                pax: Math.min(30, prev.pax + 1),
+                                pax: Math.min(landingCfg.reservation?.max_pax || 30, prev.pax + 1),
                               }))
                             }
-                            className="w-9 h-9 rounded-lg bg-stone-200 text-stone-700 font-bold hover:bg-stone-300"
+                            className="w-9 h-9 rounded-lg bg-stone-200 text-stone-700 font-bold hover:bg-stone-300 cursor-pointer"
                           >
                             +
                           </button>
@@ -978,18 +1104,30 @@ export default function LandingPage({ defaultSection = "hero" }) {
                 Jam Operasional
               </span>
               <p className="text-stone-300">Setiap Hari (Senin – Minggu)</p>
-              <p className="text-stone-400">08:00 – 23:00 WIB</p>
-              <p className="text-amber-400 pt-1 text-[11px]">Dine-in, Takeaway & Reservasi</p>
+              <p className="text-stone-400">{landingCfg.contact_info?.opening_hours || "08:00 – 23:00 WIB"}</p>
+              <p className="text-amber-400 pt-1 text-[11px]">Dine-in, Takeaway &amp; Reservasi</p>
             </div>
 
             {/* Kontak & Lokasi */}
             <div className="space-y-2">
               <span className="font-semibold text-stone-200 block uppercase tracking-wider text-[11px]">
-                Alamat & Kontak
+                Alamat &amp; Kontak
               </span>
-              <p className="text-stone-300">Jl. Teuku Umar No. 12, Banda Aceh</p>
-              <p className="text-stone-400">WhatsApp: 0812-6900-1234</p>
-              <p className="text-stone-400">Email: info@grandacehkuliner.id</p>
+              <p className="text-stone-300">{landingCfg.contact_info?.address || "Jl. T. Nyak Arief No. 88, Syiah Kuala, Banda Aceh"}</p>
+              <p className="text-stone-400">WhatsApp: {landingCfg.contact_info?.phone || landingCfg.contact_info?.whatsapp || "0812-6900-1234"}</p>
+              <p className="text-stone-400">Email: {landingCfg.contact_info?.email || "info@grandacehkuliner.com"}</p>
+              {landingCfg.contact_info?.google_maps_url && (
+                <a
+                  href={landingCfg.contact_info.google_maps_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 pt-1 text-[11px] transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span>Petunjuk Arah Google Maps</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </div>
 
             {/* Akses Cepat Kasir */}
@@ -1002,7 +1140,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
               </p>
               <button
                 onClick={() => navigate("/login")}
-                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-amber-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
+                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-amber-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Masuk ke Sistem POS Kasir</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1019,7 +1157,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
               <span aria-hidden="true">·</span>
               <span>Kopi Gayo Asli</span>
               <span aria-hidden="true">·</span>
-              <span>Halal & Alami</span>
+              <span>Halal &amp; Alami</span>
             </div>
           </div>
         </div>
@@ -1029,16 +1167,15 @@ export default function LandingPage({ defaultSection = "hero" }) {
           7. ARTICLE DETAIL READING MODAL
       ============================================================== */}
       {selectedArticle && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 sm:p-8 space-y-6 shadow-2xl relative text-stone-900 border border-stone-200">
-            <button
-              onClick={() => setSelectedArticle(null)}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="space-y-2">
+        <div
+          onClick={() => setSelectedArticle(null)}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 sm:p-8 space-y-6 shadow-2xl relative text-stone-900 border border-stone-200"
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <div className="flex items-center gap-2 text-xs text-stone-500 font-medium">
                 <span className="text-amber-800 font-semibold">{selectedArticle.category}</span>
                 <span aria-hidden="true">·</span>
@@ -1047,6 +1184,36 @@ export default function LandingPage({ defaultSection = "hero" }) {
                 <span>{selectedArticle.author || "Dapur Utama Grand Aceh"}</span>
               </div>
 
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleShareArticle(selectedArticle)}
+                  className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 transition-colors cursor-pointer"
+                  title="Bagikan artikel ini"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setSelectedArticle(null)}
+                  className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors cursor-pointer"
+                  title="Tutup dialog"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {selectedArticle.cover_image && (
+              <div className="w-full h-48 sm:h-56 rounded-2xl overflow-hidden bg-stone-100">
+                <img
+                  src={selectedArticle.cover_image}
+                  alt={selectedArticle.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
               <h2 className="text-2xl sm:text-3xl font-extrabold text-stone-950 leading-tight">
                 {selectedArticle.title}
               </h2>
@@ -1056,19 +1223,19 @@ export default function LandingPage({ defaultSection = "hero" }) {
               {selectedArticle.content}
             </div>
 
-            <div className="pt-4 border-t border-stone-100 flex items-center justify-between">
+            <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-3">
               <button
                 onClick={() => {
                   setSelectedArticle(null);
                   scrollTo("reservasi");
                 }}
-                className="px-4 py-2 text-xs font-semibold text-white bg-amber-800 hover:bg-amber-900 rounded-xl transition-all shadow-sm"
+                className="px-4 py-2 text-xs font-semibold text-white bg-amber-800 hover:bg-amber-900 rounded-xl transition-all shadow-sm cursor-pointer"
               >
-                Reservasi Meja & Cicipi Hidangan Ini
+                Reservasi Meja &amp; Cicipi Hidangan Ini
               </button>
               <button
                 onClick={() => setSelectedArticle(null)}
-                className="px-4 py-2 text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 rounded-xl transition-colors"
+                className="px-4 py-2 text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 rounded-xl transition-colors cursor-pointer"
               >
                 Tutup
               </button>
