@@ -356,16 +356,20 @@ app.use((req, res, next) => {
       return next();
     }
 
-    // Serves public landing page endpoints, uploads, agent endpoints, or static asset resources
+    // Serves public landing page endpoints, uploads, agent endpoints, static assets, or Model Context Protocol (MCP) server
     if (
       cleanPath.startsWith('/api/public') ||
       cleanPath.startsWith('/api/uploads') ||
       cleanPath.startsWith('/api/static') ||
       cleanPath.startsWith('/api/agent') ||
-      cleanPath.startsWith('/api/hermes')
+      cleanPath.startsWith('/api/hermes') ||
+      cleanPath.startsWith('/api/mcp') ||
+      cleanPath.startsWith('/mcp') ||
+      cleanPath === '/sse' ||
+      cleanPath === '/messages'
     ) {
       if (!req.user) {
-        req.user = formatUser(db.users[0]); // Assign superadmin context for agent API executions
+        req.user = formatUser(db.users[0]); // Assign superadmin context for agent/MCP executions
       }
       return next();
     }
@@ -5602,6 +5606,43 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
 - Bahan Baku Menipis: ${lowStockIngredients.map(i => `${i.name} (sisa ${i.stock} ${i.unit || 'satuan'})`).join(', ') || 'Semua aman'}
 - Total Meja: ${db.tables ? db.tables.length : 0} meja (${(db.tables || []).filter(t => t.status === 'occupied').length} terisi)`;
 
+  // Intelligent MCP Tool Pre-fetch & Grounding
+  let mcpToolUsed = null;
+  try {
+    const qLower = userText.toLowerCase();
+    if (qLower.includes('omset') || qLower.includes('omzet') || qLower.includes('penjualan') || qLower.includes('laporan') || qLower.includes('sales')) {
+      const salesData = await mcpInstance.executeTool('pos_get_sales_summary', { date: 'today' }, 'AI-Assistant-POS');
+      mcpToolUsed = { name: 'pos_get_sales_summary', args: { date: 'today' }, result: salesData };
+      systemPrompt += `\n\n[MCP Live Tool Context: pos_get_sales_summary]\n` + JSON.stringify(salesData, null, 2);
+    } else if (qLower.includes('stok') || qLower.includes('bahan') || qLower.includes('menipis') || qLower.includes('habis') || qLower.includes('kritis') || qLower.includes('opname')) {
+      const stockData = await mcpInstance.executeTool('pos_get_low_stock', { threshold: 5 }, 'AI-Assistant-POS');
+      mcpToolUsed = { name: 'pos_get_low_stock', args: { threshold: 5 }, result: stockData };
+      systemPrompt += `\n\n[MCP Live Tool Context: pos_get_low_stock]\n` + JSON.stringify(stockData, null, 2);
+    } else if (qLower.includes('meja') || qLower.includes('table') || qLower.includes('kursi') || qLower.includes('denah')) {
+      const tableData = await mcpInstance.executeTool('pos_get_tables_status', { status: 'all' }, 'AI-Assistant-POS');
+      mcpToolUsed = { name: 'pos_get_tables_status', args: { status: 'all' }, result: tableData };
+      systemPrompt += `\n\n[MCP Live Tool Context: pos_get_tables_status]\n` + JSON.stringify(tableData, null, 2);
+    } else if (qLower.includes('shift') || qLower.includes('laci') || qLower.includes('kasir aktif') || qLower.includes('modal')) {
+      const shiftData = await mcpInstance.executeTool('pos_get_shift_status', {}, 'AI-Assistant-POS');
+      mcpToolUsed = { name: 'pos_get_shift_status', args: {}, result: shiftData };
+      systemPrompt += `\n\n[MCP Live Tool Context: pos_get_shift_status]\n` + JSON.stringify(shiftData, null, 2);
+    } else if (qLower.includes('vendor') || qLower.includes('bagi hasil') || qLower.includes('titipan') || qLower.includes('konsinyasi')) {
+      const vendorData = await mcpInstance.executeTool('pos_get_vendor_settlements', { status: 'all' }, 'AI-Assistant-POS');
+      mcpToolUsed = { name: 'pos_get_vendor_settlements', args: { status: 'all' }, result: vendorData };
+      systemPrompt += `\n\n[MCP Live Tool Context: pos_get_vendor_settlements]\n` + JSON.stringify(vendorData, null, 2);
+    } else if (qLower.includes('resep') || qLower.includes('hpp') || qLower.includes('cogs') || qLower.includes('marjin') || qLower.includes('margin')) {
+      const recipeData = await mcpInstance.executeTool('pos_get_recipes', {}, 'AI-Assistant-POS');
+      mcpToolUsed = { name: 'pos_get_recipes', args: {}, result: recipeData };
+      systemPrompt += `\n\n[MCP Live Tool Context: pos_get_recipes]\n` + JSON.stringify(recipeData, null, 2);
+    } else if (qLower.includes('void') || qLower.includes('refund') || qLower.includes('batal') || qLower.includes('audit')) {
+      const voidData = await mcpInstance.executeTool('pos_get_void_refund_audit', { limit: 10 }, 'AI-Assistant-POS');
+      mcpToolUsed = { name: 'pos_get_void_refund_audit', args: { limit: 10 }, result: voidData };
+      systemPrompt += `\n\n[MCP Live Tool Context: pos_get_void_refund_audit]\n` + JSON.stringify(voidData, null, 2);
+    }
+  } catch (mcpErr) {
+    console.warn('[MCP Tool Auto-Grounding Error]:', mcpErr.message);
+  }
+
   // 1. Check if OpenAI-Compatible (Hermes Gateway / VPS) provider is chosen for assistant
   const aiFeat = db.ai?.features?.assistant;
   const isCustomHermes = aiFeat && (aiFeat.provider === 'chenzk' || (aiFeat.base_url && aiFeat.api_key));
@@ -5640,7 +5681,7 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
           session.messages.push({ role: 'assistant', text: replyText });
           session.count = session.messages.length;
           session.updated_at = new Date().toISOString();
-          return res.json({ session_id: sid, reply: replyText, action: null });
+          return res.json({ session_id: sid, reply: replyText, action: null, mcp_tool_used: mcpToolUsed });
         }
       }
     } catch (customErr) {
@@ -5660,14 +5701,13 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
         parts: [{ text: m.text }]
       }));
 
-      // Selection of model based on requirement (Lite, Flash, Pro)
-      const selectedModel = model || 'gemini-2.5-flash';
+      // Selection of model based on requirement
+      const selectedModel = model || 'gemini-3.8-flash';
       const candidateModels = [
         selectedModel,
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
-        'gemini-flash-latest'
+        'gemini-3.8-flash',
+        'gemini-flash-latest',
+        'gemini-3.1-flash-lite'
       ].filter((v, idx, arr) => arr.indexOf(v) === idx);
 
       let response = null;
@@ -5699,6 +5739,7 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
           session_id: sid,
           reply: replyText,
           action: null,
+          mcp_tool_used: mcpToolUsed,
         });
       }
       if (lastErr) throw lastErr;
@@ -5708,31 +5749,45 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
   }
 
   // Smart Indonesian POS Assistant fallback response
-  let answer = 'Halo Superadmin! Saya asisten AI Grand Aceh Kuliner POS. Ada yang bisa saya bantu terkait omzet, kasir, meja, bahan baku, atau pengiriman tugas ke AI Studio?';
+  let answer = 'Halo Superadmin! Saya asisten AI Grand Aceh Kuliner POS (didukung Model Context Protocol / MCP). Ada yang bisa saya bantu terkait omzet, kasir, meja, bahan baku, atau rekonsiliasi kas?';
   const qLower = userText.toLowerCase();
 
-  if (qLower.includes('menu') || qLower.includes('produk') || qLower.includes('makanan')) {
-    answer = `Saat ini ada ${db.products.length} menu aktif. Produk terlaris meliputi Mie Aceh Spesial, Nasi Goreng Aceh, Ayam Tangkap, dan Kopi Sanger.`;
-  } else if (qLower.includes('laporan') || qLower.includes('omset') || qLower.includes('omzet') || qLower.includes('penjualan')) {
-    answer = `📊 *Laporan Penjualan Hari Ini (${todayStr})*:\n• Total Omzet: Rp ${todayRev.toLocaleString('id-ID')}\n• Jumlah Transaksi: ${todayOrders.length} pesanan\n• Status Kasir: ${(db.shifts || []).some(s => s.status === 'open') ? '🟢 Shift Aktif' : '🔴 Shift Ditutup'}`;
-  } else if (qLower.includes('stok') || qLower.includes('bahan') || qLower.includes('kritis') || qLower.includes('habis')) {
-    if (lowStockProducts.length || lowStockIngredients.length) {
-      answer = `⚠️ *Peringatan Stok Rendah*:\n` +
-        (lowStockProducts.length ? `• Produk: ${lowStockProducts.map(p => `${p.name} (${p.stock} porsi)`).join(', ')}\n` : '') +
-        (lowStockIngredients.length ? `• Bahan Baku: ${lowStockIngredients.map(i => `${i.name} (${i.stock} ${i.unit || 'satuan'})`).join(', ')}` : '');
+  if (mcpToolUsed?.name === 'pos_get_sales_summary' && mcpToolUsed.result) {
+    const s = mcpToolUsed.result;
+    answer = `📊 *Laporan Penjualan Realtime (MCP pos_get_sales_summary)*:\n• Total Omzet: Rp ${Number(s.total_revenue || 0).toLocaleString('id-ID')}\n• Jumlah Transaksi: ${s.total_orders || 0} pesanan (Rata-rata Rp ${Number(s.average_ticket || 0).toLocaleString('id-ID')}/transaksi)\n• Penjualan F&B: Rp ${Number(s.fnb_revenue || 0).toLocaleString('id-ID')}\n• Penjualan Retail: Rp ${Number(s.retail_revenue || 0).toLocaleString('id-ID')}\n• Metode Pembayaran: ${Object.entries(s.payment_breakdown || {}).map(([k, v]) => `${k.toUpperCase()}: Rp ${Number(v).toLocaleString('id-ID')}`).join(', ') || 'Belum ada'}\n• Menu Terlaris: ${(s.top_selling_items || []).map(i => `${i.name} (${i.qty_sold})`).join(', ') || '-'}`;
+  } else if (mcpToolUsed?.name === 'pos_get_low_stock' && mcpToolUsed.result) {
+    const s = mcpToolUsed.result;
+    if (s.total_alerts > 0) {
+      answer = `⚠️ *Peringatan Stok Rendah (MCP pos_get_low_stock)*:\n` +
+        (s.low_stock_products.length ? `• Produk: ${s.low_stock_products.map(p => `${p.name} (sisa ${p.current_stock})`).join(', ')}\n` : '') +
+        (s.low_stock_kitchen_ingredients.length ? `• Bahan Dapur: ${s.low_stock_kitchen_ingredients.map(i => `${i.name} (sisa ${i.current_stock} ${i.unit})`).join(', ')}\n` : '') +
+        `\n💡 Rekomendasi: ${s.recommendation}`;
     } else {
-      answer = `✅ Semua stok produk dan bahan baku dalam kondisi aman (di atas batas minimum).`;
+      answer = `✅ Semua stok produk dan bahan dapur aman terkendali di atas batas minimum.`;
     }
-  } else if (qLower.includes('meja') || qLower.includes('table')) {
-    const occupied = (db.tables || []).filter(t => t.status === 'occupied').length;
-    answer = `🪑 Status Meja: Total ${db.tables.length} meja (${occupied} sedang terisi, ${db.tables.length - occupied} kosong).`;
+  } else if (mcpToolUsed?.name === 'pos_get_tables_status' && mcpToolUsed.result) {
+    const s = mcpToolUsed.result;
+    answer = `🪑 *Status Denah Meja (MCP pos_get_tables_status)*:\n• Total Meja: ${s.total_tables} meja (Tingkat Keterisian: ${s.occupancy_rate})\n• Meja Terisi: ${s.summary.occupied} meja\n• Meja Kosong: ${s.summary.available} meja\n• Meja Reservasi: ${s.summary.reserved} meja`;
+  } else if (mcpToolUsed?.name === 'pos_get_shift_status' && mcpToolUsed.result) {
+    const s = mcpToolUsed.result;
+    answer = `🕒 *Status Shift Kasir (MCP pos_get_shift_status)*:\n• Status: ${s.is_active ? '🟢 Sedang Berjalan (Aktif)' : '🔴 Tutup'}\n• Kasir: ${s.cashier_name}\n• Waktu Buka: ${s.opened_at}\n• Modal Kas Awal: Rp ${Number(s.starting_cash || 0).toLocaleString('id-ID')}\n• Penjualan Tunai: Rp ${Number(s.total_cash_sales || 0).toLocaleString('id-ID')}\n• Pengeluaran Kas: Rp ${Number(s.total_expenses_paid || 0).toLocaleString('id-ID')}\n• Estimasi Kas di Laci: Rp ${Number(s.expected_cash_drawer || 0).toLocaleString('id-ID')}`;
+  } else if (mcpToolUsed?.name === 'pos_get_vendor_settlements' && mcpToolUsed.result) {
+    const s = mcpToolUsed.result;
+    answer = `🤝 *Bagi Hasil Titipan Vendor (MCP pos_get_vendor_settlements)*:\n• Total Vendor: ${s.total_vendors}\n• Saldo Belum Dibayar: Rp ${Number(s.total_unpaid_amount || 0).toLocaleString('id-ID')}\n• Jumlah Catatan: ${s.settlements_count} transaksi titipan`;
+  } else if (qLower.includes('menu') || qLower.includes('produk') || qLower.includes('makanan')) {
+    answer = `Saat ini ada ${db.products.length} menu aktif. Produk terlaris meliputi Mie Aceh Spesial, Nasi Goreng Aceh, Ayam Tangkap, dan Kopi Sanger.`;
   }
 
   res.json({
     reply: answer,
     action: null,
+    mcp_tool_used: mcpToolUsed,
   });
 });
+
+// Register MCP (Model Context Protocol) Server
+const { registerMcpServer } = require('./routes/mcpServer');
+const mcpInstance = registerMcpServer(app, db, broadcastRealtimeSync);
 
 // Register all audited missing business endpoints
 const { registerAllMissingRoutes } = require('./routes/allMissingRoutes');

@@ -30,6 +30,7 @@ import Diagnostik from "@/pages/Diagnostik";
 import Integritas from "@/pages/Integritas";
 import AppVersi from "@/pages/AppVersi";
 import SystemHealth from "@/pages/SystemHealth";
+import SettingsMCP from "@/pages/SettingsMCP";
 
 const SETTINGS_GROUPS = [
   {
@@ -77,6 +78,7 @@ const SETTINGS_GROUPS = [
     items: [
       { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, comp: WhatsAppReport, mod: "pengaturan", desc: "Gateway notifikasi WhatsApp laporan harian & broadcast" },
       { id: "ai", label: "Asisten AI (Gemini)", icon: Sparkles, comp: SettingsAI, mod: "pengaturan", desc: "Konfigurasi model kecerdasan buatan Gemini & prompt POS" },
+      { id: "mcp", label: "Model Context Protocol (MCP)", icon: Cpu, comp: SettingsMCP, mod: "pengaturan", desc: "Server MCP untuk integrasi Claude Desktop, Cursor, Hermes Agent & AI POS" },
       { id: "addons", label: "Modul & Add-on", icon: SlidersHorizontal, comp: SettingsIntegrations, mod: "pengaturan", desc: "Pengaktifan fitur tambahan & integrasi layanan eksternal" },
     ],
   },
@@ -128,6 +130,9 @@ const ITEM_ALIASES = {
   whatsapp: "wa",
   ai: "ai",
   gemini: "ai",
+  mcp: "mcp",
+  "mcp-server": "mcp",
+  "model-context-protocol": "mcp",
   addons: "addons",
   fitur: "addons",
   integrations: "wa",

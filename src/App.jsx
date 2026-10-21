@@ -155,6 +155,8 @@ function App() {
               <Route path="/users" element={wrap(<UsersPage />, ["admin"], "pengguna")} />
               <Route path="/settings-ai" element={wrap(<SettingsAI />, ["admin"], "pengaturan")} />
               <Route path="/settings-data" element={wrap(<SettingsData />, ["admin"], "pengaturan")} />
+              <Route path="/settings-mcp" element={<Navigate to="/settings?tab=mcp" replace />} />
+              <Route path="/mcp" element={<Navigate to="/settings?tab=mcp" replace />} />
               <Route path="/settings" element={wrap(<Settings />, ["admin", "superadmin", "kasir"])} />
               <Route path="/whatsapp" element={wrap(<WhatsApp />, ["admin"], "whatsapp")} />
               <Route path="/device" element={wrap(<DeviceSettings />)} />

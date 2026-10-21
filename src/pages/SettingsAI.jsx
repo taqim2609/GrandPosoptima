@@ -83,6 +83,32 @@ export default function SettingsAI() {
       </div>
 
       <div className="grid gap-5 max-w-3xl">
+        {/* Kartu MCP Server */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-6" data-testid="mcp-server-card">
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <h3 className="font-extrabold text-lg flex items-center gap-2 text-[#1E40AF]">
+              <Cpu size={20} className="text-[#2563EB]" /> Model Context Protocol (MCP) Server POS
+            </h3>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0]">
+              🟢 11 Tools Siap
+            </span>
+          </div>
+          <p className="text-xs text-[#334155] mb-4 leading-relaxed">
+            Standar terbuka Anthropic MCP memungkinkan Claude Desktop, Cursor, Windsurf, dan Hermes Agent langsung berinteraksi dengan database kasir, produk, meja, dan shift restoran via JSON-RPC 2.0 dan Server-Sent Events (SSE).
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <a
+              href="/settings?tab=mcp"
+              className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-xl shadow-sm transition-colors inline-flex items-center gap-2"
+            >
+              <Cpu size={14} /> Buka MCP Hub &amp; Playground
+            </a>
+            <span className="text-xs font-mono text-[#64748B] bg-white px-3 py-1.5 rounded-lg border border-[#CBD5E1]">
+              Endpoint: /api/mcp/sse
+            </span>
+          </div>
+        </div>
+
         {/* Kartu rotasi API key Gemini */}
         <div className="bg-white rounded-2xl border p-6" data-testid="gemini-keys-card">
           <div className="flex items-center justify-between mb-1 flex-wrap gap-2">

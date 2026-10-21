@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-21 15:56:50 WIB`
-> Total Berkas Terindeks: **643 berkas**
+> Terakhir diperbarui: `2026-10-21 23:54:10 WIB`
+> Total Berkas Terindeks: **650 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -27,7 +27,7 @@ python3 project/scripts/update_file_index.py
 | **Dokumentasi Teknis** | `14` | Modul dokumentasi teknis sistem POS |
 | **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `264` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `271` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -467,7 +467,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (264 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (271 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -481,6 +481,11 @@ python3 project/scripts/update_file_index.py
 | `README.md` | Berkas konfigurasi/data: README.md. |
 | `api-server.js` | Berkas konfigurasi/data: api-server.js. |
 | `capacitor.config.json` | Berkas konfigurasi/data: capacitor.config.json. |
+| `dokumentasi/01-PROMPT-HERMES-INSTALLER.md` | Berkas konfigurasi/data: 01-PROMPT-HERMES-INSTALLER.md. |
+| `dokumentasi/02-PANDUAN-FITUR-DAN-PENGGUNAAN.md` | Berkas konfigurasi/data: 02-PANDUAN-FITUR-DAN-PENGGUNAAN.md. |
+| `dokumentasi/03-FUNGSI-SELURUH-FILE.md` | Berkas konfigurasi/data: 03-FUNGSI-SELURUH-FILE.md. |
+| `dokumentasi/04-INDEX-NAVIGASI-KODE.md` | Berkas konfigurasi/data: 04-INDEX-NAVIGASI-KODE.md. |
+| `dokumentasi/README.md` | Berkas konfigurasi/data: README.md. |
 | `feature-requests.jsonl` | Berkas konfigurasi/data: feature-requests.jsonl. |
 | `firebase-applet-config.json` | Konfigurasi kredensial koneksi Firebase Applet. |
 | `firebase-blueprint.json` | Skema cetak biru Firestore dan konfigurasi database cloud. |
@@ -571,6 +576,7 @@ python3 project/scripts/update_file_index.py
 | `public/polyfills.js` | Berkas konfigurasi/data: polyfills.js. |
 | `public/screenshot-desktop.png` | Berkas konfigurasi/data: screenshot-desktop.png. |
 | `public/sw.js` | Berkas konfigurasi/data: sw.js. |
+| `routes/mcpServer.js` | Berkas konfigurasi/data: mcpServer.js. |
 | `scripts/generate_pwa_assets.py` | Berkas konfigurasi/data: generate_pwa_assets.py. |
 | `scripts/make-ota.js` | Berkas konfigurasi/data: make-ota.js. |
 | `server.ts` | Berkas konfigurasi/data: server.ts. |
@@ -717,6 +723,7 @@ python3 project/scripts/update_file_index.py
 | `src/pages/SettingsInstaller.jsx` | Berkas konfigurasi/data: SettingsInstaller.jsx. |
 | `src/pages/SettingsIntegrations.jsx` | Berkas konfigurasi/data: SettingsIntegrations.jsx. |
 | `src/pages/SettingsLandingPage.jsx` | Berkas konfigurasi/data: SettingsLandingPage.jsx. |
+| `src/pages/SettingsMCP.jsx` | Berkas konfigurasi/data: SettingsMCP.jsx. |
 | `src/pages/SettingsPlatform.jsx` | Berkas konfigurasi/data: SettingsPlatform.jsx. |
 | `src/pages/SettingsReport.jsx` | Berkas konfigurasi/data: SettingsReport.jsx. |
 | `src/pages/SettingsRoles.jsx` | Berkas konfigurasi/data: SettingsRoles.jsx. |

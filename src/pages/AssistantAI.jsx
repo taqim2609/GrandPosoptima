@@ -12,15 +12,14 @@ import {
 } from "lucide-react";
 
 const SUGGESTIONS = [
-  "Berapa total penjualan hari ini?",
-  "Apa produk terlaris hari ini?",
-  "Bandingkan penjualan hari ini dengan kemarin",
-  "Berapa total belanja hari ini?",
+  "Berapa total omzet & penjualan hari ini?",
+  "Cek persediaan produk dan bahan dapur yang menipis",
+  "Bagaimana status keterisian meja restoran saat ini?",
+  "Periksa shift kasir aktif dan estimasi uang di laci",
+  "Berapa saldo bagi hasil vendor titipan yang belum dibayar?",
+  "Analisis marjin keuntungan dan HPP resep masakan Aceh",
   "Buat kategori baru 'Kopi' untuk minuman",
   "Tambah banyak produk: Kopi Susu 18000, Teh Tarik 15000, Roti Bakar 12000",
-  "Nonaktifkan produk Es Teh Manis",
-  "Hapus kategori Kopi",
-  "Ubah harga produk Nasi Goreng jadi 22000",
 ];
 
 const ACTION_LABEL = {
@@ -279,6 +278,7 @@ export default function AssistantAI() {
       setMessages((m) => [...m, {
         role: "assistant", text: r.data.reply,
         action: r.data.action || null, actionState: r.data.action ? "pending" : null,
+        mcp_tool_used: r.data.mcp_tool_used || null,
       }]);
       loadSessions();
     } catch (e) {
@@ -403,6 +403,18 @@ export default function AssistantAI() {
         </div>
       </div>
 
+      {/* MCP Status Banner */}
+      <div className="bg-[#EFF6FF] border-b border-[#BFDBFE] px-4 lg:px-6 py-2 flex items-center justify-between text-xs text-[#1D4ED8]">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[#2563EB] animate-pulse"></span>
+          <span className="font-extrabold flex items-center gap-1"><Cpu size={14} /> Model Context Protocol (MCP) Aktif:</span>
+          <span className="text-[#3B82F6] hidden sm:inline">11 Tools POS terintegrasi real-time (omzet, stok, meja, shift, resep)</span>
+        </div>
+        <Link to="/settings?tab=mcp" className="font-bold underline hover:text-[#1E40AF] flex items-center gap-1">
+          Buka MCP Hub &rarr;
+        </Link>
+      </div>
+
       {provider === "chenzk" && !keySet && (
         <div className="bg-[#FEF3C7] border-b border-[#F59E0B] text-[#92400E] text-sm px-4 lg:px-6 py-2.5 flex items-center gap-2" data-testid="assistant-key-warning">
           <SettingsIcon size={16} className="shrink-0" />
@@ -439,7 +451,7 @@ export default function AssistantAI() {
             <div className="h-14 w-14 rounded-2xl bg-[#E63946] grid place-items-center mx-auto mb-4">
               <Bot className="text-white" size={26} />
             </div>
-            <h2 className="text-xl font-extrabold">Gemini AI Chatbot</h2>
+            <h2 className="text-xl font-extrabold">Gemini AI Chatbot (MCP Powered)</h2>
             <p className="text-sm text-[#52525B] mt-1 mb-6">Pilih model & peran chatbot Anda di atas, lalu mulailah berdiskusi interaktif terkait POS, manajemen menu, analisis penjualan harian, atau rekomendasi stok secara multi-turn. Contoh pertanyaan:</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {SUGGESTIONS.map((s) => (
@@ -460,6 +472,24 @@ export default function AssistantAI() {
               <div className={`rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-[#0A0A0A] text-white" : m.error ? "bg-[#FEF2F2] text-[#B91C1C] border border-[#FECACA]" : "bg-white border"}`}>
                 {m.text}
               </div>
+              {m.mcp_tool_used && (
+                <div className="mt-2 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl p-2.5 space-y-1">
+                  <div className="flex items-center justify-between font-bold text-[#1E40AF]">
+                    <span className="flex items-center gap-1.5">
+                      <Cpu size={13} className="text-[#2563EB]" />
+                      Dieksekusi via MCP: <code className="bg-[#EFF6FF] text-[#2563EB] px-1.5 py-0.5 rounded font-mono">{m.mcp_tool_used.name}</code>
+                    </span>
+                    <span className="text-[10px] text-[#059669] font-bold bg-[#ECFDF5] px-1.5 py-0.5 rounded border border-[#A7F3D0]">
+                      Live Data POS
+                    </span>
+                  </div>
+                  {m.mcp_tool_used.args && Object.keys(m.mcp_tool_used.args).length > 0 && (
+                    <div className="text-[11px] text-[#64748B] font-mono">
+                      Argumen: {JSON.stringify(m.mcp_tool_used.args)}
+                    </div>
+                  )}
+                </div>
+              )}
               {m.action && (
                 <ActionCard action={m.action} state={m.actionState} result={m.actionResult} user={user} onApply={(mode) => handleAction(i, mode)} />
               )}

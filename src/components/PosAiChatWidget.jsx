@@ -95,13 +95,14 @@ export default function PosAiChatWidget() {
         message: textToSend,
         session_id: sessionId,
         role: aiRole,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.8-flash",
       });
 
       const reply = res.data?.reply || "Maaf, tidak ada respons yang dihasilkan.";
       const assistantMsg = {
         role: "assistant",
         text: reply,
+        mcp_tool_used: res.data?.mcp_tool_used || null,
         time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, assistantMsg]);
@@ -307,6 +308,18 @@ export default function PosAiChatWidget() {
                       }`}
                     >
                       <div className="whitespace-pre-wrap font-sans">{m.text}</div>
+                      {m.mcp_tool_used && (
+                        <div className="mt-2 text-[11px] bg-zinc-50 border border-zinc-200 rounded-lg p-2 font-sans space-y-0.5">
+                          <div className="flex items-center justify-between font-bold text-violet-700">
+                            <span className="flex items-center gap-1 font-mono">
+                              ⚡ MCP: {m.mcp_tool_used.name}
+                            </span>
+                            <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded font-bold border border-emerald-200">
+                              Live POS
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       <div
                         className={`text-[10px] mt-1 text-right font-mono ${
                           m.role === "user" ? "text-zinc-400" : "text-zinc-400"

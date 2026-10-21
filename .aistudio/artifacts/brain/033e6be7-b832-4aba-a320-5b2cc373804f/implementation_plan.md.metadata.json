@@ -1,6 +1,6 @@
 {
-  "summary": "Rencana Implementasi Dashboard Recharts & Real-Time Sync:\n- Visualisasi Tren Transaksi menggunakan Grafik Garis Ganda (Omzet F&B vs Retail).\n- Visualisasi Menu Terlaris menggunakan Kartu Peringkat dengan Indikator Tren (Naik/Turun).\n- Pembaruan data real-time seketika berbasis Server-Sent Events (SSE) saat transaksi selesai.",
-  "updatedAt": "2026-10-19T09:26:56.198580497Z",
-  "requestFeedback": true,
-  "userFacing": true
+  "summary":  "Rencana implementasi paket dokumentasi komprehensif di folder `dokumentasi/` dan prompt instalasi terpadu untuk Agen AI Hermes (Server Gudang 644 & GrandPOS Raspberry Pi), dilengkapi penjelasan arsitektur eksisting, panduan seluruh fitur, fungsi tiap file, dan indeks navigasi kode.",
+  "updatedAt":  "2026-10-21T16:43:59.418202538Z",
+  "requestFeedback":  true,
+  "userFacing":  true
 }
