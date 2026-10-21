@@ -36,7 +36,7 @@ cd /opt
 if [ -d "grand-aceh-pos" ]; then
   cd grand-aceh-pos && git pull origin main
 else
-  git clone https://github.com/taqim2609/grand-aceh-kuliner-pos.git grand-aceh-pos
+  git clone https://github.com/taqim2609/GrandPosoptima.git grand-aceh-pos
   cd grand-aceh-pos
 fi
 ```
@@ -132,7 +132,7 @@ Langkah 2.2 — Jalankan Skrip Bootstrap Pi
 ```bash
 cd ~
 if [ ! -d "grand-pos" ]; then
-  git clone https://github.com/taqim2609/grand-aceh-kuliner-pos.git grand-pos
+  git clone https://github.com/taqim2609/GrandPosoptima.git grand-pos
 fi
 cd grand-pos
 chmod +x bootstrap-pi.sh install-pi.sh setup-tailscale.sh

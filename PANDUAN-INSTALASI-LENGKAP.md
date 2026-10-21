@@ -84,7 +84,7 @@ Server VPS berfungsi sebagai pusat data publik, pengelola reservasi online 24/7,
 2. Clone repositori dari GitHub:
    ```bash
    cd ~
-   git clone https://github.com/taqim2609/grand-aceh-kuliner-pos.git grand-pos
+   git clone https://github.com/taqim2609/GrandPosoptima.git grand-pos
    cd grand-pos
    ```
 
@@ -119,7 +119,7 @@ Raspberry Pi atau PC Mini di outlet berfungsi sebagai server lokal kasir. Transa
 2. Clone repositori dari GitHub:
    ```bash
    cd ~
-   git clone https://github.com/taqim2609/grand-aceh-kuliner-pos.git grand-pos
+   git clone https://github.com/taqim2609/GrandPosoptima.git grand-pos
    cd grand-pos
    ```
 

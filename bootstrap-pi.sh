@@ -3,7 +3,7 @@ set -e
 # ==============================================================================
 # Bootstrap Grand Aceh POS untuk Raspberry Pi (Berbasis GitHub Repositori)
 # ==============================================================================
-REPO_URL="${GITHUB_REPO_URL:-https://github.com/taqim2609/grand-aceh-kuliner-pos.git}"
+REPO_URL="${GITHUB_REPO_URL:-https://github.com/taqim2609/GrandPosoptima.git}"
 APP_DIR="${APP_DIR:-$HOME/grand-pos}"
 
 echo "======================================================================"
