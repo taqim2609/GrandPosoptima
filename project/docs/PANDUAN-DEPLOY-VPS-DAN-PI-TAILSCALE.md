@@ -28,7 +28,7 @@ Untuk memasang aplikasi Web POS dan mengonfigurasi service Systemd di VPS Linux 
    ```bash
    curl -fsSL http://localhost:3000/scripts/install-vps-one-click.sh | bash
    # Atau jika kode repositori sudah di-clone:
-   cd /opt/grand-aceh-pos
+   cd /root/grandpos/pos-engine
    sudo bash scripts/install-vps-one-click.sh
    ```
 

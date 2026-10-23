@@ -42,7 +42,7 @@ fi
 ```
 
 Langkah 1.3 — Konfigurasi Lingkungan (.env)
-Pastikan berkas `.env` di `/opt/grand-aceh-pos/.env` berisi:
+Pastikan berkas `.env` di `/root/grandpos/pos-engine/.env` berisi:
 ```ini
 NODE_ENV=production
 PORT=3000
@@ -55,7 +55,7 @@ ALLOW_DEV_PROXIES=false
 Langkah 1.4 — Menjalankan POS Engine & MCP Server (Port 3000)
 Jalankan skrip bootstrap otomatis VPS atau Docker Compose:
 ```bash
-cd /opt/grand-aceh-pos
+cd /root/grandpos/pos-engine
 chmod +x bootstrap-vps.sh scripts/*.sh
 ./bootstrap-vps.sh
 ```
@@ -73,7 +73,7 @@ curl http://127.0.0.1:3000/api/agent/whatsapp/status
 
 Langkah 1.5 — Menjalankan Baileys WhatsApp Gateway (Port 8644)
 Pastikan service WhatsApp Gateway aktif di port 8644:
-- Folder session: `/opt/grand-aceh-pos/whatsapp_sessions/`
+- Folder session: `/root/grandpos/pos-engine/whatsapp_sessions/`
 - Webhook outbox: `http://127.0.0.1:8644/webhooks/grandpos-outbox`
 - Jika service menggunakan Docker/PM2:
 ```bash

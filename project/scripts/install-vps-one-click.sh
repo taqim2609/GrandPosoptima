@@ -38,7 +38,7 @@ fi
 echo -e "${GREEN}✓ Node.js $(node -v) terpasang.${NC}"
 
 # 4. Clone / Update Repository
-TARGET_DIR="/opt/grand-aceh-pos"
+TARGET_DIR="/root/grandpos/pos-engine"
 echo -e "\n${YELLOW}[3/6] Menyiapkan berkas kode di ${TARGET_DIR}...${NC}"
 
 if [ -d "$TARGET_DIR/.git" ]; then
