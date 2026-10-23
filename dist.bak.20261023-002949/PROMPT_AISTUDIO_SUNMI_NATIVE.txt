@@ -1,0 +1,35 @@
+================================================================================
+          PROMPT SIAP PAKAI - GOOGLE AI STUDIO (CHAT INITIAL)
+      PENGEMBANGAN APK NATIVE KOTLIN POS SUNMI T2
+================================================================================
+
+Halo Gemini! Saya ingin membuat aplikasi Android Native murni (Kotlin / Jetpack Compose) untuk POS Kasir Sunmi T2 (Android 7.0+, Dual Screen 15.6 Inch Landscape, Printer Thermal 80mm dengan Auto-Cutter).
+
+Aplikasi Native ini terhubung langsung ke Backend REST API FastAPI (Server POS Web) milik toko "Grand Aceh Kuliner".
+
+ARSITEKTUR NATIVE ANDROID & BAHASA:
+1. Bahasa: Kotlin
+2. UI Layout: Jetpack Compose + Material3
+3. Networking: Retrofit2 + OkHttpClient + Gson Interceptor (Auth Token Bearer JWT).
+4. Local DB & Offline Queue: Room Database + WorkManager (Setiap pesanan memiliki UUID 'client_ref' untuk sinkronisasi aman saat offline).
+5. Hardware Sunmi T2 Native SDK:
+   - Sunmi Printer SDK (`com.sunmi:printerlibrary`) via `InnerPrinterManager`.
+   - Cetak Struk 80mm (42 kolom) + Auto-Cutter (`cutPaper(1, 0)`).
+   - Laci Kasir RJ11 via `printer.openDrawer()`.
+   - Customer Facing Sub-Display via Android `Presentation` API.
+6. Auto In-App Update:
+   - Memeriksa versi baru dari endpoint GET `/api/update/check`.
+   - Jika ada versi baru, unduh APK via Android DownloadManager dari `/api/installers/download?key=apk_sunmi_t2` dan jalankan FileProvider Installation Intent.
+
+REST API ENDPOINT UTAMA BACKEND (/api):
+- Auth: POST /api/auth/login, GET /api/auth/me
+- Order/POS: POST /api/orders, GET /api/orders, POST /api/orders/{oid}/pay, POST /api/orders/{oid}/void
+- Shift Kasir: GET /api/shifts/current, POST /api/shifts/open, POST /api/shifts/close
+- Catalog: GET /api/products, GET /api/categories
+- System Health & Update: GET /api/health, GET /api/update/check
+
+TUGAS SAYA SAAT INI:
+[TULISKAN COMPONENT KOTLIN NATIVE YANG INGIN DIBUAT, MISALNYA: "Buatkan ViewModel, Retrofit Repository, dan UI Jetpack Compose untuk Layar Transaksi POS F&B & Retail lengkap dengan tombol Cetak Struk Native Sunmi T2"]
+
+Tolong buatkan kode Kotlin yang lengkap, terstruktur rapi, aman dari memory leak, dan siap dikompilasi di Android Studio.
+================================================================================

@@ -1,0 +1,34 @@
+================================================================================
+     PANDUAN INTEGRASI & CARA SINKRONISASI WEB APP & APK NATIVE SUNMI T2
+                  GRAND ACEH KULINER POS
+================================================================================
+
+1. DOWLOAD APK & INSTRUKSI LANGSUNG DARI WEB APP
+   Aplikasi Web POS telah menyediakan fitur unduh langsung untuk:
+   - File Installer APK Native Sunmi T2
+   - File System Instruction untuk Google AI Studio
+   - File Prompt Siap Pakai untuk Google AI Studio
+
+   Semua file ini bisa diakses dari menu "Versi Aplikasi & Installer" (/app-versi).
+
+2. BAGAIMANA WEB APP DAN APK NATIVE TERHUBUNG & SINKRON?
+   A. Satu Database Pusat (Single Source of Truth)
+      Baik Web App maupun APK Native Sunmi T2 mengirimkan request ke database MongoDB / SQLite yang sama melalui REST API FastAPI (`/api/*`).
+   
+   B. Sinkronisasi Pesanan Idempoten (Anti-Duplikasi Data)
+      Setiap transaksi lokal di APK Native diberi UUID unik `client_ref`. Saat APK terhubung ke server (secara online maupun setelah offline), server memeriksa `client_ref` ini sehingga pesanan tidak akan pernah terduplikasi.
+
+   C. Dynamic Server IP Discovery
+      APK Native tidak di-hardcode dengan IP Server tertentu. Kasir dapat mengatur IP Server di menu Pengaturan Perangkat, atau APK akan memindai subnet lokal LAN (port 8000) secara otomatis.
+
+3. ALUR CARA MEMPERBARUI (UPDATE) APK NATIVE
+   A. Untuk Admin/Developer:
+      - Letakkan file APK baru di folder `/apk/Grand-Aceh-Kuliner-POS-vX.XX.apk` pada server.
+      - Perbarui versi pada file `version.json` di root server.
+
+   B. Untuk Kasir/Perangkat Sunmi T2:
+      - APK Native akan mengecek `/api/update/check` secara otomatis saat aplikasi dibuka.
+      - Jika ada versi baru, APK menampilkan dialog pop-up "Update Versi Baru Tersedia".
+      - Klik "Update", APK akan mengunduh file `.apk` baru dari server secara otomatis dan mengeksekusi installer Android tanpa perlu buka browser.
+
+================================================================================
