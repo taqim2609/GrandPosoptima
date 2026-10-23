@@ -17,3 +17,7 @@ project/.screenshots/
 project/frontend/android/build/
 project/frontend/android/.gradle/
 
+dist/
+package-lock.json
+.env.local
+.env
