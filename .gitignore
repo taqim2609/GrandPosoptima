@@ -21,3 +21,4 @@ dist/
 package-lock.json
 .env.local
 .env
+dist.bak.*/
