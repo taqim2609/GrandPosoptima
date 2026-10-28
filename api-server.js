@@ -2322,7 +2322,7 @@ app.post(['/api/shifts/open', '/shifts/open'], (req, res) => {
 });
 
 app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
-  const summary = getReportSummary(new Date().toISOString().slice(0, 10));
+  const summary = getReportSummary(wibTodayStr());
   const shift = db.currentShift || {
     id: 's-' + Date.now(),
     user_id: req.user?.id || 'usr-taqim2609',
@@ -2797,7 +2797,7 @@ app.post(['/api/reports/ai-summary', '/reports/ai-summary'], async (req, res) =>
     // 1. Validasi format tanggal (YYYY-MM-DD)
     let dateStr = req.body?.date || req.query?.date;
     if (!dateStr || typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
-      dateStr = new Date().toISOString().slice(0, 10);
+      dateStr = wibTodayStr();
     } else {
       dateStr = dateStr.trim();
     }
@@ -3475,7 +3475,7 @@ app.post(['/api/whatsapp/test', '/whatsapp/test'], async (req, res) => {
 // Report File Export
 app.get(['/api/reports/export/:fmt', '/reports/export/:fmt'], (req, res) => {
   const { fmt } = req.params;
-  const dateStr = req.query.date || new Date().toISOString().slice(0, 10);
+  const dateStr = req.query.date || wibTodayStr();
   const summary = getReportSummary(dateStr);
   if (fmt === 'excel' || fmt === 'csv') {
     const csvContent = `Laporan Penjualan Grand Aceh Kuliner - ${dateStr}\nTotal Penjualan,Rp ${summary.total_sales}\nJumlah Order,${summary.order_count}\nLaba Kotor,Rp ${summary.gross_profit}\n`;
@@ -5638,8 +5638,8 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
   session.count = session.messages.length;
 
   // Build System Prompt with rich live POS statistics
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayOrders = (db.orders || []).filter(o => (o.created_at || '').startsWith(todayStr));
+  const todayStr = wibTodayStr();
+  const todayOrders = (db.orders || []).filter(o => (orderDateStr(o) === todayStr && (o.status === 'completed' || o.status === 'paid')));
   const todayRev = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
   const lowStockProducts = (db.products || []).filter(p => p.track_stock && Number(p.stock) <= 5);
   const lowStockIngredients = (db.ingredients || []).filter(i => Number(i.stock) <= Number(i.min_stock || 5));
