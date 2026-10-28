@@ -23,33 +23,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
     <title>Grand Aceh Kuliner POS</title>
-    <style>
-      /* Instant First Paint & App Shell Placeholder */
-      #gak-init-loader {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        background: #FBFBFB;
-        color: #18181B;
-        font-family: 'Manrope', system-ui, -apple-system, sans-serif;
-        z-index: 999;
-      }
-      .gak-spinner-ring {
-        width: 36px;
-        height: 36px;
-        border: 3.5px solid #F4F5F7;
-        border-top-color: #E63946;
-        border-radius: 50%;
-        animation: gak-spin 0.75s linear infinite;
-        margin-bottom: 16px;
-      }
-      @keyframes gak-spin {
-        to { transform: rotate(360deg); }
-      }
-    </style>
+    <style>#gak-init-loader{color:#18181b;z-index:999;background:#fbfbfb;flex-direction:column;justify-content:center;align-items:center;font-family:Manrope,system-ui,-apple-system,sans-serif;display:flex;position:fixed;inset:0}.gak-spinner-ring{border:3.5px solid #f4f5f7;border-top-color:#e63946;border-radius:50%;width:36px;height:36px;margin-bottom:16px;animation:.75s linear infinite gak-spin}@keyframes gak-spin{to{transform:rotate(360deg)}}</style>
     <!-- Overlay error: kalau ada error saat app dimuat (mis. WebView terlalu tua),
          tampilkan pesan di layar + tombol Salin & Kirim ke Google AI Studio (tanpa React).
          ES5 murni (var/function/XMLHttpRequest) supaya jalan di WebView paling tua. -->
@@ -160,6 +134,8 @@
       })();
     </script>
     <script src="/polyfills.js"></script>
+    <script type="module" crossorigin src="/assets/index-Cc9rujQ0.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CG8-c0E0.css">
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
@@ -169,7 +145,6 @@
       <div style="font-size: 11px; color: #71717A; margin-top: 4px; font-weight: 500;">Memuat sistem kasir cepat...</div>
     </div>
     <div id="root"></div>
-    <script type="module" src="/src/index.jsx"></script>
 
     <script>
       (function() {

@@ -148,13 +148,14 @@ removeMaps(srcDir);
 const publicIndex = path.join(__dirname, 'project', 'frontend', 'public', 'index.html');
 const destIndex = path.join(destDir, 'index.html');
 let htmlContent = '';
-if (fs.existsSync(srcDir) && fs.existsSync(destIndex)) {
+if (fs.existsSync(destIndex)) {
   htmlContent = fs.readFileSync(destIndex, 'utf8');
 } else if (fs.existsSync(publicIndex)) {
   htmlContent = fs.readFileSync(publicIndex, 'utf8');
-} else if (fs.existsSync(destIndex)) {
-  htmlContent = fs.readFileSync(destIndex, 'utf8');
 }
+
+// If Vite already built and injected bundled assets (/assets/index-*.js), keep it!
+const isViteBuilt = htmlContent.includes('/assets/') || htmlContent.includes('type="module"');
 
 // Find entrypoint files from asset-manifest.json or static folder
 let cssFile = '';
@@ -192,13 +193,13 @@ if (jsFile && !jsFile.startsWith('/')) jsFile = '/' + jsFile;
 // Clean up %PUBLIC_URL%
 htmlContent = htmlContent.replace(/%PUBLIC_URL%\/?/g, '/');
 
-// Inject CSS into <head>
-if (cssFile && !htmlContent.includes(cssFile)) {
+// Inject CSS into <head> (only if not already bundled by Vite)
+if (!isViteBuilt && cssFile && !htmlContent.includes(cssFile)) {
   htmlContent = htmlContent.replace('</head>', `  <link rel="stylesheet" href="${cssFile}" />\n  </head>`);
 }
 
-// Inject JS into <body>
-if (jsFile && !htmlContent.includes(jsFile)) {
+// Inject JS into <body> (only if not already bundled by Vite)
+if (!isViteBuilt && jsFile && !htmlContent.includes(jsFile)) {
   htmlContent = htmlContent.replace('</body>', `  <script defer="defer" src="${jsFile}"></script>\n  </body>`);
 }
 
