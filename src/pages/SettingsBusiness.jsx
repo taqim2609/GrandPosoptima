@@ -27,8 +27,8 @@ export default function SettingsBusiness() {
 
   const save = async () => {
     if (!f) return;
-    if (!(Number(f.transport_amount) > 0)) {
-      toast.error("Uang transport tidak boleh 0 — isi nominal lebih dari 0");
+    if (Number(f.transport_amount || 0) < 0) {
+      toast.error("Uang transport tidak boleh negatif — isi 0 bila tidak ada");
       return;
     }
     setSaving(true);
@@ -131,14 +131,14 @@ export default function SettingsBusiness() {
 
         <Card icon={Wallet} title="Shift & Kas">
           <Field label="Uang transport saat tutup shift (Rp)"
-            hint="Pengeluaran WAJIB setiap tutup shift dan TIDAK BOLEH 0. Dibebankan ke kas F&B, otomatis tercatat di kas keluar & laporan shift. Nominal ini jadi isian bawaan di form tutup shift (kasir boleh mengubahnya).">
-            <input data-testid="biz-transport" type="number" min="1" value={f.transport_amount}
+            hint="Opsional. Isi 0 bila tidak ada uang transport. Bila diisi, nominal ini menjadi isian bawaan di form tutup shift dan otomatis tercatat sebagai kas keluar pada kas F&B.">
+            <input data-testid="biz-transport" type="number" min="0" value={f.transport_amount}
               onChange={(e) => set("transport_amount", e.target.value)} className={`${inp} max-w-[180px]`} />
           </Field>
-          {!(Number(f.transport_amount) > 0) && (
+          {Number(f.transport_amount || 0) < 0 && (
             <div className="rounded-xl bg-[#FEF2F2] border border-[#FECACA] px-3 py-2 text-[11px] text-[#B91C1C] font-bold"
               data-testid="biz-transport-warn">
-              Nominal uang transport tidak boleh 0 — tutup shift akan ditolak bila nilainya 0.
+              Nominal uang transport tidak boleh negatif.
             </div>
           )}
         </Card>

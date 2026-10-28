@@ -69,9 +69,10 @@ export default function Shift() {
   const [allocationMode, setAllocationMode] = useState("split_equal"); // "split_equal", "fnb_only", "retail_only", "proportional"
   const [showDenomBreakdown, setShowDenomBreakdown] = useState(true);
 
-  // Uang transport: pengeluaran WAJIB saat tutup shift (tidak boleh 0), dibebankan ke F&B.
-  // Nilai bawaan diambil dari Pengaturan → Aplikasi; kasir boleh mengubahnya.
-  const [transport, setTransport] = useState(() => String(bizCache().transport_amount ?? ""));
+  // Uang transport: pengeluaran saat tutup shift, dibebankan ke F&B.
+  // Nilai awal KOSONG — hanya terisi bila admin sudah menyimpan nominal bawaan
+  // di Pengaturan → Aplikasi. Nominal tidak boleh muncul tanpa keputusan admin.
+  const [transport, setTransport] = useState("");
   const [transportTouched, setTransportTouched] = useState(false);
   useEffect(() => {
     if (!transportTouched && biz && Number(biz.transport_amount) > 0) setTransport(String(biz.transport_amount));
@@ -169,8 +170,8 @@ export default function Shift() {
   }, 0);
 
   // Perhitungan Nilai Ekspektasi Kas Sistem
-  const expOpeningFnb = Number(session?.fnb?.opening_cash ?? (session?.start_cash ? session.start_cash / 2 : 100000));
-  const expOpeningRetail = Number(session?.retail?.opening_cash ?? (session?.start_cash ? session.start_cash / 2 : 100000));
+  const expOpeningFnb = Number(session?.fnb?.opening_cash ?? (session?.start_cash ? session.start_cash / 2 : 0));
+  const expOpeningRetail = Number(session?.retail?.opening_cash ?? (session?.start_cash ? session.start_cash / 2 : 0));
   const expOpeningTotal = expOpeningFnb + expOpeningRetail;
 
   const expSalesCashFnb = Number(summary?.cash_sales_fnb ?? (summary?.by_payment?.cash ? summary.by_payment.cash * 0.7 : 0));
@@ -271,8 +272,8 @@ export default function Shift() {
 
   const close = async () => {
     const tr = Number(transport || 0);
-    if (!(tr > 0)) {
-      toast.error("Uang transport wajib diisi dan tidak boleh 0", { duration: 9000 });
+    if (tr < 0) {
+      toast.error("Uang transport tidak boleh negatif", { duration: 9000 });
       return;
     }
     // PERINGATAN: pengeluaran harian belum diisi sama sekali & form ini juga tidak mengisi apa pun
@@ -997,17 +998,17 @@ export default function Shift() {
                 {/* Uang Transport */}
                 <div className="rounded-xl border border-[#E4E4E7] p-3">
                   <div className="text-xs font-extrabold uppercase tracking-wider text-[#52525B] flex items-center gap-1">
-                    <Wallet size={14} className="text-[#E63946]" /> Uang Transport (Wajib)
+                    <Wallet size={14} className="text-[#E63946]" /> Uang Transport (Opsional)
                   </div>
                   <p className="text-[11px] text-[#52525B] mt-1">
-                    Pengeluaran <b>wajib</b> setiap tutup shift dan <b>tidak boleh 0</b> — dibebankan ke kas <b>{lb.fnb}</b>,
+                    Kosongkan bila tidak ada uang transport. Bila diisi, nominal dibebankan ke kas <b>{lb.fnb}</b> dan
                     otomatis tercatat di kas keluar &amp; laporan shift.
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     <input
                       data-testid="close-transport"
                       type="number"
-                      min="1"
+                      min="0"
                       value={transport}
                       onChange={(e) => {
                         setTransportTouched(true);
@@ -1027,9 +1028,9 @@ export default function Shift() {
                     >
                       Pakai bawaan {rupiah(biz?.transport_amount || 0)}
                     </button>
-                    {!(Number(transport) > 0) && (
+                    {transport !== "" && Number(transport) < 0 && (
                       <span data-testid="close-transport-warn" className="text-[11px] font-bold text-[#B91C1C]">
-                        Uang transport wajib diisi &amp; tidak boleh 0
+                        Uang transport tidak boleh negatif
                       </span>
                     )}
                   </div>

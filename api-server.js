@@ -2294,8 +2294,8 @@ app.get(['/api/shifts/current', '/shifts/current'], (req, res) => {
   if (!db.currentShift) {
     return res.json(null);
   }
-  const openFnb = db.currentShift.opening_cash_fnb ?? (db.currentShift.start_cash ? db.currentShift.start_cash / 2 : 100000);
-  const openRetail = db.currentShift.opening_cash_retail ?? (db.currentShift.start_cash ? db.currentShift.start_cash / 2 : 100000);
+  const openFnb = Number(db.currentShift.opening_cash_fnb ?? (db.currentShift.start_cash ? db.currentShift.start_cash / 2 : 0));
+  const openRetail = Number(db.currentShift.opening_cash_retail ?? (db.currentShift.start_cash ? db.currentShift.start_cash / 2 : 0));
   const cashTxs = db.cashTransactions || [];
   const fnbExp = cashTxs.filter((c) => (c.scope || 'fnb') === 'fnb');
   const retailExp = cashTxs.filter((c) => c.scope === 'retail');
@@ -2341,16 +2341,21 @@ app.get(['/api/shifts/history', '/shifts/history'], (req, res) => {
 });
 
 app.post(['/api/shifts/open', '/shifts/open'], (req, res) => {
+  // Kas awal harus mengikuti isian kasir apa adanya. Nilai 0 adalah sah (laci
+  // kosong), jadi tidak boleh ada fallback ke nominal bawaan 100000/200000.
   const openFnb = Number(req.body.opening_cash_fnb) || 0;
   const openRetail = Number(req.body.opening_cash_retail) || 0;
-  const totalStart = (openFnb + openRetail) || Number(req.body.start_cash) || 200000;
+  if (openFnb < 0 || openRetail < 0) {
+    return res.status(400).json({ detail: 'Kas awal tidak boleh negatif' });
+  }
+  const totalStart = openFnb + openRetail;
   db.currentShift = {
     id: 's-' + Date.now(),
     user_id: req.user?.id || req.body.user_id || 'usr-taqim2609',
     user_name: req.user?.name || req.body.user_name || 'Kasir',
     start_cash: totalStart,
-    opening_cash_fnb: openFnb || 100000,
-    opening_cash_retail: openRetail || 100000,
+    opening_cash_fnb: openFnb,
+    opening_cash_retail: openRetail,
     opened_at: new Date().toISOString(),
     status: 'open',
     cash_sales: 0,
@@ -2367,14 +2372,14 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
     id: 's-' + Date.now(),
     user_id: req.user?.id || 'usr-taqim2609',
     user_name: req.user?.name || 'Kasir',
-    start_cash: 200000,
-    opening_cash_fnb: 100000,
-    opening_cash_retail: 100000,
+    start_cash: 0,
+    opening_cash_fnb: 0,
+    opening_cash_retail: 0,
     opened_at: new Date().toISOString(),
   };
 
-  const opening_cash_fnb = Number(shift.opening_cash_fnb ?? (shift.start_cash ? shift.start_cash / 2 : 100000));
-  const opening_cash_retail = Number(shift.opening_cash_retail ?? (shift.start_cash ? shift.start_cash / 2 : 100000));
+  const opening_cash_fnb = Number(shift.opening_cash_fnb ?? (shift.start_cash ? shift.start_cash / 2 : 0));
+  const opening_cash_retail = Number(shift.opening_cash_retail ?? (shift.start_cash ? shift.start_cash / 2 : 0));
   const opening_cash_total = opening_cash_fnb + opening_cash_retail;
 
   // Actual physical cash counted by cashier
