@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
 
-function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync) {
+function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow = () => {}) {
   // Helper: Get or Init collections
   if (!db.cashCategories) {
     db.cashCategories = ['Bahan Baku', 'Belanja Operasional', 'Bayar Supplier', 'Kasbon', 'Operasional', 'Lainnya'];
@@ -2728,10 +2728,16 @@ Keluarkan JSON dengan format:
   });
 
   // POST /api/admin/reset-data
+  // Scope `transactions` hanya menghapus data penjualan/kas/shift; katalog menu
+  // (products, categories, tables) tidak boleh tersentuh. Perubahan langsung
+  // dipersistensikan agar tidak kembali setelah container restart.
   app.post(['/api/admin/reset-data', '/admin/reset-data'], (req, res) => {
-    const { scope, password } = req.body;
+    const { scope, password } = req.body || {};
     if (!password) {
       return res.status(400).json({ detail: 'Password admin wajib diisi' });
+    }
+    if (!['transactions', 'catalog', 'all'].includes(scope)) {
+      return res.status(400).json({ detail: 'Cakupan reset tidak dikenal' });
     }
 
     const deleted = {};
@@ -2757,7 +2763,8 @@ Keluarkan JSON dengan format:
       db.products = db.products.slice(0, 5); // Keep initial base products
     }
 
-    res.json({ ok: true, deleted });
+    persistNow();
+    res.json({ ok: true, scope, deleted });
   });
 
   // ==========================================

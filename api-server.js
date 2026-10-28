@@ -7,6 +7,12 @@ const multer = require('multer');
 const AdmZip = require('adm-zip');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const {
+  loadSnapshot,
+  createDebouncedSaver,
+  saveSnapshot,
+  resolveSnapshotPath,
+} = require('./lib/db-snapshot');
 
 // Secret Key for JWT Signing & Verification
 const JWT_SECRET = process.env.JWT_SECRET || 'grandpos_prod_secure_jwt_secret_key_2026_gak_fnb_auth';
@@ -869,9 +875,43 @@ const db = {
   },
 };
 
-// ==========================================
-// 1. Health & System Diagnostics Endpoints
-// ==========================================
+// Persist the in-memory POS state before serving requests. Existing installs
+// without a snapshot keep their seed data on first boot; the first mutation
+// then creates the durable snapshot.
+const dbSnapshotPath = resolveSnapshotPath();
+const restoredSnapshot = loadSnapshot(db);
+const persistDb = createDebouncedSaver(db);
+if (restoredSnapshot) {
+  console.log(`[Snapshot] Memuat data persisten dari ${restoredSnapshot.filePath} (${restoredSnapshot.collections} koleksi).`);
+} else {
+  console.log(`[Snapshot] Belum ada snapshot; memakai seed awal. File: ${dbSnapshotPath}`);
+}
+
+function persistNow() {
+  persistDb.flush();
+  return saveSnapshot(db);
+}
+
+// Any successful mutating API call is persisted shortly after the response.
+// This keeps every existing endpoint durable without editing each handler.
+app.use((req, res, next) => {
+  const mutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+  if (!mutating || !req.path.startsWith('/api')) return next();
+  res.on('finish', () => {
+    if (res.statusCode >= 200 && res.statusCode < 300) persistDb.schedule();
+  });
+  next();
+});
+
+// Flush pending writes during graceful container shutdown. Docker normally
+// sends SIGTERM before SIGKILL, giving the snapshot a final durable write.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.once(signal, () => {
+    try { persistNow(); } catch (err) { console.error('[Snapshot] Flush shutdown gagal:', err.message); }
+    process.exit(0);
+  });
+}
+
 const syncSubscribers = new Set();
 
 let lastSyncState = {
@@ -5598,6 +5638,10 @@ app.post('/api/backup/import', upload.single('file'), (req, res) => {
     // Format seluruh user
     db.users = db.users.map(formatUser);
 
+    // Persist the restored collections immediately: the in-memory store is the
+    // only live copy, so a restart after restore must not fall back to seed data.
+    persistNow();
+
     console.log(`[Backup Restore] Berhasil memulihkan ${restoredCount} koleksi.`);
     res.json({
       ok: true,
@@ -5847,7 +5891,7 @@ const mcpInstance = registerMcpServer(app, db, broadcastRealtimeSync);
 
 // Register all audited missing business endpoints
 const { registerAllMissingRoutes } = require('./routes/allMissingRoutes');
-registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync);
+registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow);
 
 // Safe Fallback for any other API endpoints
 app.all('/api/*', (req, res) => {

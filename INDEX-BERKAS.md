@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-22 01:07:26 WIB`
-> Total Berkas Terindeks: **650 berkas**
+> Terakhir diperbarui: `2026-10-29 02:35:39 WIB`
+> Total Berkas Terindeks: **675 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -25,9 +25,9 @@ python3 project/scripts/update_file_index.py
 | **Integrasi Hermes Agent** | `2` | Modul integrasi hermes agent sistem POS |
 | **Planora Framework** | `48` | Modul planora framework sistem POS |
 | **Dokumentasi Teknis** | `14` | Modul dokumentasi teknis sistem POS |
-| **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
+| **Deployment & DevOps** | `67` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `271` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `294` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -341,7 +341,7 @@ python3 project/scripts/update_file_index.py
 | `project/docs/RANCANGAN-VOID-PESANAN.md` | Dokumen acuan teknis operasional: RANCANGAN-VOID-PESANAN.md. |
 | `project/docs/RANCANGAN-WINDOWS-UTAMA-PI-CADANGAN.md` | Dokumen acuan teknis operasional: RANCANGAN-WINDOWS-UTAMA-PI-CADANGAN.md. |
 
-### 📁 Deployment & DevOps (65 berkas)
+### 📁 Deployment & DevOps (67 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -356,6 +356,8 @@ python3 project/scripts/update_file_index.py
 | `check-integrity-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: check-integrity-pi.sh. |
 | `check-workers-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: check-workers-pi.sh. |
 | `collect-metrics-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: collect-metrics-pi.sh. |
+| `dist.bak.20261023-002949/bootstrap-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-pi.sh. |
+| `dist.bak.20261023-002949/bootstrap-vps.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-vps.sh. |
 | `fix-permission-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: fix-permission-pi.sh. |
 | `install-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: install-pi.sh. |
 | `project/.emergent/cron/dispatch_webhook.sh` | Skrip otomatisasi Linux/Raspberry Pi: dispatch_webhook.sh. |
@@ -467,10 +469,11 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (271 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (294 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
+| `.env` | Berkas konfigurasi/data: .env. |
 | `.env.example` | Berkas konfigurasi/data: .env.example. |
 | `AGENTS.md` | Aturan emas agen, konvensi teknis arsitektur F&B/Retail, dan alur Planora. |
 | `CLAUDE.md` | Panduan instruksi agen berbasis Claude untuk repositori. |
@@ -481,6 +484,26 @@ python3 project/scripts/update_file_index.py
 | `README.md` | Berkas konfigurasi/data: README.md. |
 | `api-server.js` | Berkas konfigurasi/data: api-server.js. |
 | `capacitor.config.json` | Berkas konfigurasi/data: capacitor.config.json. |
+| `data/pos-db.json` | Berkas konfigurasi/data: pos-db.json. |
+| `dist.bak.20261023-002949/.well-known/assetlinks.json` | Berkas konfigurasi/data: assetlinks.json. |
+| `dist.bak.20261023-002949/PANDUAN_APK_SUNMI_T2.txt` | Berkas konfigurasi/data: PANDUAN_APK_SUNMI_T2.txt. |
+| `dist.bak.20261023-002949/PROMPT_AISTUDIO_SUNMI_NATIVE.txt` | Berkas konfigurasi/data: PROMPT_AISTUDIO_SUNMI_NATIVE.txt. |
+| `dist.bak.20261023-002949/SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt` | Berkas konfigurasi/data: SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt. |
+| `dist.bak.20261023-002949/apple-touch-icon.png` | Berkas konfigurasi/data: apple-touch-icon.png. |
+| `dist.bak.20261023-002949/assets/index-CG8-c0E0.css` | Berkas konfigurasi/data: index-CG8-c0E0.css. |
+| `dist.bak.20261023-002949/assets/index-NwWhyWOA.js` | Berkas konfigurasi/data: index-NwWhyWOA.js. |
+| `dist.bak.20261023-002949/assets/web-D3yfarIJ.js` | Berkas konfigurasi/data: web-D3yfarIJ.js. |
+| `dist.bak.20261023-002949/icon-192.png` | Berkas konfigurasi/data: icon-192.png. |
+| `dist.bak.20261023-002949/icon-512.png` | Berkas konfigurasi/data: icon-512.png. |
+| `dist.bak.20261023-002949/icon-maskable-512.png` | Berkas konfigurasi/data: icon-maskable-512.png. |
+| `dist.bak.20261023-002949/icon.svg` | Berkas konfigurasi/data: icon.svg. |
+| `dist.bak.20261023-002949/index.html` | Berkas konfigurasi/data: index.html. |
+| `dist.bak.20261023-002949/manifest.json` | Berkas konfigurasi/data: manifest.json. |
+| `dist.bak.20261023-002949/ota/bundle.zip` | Berkas konfigurasi/data: bundle.zip. |
+| `dist.bak.20261023-002949/ota/version.json` | Berkas konfigurasi/data: version.json. |
+| `dist.bak.20261023-002949/polyfills.js` | Berkas konfigurasi/data: polyfills.js. |
+| `dist.bak.20261023-002949/screenshot-desktop.png` | Berkas konfigurasi/data: screenshot-desktop.png. |
+| `dist.bak.20261023-002949/sw.js` | Berkas konfigurasi/data: sw.js. |
 | `dokumentasi/01-PROMPT-HERMES-INSTALLER.md` | Berkas konfigurasi/data: 01-PROMPT-HERMES-INSTALLER.md. |
 | `dokumentasi/02-PANDUAN-FITUR-DAN-PENGGUNAAN.md` | Berkas konfigurasi/data: 02-PANDUAN-FITUR-DAN-PENGGUNAAN.md. |
 | `dokumentasi/03-FUNGSI-SELURUH-FILE.md` | Berkas konfigurasi/data: 03-FUNGSI-SELURUH-FILE.md. |
@@ -490,6 +513,8 @@ python3 project/scripts/update_file_index.py
 | `firebase-applet-config.json` | Konfigurasi kredensial koneksi Firebase Applet. |
 | `firebase-blueprint.json` | Skema cetak biru Firestore dan konfigurasi database cloud. |
 | `firestore.rules` | Aturan keamanan Firestore Cloud Database. |
+| `lib/data/pos-db.json` | Berkas konfigurasi/data: pos-db.json. |
+| `lib/db-snapshot.js` | Berkas konfigurasi/data: db-snapshot.js. |
 | `postcss.config.js` | Berkas konfigurasi/data: postcss.config.js. |
 | `project/.emergent/cron/applied.hash` | Berkas konfigurasi/data: applied.hash. |
 | `project/.emergent/cron/webhook-crons` | Berkas konfigurasi/data: webhook-crons. |
