@@ -654,7 +654,10 @@ const db = {
       cash_tendered: 100000,
       change: 12000,
       status: 'completed',
-      created_at: new Date(Date.now() - 3600000).toISOString(),
+      // FIX: sebelumnya `Date.now() - 3600000` → seed order ini selalu jatuh
+      // pada "hari ini" sehingga dashboard selalu menampilkan omset palsu.
+      // Dikunci ke tanggal sesuai nomor ordernya.
+      created_at: '2026-09-17T10:15:00.000Z',
     },
     {
       id: 'ord-1002',
@@ -673,7 +676,8 @@ const db = {
       cash_tendered: 43000,
       change: 0,
       status: 'completed',
-      created_at: new Date(Date.now() - 1800000).toISOString(),
+      // FIX: lihat ord-1001 — seed order tidak lagi mengikuti waktu saat ini.
+      created_at: '2026-09-17T11:40:00.000Z',
     },
   ],
   currentShift: null,
@@ -2530,13 +2534,35 @@ app.get(['/api/cash/categories', '/cash/categories'], (req, res) => {
 // ==========================================
 // 7. Dashboard & Reports
 // ==========================================
+// Helper: ambil tanggal WIB (UTC+7) dari sebuah order/create timestamp
+function wibDateStr(ts) {
+  const d = ts ? new Date(ts) : new Date();
+  if (isNaN(d.getTime())) return '';
+  return new Date(d.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 app.get('/api/dashboard', (req, res) => {
-  const totalRev = db.orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+  const todayStr = wibTodayStr();
+  const orders = Array.isArray(db.orders) ? db.orders : [];
+
+  // HANYA order hari ini yang dihitung sebagai penjualan hari ini.
+  // Sebelumnya field today_* disalin dari total seluruh order, sehingga
+  // order dari shift lama (yang belum ditutup) ikut terhitung sebagai hari ini.
+  const todayOrders = orders.filter((o) => {
+    if (o.status !== 'completed' && o.status !== 'paid') return false;
+    if (!o.created_at) return false; // order tanpa timestamp: legacy, jangan diakui hari ini
+    return wibDateStr(o.created_at) === todayStr;
+  });
+
+  const todayRev = todayOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+  const totalRev = orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+
   res.json({
     total_revenue: totalRev,
-    total_orders: db.orders.length,
-    today_revenue: totalRev,
-    today_orders: db.orders.length,
+    total_orders: orders.length,
+    today_revenue: todayRev,
+    today_orders: todayOrders.length,
+    today_date: todayStr,
     open_tables: db.tables.filter((t) => t.status !== 'empty').length,
     total_tables: db.tables.length,
     low_stock_count: db.products.filter((p) => p.stock <= 10).length,
@@ -2544,9 +2570,37 @@ app.get('/api/dashboard', (req, res) => {
   });
 });
 
+// ==========================================
+// Helper: tanggal hari ini + tanggal order (WIB, UTC+7)
+// ==========================================
+function wibTodayStr() {
+  const d = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+// Ambil tanggal bisnis (WIB, UTC+7) dari sebuah order dalam format YYYY-MM-DD.
+// Kembali '' bila tidak ada/invalid timestamp.
+function orderDateStr(o) {
+  const ts = o && o.created_at;
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '';
+  return new Date(d.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function getReportSummary(dateStr) {
-  const targetDate = dateStr || new Date().toISOString().slice(0, 10);
-  const paidOrders = db.orders.filter((o) => o.status === 'completed' || o.status === 'paid');
+  // FIX: filter order by business date. Sebelumnya targetDate hanya dipakai
+  // sebagai label chart_data dan SEMUA order dihitung, sehingga dashboard
+  // menampilkan order lama (mis. shift yang belum ditutup) sebagai "hari ini".
+  const targetDate = dateStr || wibTodayStr();
+
+  const paidOrders = (db.orders || []).filter((o) => {
+    if (o.status !== 'completed' && o.status !== 'paid') return false;
+    const od = orderDateStr(o);
+    // Order tanpa/invalid tanggal: legacy, hanya dihitung bila target hari ini.
+    if (!od) return false;
+    return od === targetDate;
+  });
 
   const by_type = {
     dine_in: { count: 0, total: 0 },
@@ -2731,7 +2785,9 @@ function getReportSummary(dateStr) {
 }
 
 app.get(['/api/reports/summary', '/reports/summary'], (req, res) => {
-  const dateStr = req.query.date || new Date().toISOString().slice(0, 10);
+  // Pakai tanggal WIB (UTC+7) sebagai default "hari ini" agar selaras dengan
+  // zona waktu operasional toko, bukan UTC.
+  const dateStr = req.query.date || wibTodayStr();
   res.json(getReportSummary(dateStr));
 });
 
