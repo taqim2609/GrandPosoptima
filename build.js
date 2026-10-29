@@ -204,9 +204,8 @@ if (!isViteBuilt && jsFile && !htmlContent.includes(jsFile)) {
 }
 
 fs.writeFileSync(destIndex, htmlContent, 'utf8');
-// Also write to root index.html so both paths serve identically
-fs.writeFileSync(path.join(__dirname, 'index.html'), htmlContent, 'utf8');
-console.log(`[Build] index.html updated: CSS=${cssFile || 'none'}, JS=${jsFile || 'none'}`);
+// Do NOT overwrite root index.html because Vite needs /src/index.jsx entrypoint for builds
+console.log(`[Build] dist/index.html updated: CSS=${cssFile || 'none'}, JS=${jsFile || 'none'}`);
 
 // 3. Buat paket OTA bundle.zip dan version.json untuk update APK Android / Sunmi
 try {

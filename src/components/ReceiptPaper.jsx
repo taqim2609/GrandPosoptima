@@ -199,12 +199,18 @@ export default function ReceiptPaper({
             </div>
             <div className="flex justify-between text-[10px] text-[#6B7280]">
               <span>
-                {i.qty || 1} x {rupiah(i.price || 0)}
+                {i.weight ? (
+                  <>
+                    {Number(i.weight).toFixed(2)} {i.weight_unit || "kg"} × {rupiah(i.base_price || (i.price && i.weight ? Math.round(i.price / i.weight) : i.price))}
+                  </>
+                ) : (
+                  <>
+                    {i.qty || 1} x {rupiah(i.price || 0)}
+                  </>
+                )}
               </span>
-              {i.weight ? (
-                <span>
-                  ({Number(i.weight).toFixed(2)} {i.weight_unit || "kg"})
-                </span>
+              {i.weight && i.qty > 1 ? (
+                <span>(x{i.qty})</span>
               ) : null}
             </div>
             {i.notes && (

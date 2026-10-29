@@ -176,8 +176,23 @@ api.interceptors.response.use(
   }
 );
 
-export function apiError(detail) {
-  if (detail == null) return "Terjadi kesalahan. Coba lagi.";
+export function apiError(detail, err) {
+  if (!detail && err && err.response && err.response.data) {
+    const d = err.response.data;
+    detail = d.detail ?? d.message ?? d.error ?? d;
+  }
+  if (detail == null) {
+    if (err) {
+      if (err.code === "ECONNABORTED" || (err.message && err.message.includes("timeout"))) {
+        return "Waktu tunggu habis. Server tidak merespons. Coba lagi.";
+      }
+      if (!err.response) {
+        return "Tidak dapat terhubung ke server. Periksa koneksi jaringan dan coba lagi.";
+      }
+      return `Terjadi kesalahan (HTTP ${err.response.status}). Coba lagi.`;
+    }
+    return "Terjadi kesalahan. Coba lagi.";
+  }
   if (typeof detail === "string") {
     const s = detail.trim();
     // Ignore non-JSON gateway/HTML error pages (e.g. Cloudflare 5xx)

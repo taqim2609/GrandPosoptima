@@ -2121,8 +2121,17 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
     return res.json(order);
   }
 
+  // Recompute total from order items + service tax + discount (support open bills)
+  const itemsSubtotal = (order.items || []).reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0), 0);
+  const discountType = req.body.discount_type || order.discount_type || 'none';
+  const discountValue = Number(req.body.discount_value || order.discount_value || 0) || 0;
+  let discount = 0;
+  if (discountType === 'percent') discount = (itemsSubtotal * discountValue) / 100;
+  else if (discountType === 'amount') discount = discountValue;
+  const serviceTax = Number(req.body.service_tax || order.service_tax || 0) || 0;
+  const totalAmount = Math.max(0, itemsSubtotal - discount + serviceTax);
+
   const paymentMethod = req.body.payment_method || order.payment_method || 'cash';
-  const totalAmount = Number(order.total) || 0;
   const amountPaid = Number(req.body.amount_paid !== undefined && req.body.amount_paid !== null ? req.body.amount_paid : totalAmount);
 
   // Validasi kecukupan pembayaran (kecuali metode kasbon / piutang)
@@ -2138,8 +2147,12 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
   order.payment_method = paymentMethod;
   order.amount_paid = amountPaid;
   order.change = change;
-  order.discount_type = req.body.discount_type || order.discount_type || 'none';
-  order.discount_value = req.body.discount_value || order.discount_value || 0;
+  order.discount_type = discountType;
+  order.discount_value = discountValue;
+  order.service_tax = serviceTax;
+  order.total = totalAmount;
+  order.subtotal = itemsSubtotal;
+  order.discount = discount;
   order.paid_at = new Date().toISOString();
 
   // If table was dine-in, free the table
@@ -2178,11 +2191,22 @@ app.post(['/api/orders', '/orders'], (req, res) => {
   // Resolve items: enrich with name, price, subtotal
   const resolvedItems = (req.body.items || []).map((it) => {
     const prod = (db.products || []).find((p) => p.id === it.product_id || p.id === it.id || p.sku === it.product_id) || {};
-    const price = Number(it.price !== undefined ? it.price : prod.price || 0) || 0;
+    let price = Number(it.price !== undefined ? it.price : prod.price || 0) || 0;
     const cost = Number(it.cost !== undefined ? it.cost : prod.cost || 0) || 0;
     const qty = Number(it.qty || 1) || 1;
     const name = it.name || prod.name || 'Produk';
     const type = it.type || prod.type || 'fnb';
+    const weight = it.weight ? Number(it.weight) : null;
+    const weight_unit = it.weight_unit || prod.weight_unit || null;
+
+    // Safety net: jika produk timbangan dan dikirim dengan harga satuan dasar,
+    // pastikan price baris dikalikan dengan beratnya.
+    if ((prod.weight_sale || it.weight_sale) && weight && weight > 0) {
+      if (Math.abs(price - (prod.price || 0)) < 0.01) {
+        price = Math.round((prod.price || price) * weight * 100) / 100;
+      }
+    }
+
     return {
       product_id: prod.id || it.product_id || ('p-' + Date.now()),
       name,
@@ -2190,8 +2214,8 @@ app.post(['/api/orders', '/orders'], (req, res) => {
       cost,
       qty,
       type,
-      weight: it.weight || null,
-      weight_unit: it.weight_unit || prod.weight_unit || null,
+      weight,
+      weight_unit,
       notes: it.notes || null,
       subtotal: price * qty,
     };

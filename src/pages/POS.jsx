@@ -122,7 +122,15 @@ const CartItemRow = memo(function CartItemRow({ item, onMinus, onPlus, onRemove 
           >
             <Minus size={15} />
           </button>
-          <span className="font-num font-extrabold text-sm min-w-7 text-center text-zinc-900">{item.qty}</span>
+          <span className="font-num font-extrabold text-sm min-w-7 text-center text-zinc-900">
+            {item.weight ? (
+              <>
+                {Number(item.weight).toFixed(2)}{item.weight_unit}{item.qty > 1 && ` ×${item.qty}`}
+              </>
+            ) : (
+              item.qty
+            )}
+          </span>
           <button
             data-testid={`qty-plus-${item.product_id}`}
             onClick={() => onPlus(item.product_id)}
@@ -454,7 +462,7 @@ export default function POS() {
       setShift(data);
       toast.success("Shift hari ini dibuka. POS siap digunakan.");
     } catch (e) {
-      toast.error(apiError(e.response?.data?.detail), { duration: 9000 });
+      toast.error(apiError(e.response?.data?.detail, e), { duration: 9000 });
     } finally {
       setOpeningShiftLoading(false);
     }
@@ -543,7 +551,7 @@ export default function POS() {
       setMoveSourceTable(null);
       load();
     } catch (e) {
-      toast.error(apiError(e.response?.data?.detail));
+      toast.error(apiError(e.response?.data?.detail, e));
     }
   };
 
@@ -568,7 +576,7 @@ export default function POS() {
       }
       load();
     } catch (e) {
-      toast.error(apiError(e.response?.data?.detail));
+      toast.error(apiError(e.response?.data?.detail, e));
     }
   };
 
@@ -584,7 +592,7 @@ export default function POS() {
       }
       load();
     } catch (e) {
-      toast.error(apiError(e.response?.data?.detail));
+      toast.error(apiError(e.response?.data?.detail, e));
     }
   };
 
@@ -595,7 +603,13 @@ export default function POS() {
     }
     const { data } = await api.post("/orders", {
       order_type: orderType, table_id: orderType === "dine_in" ? table?.id : null,
-      items: cart.map((i) => ({ product_id: i.product_id, qty: i.qty, weight: i.weight || null })),
+      items: cart.map((i) => ({
+        product_id: i.product_id,
+        qty: i.qty,
+        price: Number(i.price || 0),
+        weight: i.weight || null,
+        weight_unit: i.weight_unit || null,
+      })),
       discount_type: discType, discount_value: Number(discVal),
     });
     setCurrentOrderId(data.id);
@@ -611,13 +625,20 @@ export default function POS() {
       resetSale();
       load();
     } catch (e) {
-      const msg = apiError(e.response?.data?.detail);
+      const msg = apiError(e.response?.data?.detail, e);
       if (msg.toLowerCase().includes("shift")) setShift(null);
       toast.error(msg);
     }
   };
 
   const doPay = async (pm, amountPaid, opts = {}) => {
+    // Tagihan FINAL setelah potongan poin member. SELURUH hitungan kembalian wajib
+    // pakai angka ini — bukan `total` kotor — supaya kembalian tidak melenceng.
+    const payable = Math.max(0, Number(opts.payable ?? total));
+    const paidNum = Number(amountPaid || 0) || 0;
+    const dueNow = opts.splits ? payable : (paidNum || payable);
+    const changeVal = Math.round(Math.max(0, dueNow - payable) * 100) / 100;
+
     if (opts.splits && !online) {
       return toast.error("Pembayaran 2 metode hanya bisa dilakukan saat online (struk offline tetap 1 metode).");
     }
@@ -630,7 +651,13 @@ export default function POS() {
       }
       const payload = {
         order_type: orderType, table_id: null,
-        items: cart.map((i) => ({ product_id: i.product_id, qty: i.qty, weight: i.weight || null })),
+        items: cart.map((i) => ({
+          product_id: i.product_id,
+          qty: i.qty,
+          price: Number(i.price || 0),
+          weight: i.weight || null,
+          weight_unit: i.weight_unit || null,
+        })),
         discount_type: discType, discount_value: Number(discVal),
         member_id: opts.member_id || null, redeem_points: Number(opts.redeem_points || 0),
         discount_reason: opts.discount_reason || null, coupon_code: opts.coupon_code || null,
@@ -639,9 +666,9 @@ export default function POS() {
       addPending(payload, { order_type: orderType, total, item_count: cart.length, preview: cart.map((i) => `${i.qty}x ${i.name}${i.weight ? " (" + Number(i.weight).toFixed(2) + " " + (i.weight_unit||"") + ")" : ""}`).join(", ") });
       const offlineReceipt = {
         order_number: `OFFLINE-${Date.now().toString().slice(-8)}`, order_type: orderType, items: cart,
-        subtotal, discount, service_tax: service, total, cashier_name: "(offline)",
-        payment_method_name: pm.name, amount_paid: amountPaid || total,
-        change: (amountPaid || total) - total, created_at: new Date().toISOString(), offline: true,
+        subtotal, discount, service_tax: service, total: payable, cashier_name: "(offline)",
+        payment_method_name: pm.name, amount_paid: dueNow,
+        change: changeVal, created_at: new Date().toISOString(), offline: true,
       };
       setPayOpen(false);
       setReceipt(offlineReceipt);
@@ -695,8 +722,8 @@ export default function POS() {
           member_id: opts.member_id || null, redeem_points: Number(opts.redeem_points || 0),
           discount_reason: opts.discount_reason || null, coupon_code: opts.coupon_code || null,
           pay_now: true, payment_method: pm.id,
-          amount_paid: opts.splits ? null : amountPaid,
-          change: (amountPaid || total) - total,
+          amount_paid: opts.splits ? null : dueNow,
+          change: changeVal,
           splits: opts.splits || null,
         });
         data = r.data;
@@ -709,9 +736,9 @@ export default function POS() {
         payment_method_name: data?.payment_method_name || pm.name,
         subtotal: data?.subtotal || subtotal,
         discount: data?.discount !== undefined ? data.discount : discount,
-        total: data?.total || total,
-        amount_paid: data?.amount_paid || amountPaid || total,
-        change: data?.change !== undefined ? data.change : Math.max(0, (amountPaid || total) - total),
+        total: data?.total || payable,
+        amount_paid: data?.amount_paid || dueNow,
+        change: data?.change !== undefined ? data.change : changeVal,
       };
 
       setPayOpen(false);
@@ -724,7 +751,7 @@ export default function POS() {
       load();
       toast.success("Pembayaran berhasil");
     } catch (e) {
-      const msg = apiError(e.response?.data?.detail);
+      const msg = apiError(e.response?.data?.detail, e);
       if (msg.toLowerCase().includes("shift")) setShift(null);
       toast.error(msg);
     }
@@ -1658,7 +1685,7 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
       const { data } = await api.get("/members/search", { params: { phone: phone.trim() } });
       if (data.member) { setMember(data.member); toast.success(`${data.member.name} — poin ${(data.member.points || 0).toLocaleString("id-ID")}`); }
       else { setMember(null); toast.error("Member tidak ditemukan. Daftarkan di menu Member."); }
-    } catch (e) { toast.error(apiError(e.response?.data?.detail)); } finally { setSearching(false); }
+    } catch (e) { toast.error(apiError(e.response?.data?.detail, e)); } finally { setSearching(false); }
   };
 
   const submit = () => {
@@ -1667,6 +1694,7 @@ function PayDialog({ open, onClose, pms = [], total, discountType, discountValue
       redeem_points: Number(redeemPts || 0) || 0,
       discount_reason: needReason ? discReason.trim() : null,
       coupon_code: couponCode.trim() || null,
+      payable,
     };
     if (isSplit) {
       opts.splits = selected.map((pm, i) => ({
