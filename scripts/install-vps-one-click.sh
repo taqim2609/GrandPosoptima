@@ -69,8 +69,20 @@ GRANDPOS_API_KEY=65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551
 GRANDPOS_MCP_URL=http://127.0.0.1:8001/sse
 
 # JWT Security
-JWT_SECRET=grandpos_prod_secure_jwt_secret_key_2026_gak_fnb_auth
+# R-AUTH-01: never ship a literal secret (a shared value in the repo lets anyone forge a
+# superadmin token). The installer generates a per-deployment random secret below.
+JWT_SECRET=__JWT_SECRET_PLACEHOLDER__
 EOF
+
+# 5b. Isi secret acak per-deployment
+if command -v openssl >/dev/null 2>&1; then
+  GENERATED_JWT_SECRET="$(openssl rand -hex 32)"
+else
+  GENERATED_JWT_SECRET="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+fi
+sed -i "s|^JWT_SECRET=__JWT_SECRET_PLACEHOLDER__$|JWT_SECRET=${GENERATED_JWT_SECRET}|" .env
+echo -e "${GREEN}JWT_SECRET acak dibuat untuk deployment ini.${NC}"
+unset GENERATED_JWT_SECRET
 
 # 6. Install Node dependencies & Build Frontend
 echo -e "\n${YELLOW}[5/6] Membangun frontend dan mengompilasi aplikasi Web POS...${NC}"

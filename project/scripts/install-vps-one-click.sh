@@ -69,8 +69,27 @@ GRANDPOS_API_KEY=65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551
 GRANDPOS_MCP_URL=http://127.0.0.1:8001/sse
 
 # JWT Security
-JWT_SECRET=grandpos_prod_secure_jwt_secret_key_2026_gak_fnb_auth
+# R-AUTH-01: never ship a literal secret. A shared value in the repo lets anyone forge
+# a superadmin token, so the installer generates a per-deployment random secret instead.
+JWT_SECRET=__JWT_SECRET_PLACEHOLDER__
 EOF
+
+# 5b. Isi secret acak per-deployment (bukan literal yang bisa dibaca dari repo)
+if command -v openssl >/dev/null 2>&1; then
+  GENERATED_JWT_SECRET="$(openssl rand -hex 32)"
+else
+  GENERATED_JWT_SECRET="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+fi
+# Ganti HANYA baris JWT_SECRET, dan jangan pernah menimpa .env yang sudah punya secret asli.
+if grep -q '^JWT_SECRET=__JWT_SECRET_PLACEHOLDER__$' .env 2>/dev/null; then
+  sed -i "s|^JWT_SECRET=__JWT_SECRET_PLACEHOLDER__$|JWT_SECRET=${GENERATED_JWT_SECRET}|" .env
+  echo -e "${GREEN}JWT_SECRET acak dibuat untuk deployment ini.${NC}"
+elif grep -q '^JWT_SECRET=grandpos_prod_secure_jwt_secret_key_2026_gak_fnb_auth$' .env 2>/dev/null; then
+  # .env lama yang masih memakai secret publik: rotasi otomatis (semua sesi login lama gugur).
+  sed -i "s|^JWT_SECRET=.*$|JWT_SECRET=${GENERATED_JWT_SECRET}|" .env
+  echo -e "${YELLOW}JWT_SECRET lama (publik) dirotasi. Semua token login lama tidak berlaku lagi.${NC}"
+fi
+unset GENERATED_JWT_SECRET
 
 # 6. Install Node dependencies & Build Frontend
 echo -e "\n${YELLOW}[5/6] Membangun frontend dan mengompilasi aplikasi Web POS...${NC}"
