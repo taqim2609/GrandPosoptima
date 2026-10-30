@@ -501,8 +501,6 @@ const AUTH_PUBLIC_PATHS = new Set([
   '/api/apk/latest',
   '/api/apk/info',
   '/api/apk/version',
-  '/api/settings/landing-page',
-  '/api/public/landing-config',
 ]);
 
 // Read-only public surface: no identity is attached to these paths.
@@ -1063,6 +1061,9 @@ const db = {
 const dbSnapshotPath = resolveSnapshotPath();
 const restoredSnapshot = loadSnapshot(db);
 const persistDb = createDebouncedSaver(db);
+// Start background worker for P1A → analytics sync (outbox + retry)
+const analyticsSync = require('./lib/analytics-sync');
+analyticsSync.initSync(db);
 if (restoredSnapshot) {
   console.log(`[Snapshot] Memuat data persisten dari ${restoredSnapshot.filePath} (${restoredSnapshot.collections} koleksi).`);
 } else {
@@ -2389,6 +2390,8 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
   }
 
   broadcastRealtimeSync('order_paid', { order_number: order.order_number, total: order.total });
+
+  analyticsSync.enqueueOrder(order);
   res.json(order);
 });
 
@@ -2541,6 +2544,8 @@ app.post(['/api/orders', '/orders'], (req, res) => {
 
   db.orders.unshift(order);
   broadcastRealtimeSync('order_created', { order_number: order.order_number, total: order.total });
+
+  analyticsSync.enqueueOrder(order);
   res.json(order);
 });
 
@@ -5403,19 +5408,6 @@ app.put('/api/settings/wa-templates', requireAdmin, (req, res) => { db.settings.
 app.get('/api/settings/shopping', (req, res) => res.json(db.settings.shopping));
 app.put('/api/settings/shopping', requireAdmin, (req, res) => { db.settings.shopping = { ...db.settings.shopping, ...req.body }; res.json(db.settings.shopping); });
 
-// Landing Page Configuration Settings (Supports public GET & admin save)
-app.get(['/api/settings/landing-page', '/api/public/landing-config'], (req, res) => {
-  res.json(db.settings.landing_page || {});
-});
-app.post(['/api/settings/landing-page', '/api/public/landing-config'], requireAdmin, (req, res) => {
-  db.settings.landing_page = { ...(db.settings.landing_page || {}), ...req.body };
-  res.json({ ok: true, data: db.settings.landing_page });
-});
-app.put('/api/settings/landing-page', requireAdmin, (req, res) => {
-  db.settings.landing_page = { ...(db.settings.landing_page || {}), ...req.body };
-  res.json({ ok: true, data: db.settings.landing_page });
-});
-
 app.get(['/api/settings/dashboard', '/settings/dashboard'], (req, res) => {
   const defaults = {
     superadmin: ['kpi', 'jenis', 'finansial', 'trend', 'kategori', 'terlaris', 'metode', 'ai', 'lowstock'],
@@ -6426,6 +6418,28 @@ const mcpInstance = registerMcpServer(app, db, broadcastRealtimeSync);
 // Register all audited missing business endpoints
 const { registerAllMissingRoutes } = require('./routes/allMissingRoutes');
 registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow);
+
+// ==========================================
+// Analytics Sync observability endpoints
+// Registered BEFORE the catch-all /api/* fallback below so they are reachable.
+// Exposes the P1A → analytics outbox state so ops can verify that completed
+// orders actually reached the analytics database (no silent data loss).
+// ==========================================
+app.get(['/api/analytics/sync/status', '/analytics/sync/status'], (req, res) => {
+  try {
+    res.json(analyticsSync.getStatus());
+  } catch (err) {
+    res.status(500).json({ detail: 'Gagal membaca status sinkronisasi analytics', error: err.message });
+  }
+});
+
+app.post(['/api/analytics/sync/requeue', '/analytics/sync/requeue'], (req, res) => {
+  try {
+    res.json({ ok: true, ...analyticsSync.requeueAllCompleted(db) });
+  } catch (err) {
+    res.status(500).json({ detail: 'Gagal menjadwalkan ulang sinkronisasi', error: err.message });
+  }
+});
 
 // Safe Fallback for any other API endpoints
 app.all('/api/*', (req, res) => {
