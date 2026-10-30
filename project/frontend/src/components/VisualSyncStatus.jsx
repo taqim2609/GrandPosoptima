@@ -13,6 +13,7 @@ import {
   firebaseProjectId
 } from "@/lib/firebase";
 import api from "@/lib/api";
+import { formatWib } from "@/lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
@@ -29,7 +30,7 @@ function formatTimeAgo(isoString) {
   if (diffSec < 60) return `${diffSec} detik lalu`;
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin} menit lalu`;
-  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return formatWib(d, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 export function VisualSyncBadge({ onClick }) {
@@ -133,7 +134,7 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
     setIsTesting(false);
     setSyncInfo(getLastSyncInfo());
     if (res.ok) {
-      toast.success(`Terhubung ke Firebase (${res.latencyMs}ms)!`, {
+      toast.success(`Terhubung ke Firebase${res.latencyMs ? ` (${res.latencyMs}ms)` : ""}!`, {
         description: `Database: ${res.databaseId}`,
       });
     } else {
@@ -334,7 +335,7 @@ export default function VisualSyncStatusCard({ showActions = true, className = "
             <div
               data-testid="last-sync-timestamp"
               className="font-num font-extrabold text-sm text-neutral-900 mt-1.5"
-              title={syncInfo.timestamp ? new Date(syncInfo.timestamp).toLocaleString("id-ID") : "-"}
+              title={syncInfo.timestamp ? formatWib(syncInfo.timestamp) : "-"}
             >
               {formatTimeAgo(syncInfo.timestamp)}
             </div>

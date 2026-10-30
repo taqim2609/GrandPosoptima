@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import api, { apiError, getServerUrl, setServerUrl, discoverServer } from "@/lib/api";
+import api, { apiError, getServerUrl, setServerUrl, discoverServer, authHeaders } from "@/lib/api";
 import { toast } from "sonner";
 import { Loader2, Lock, Mail, Server, Radar, Download, Globe, Smartphone, Bug, KeyRound, Shield, Delete, UserCheck, Sparkles } from "lucide-react";
 import { collectVersions, APK_VERSION, APK_FILENAME, APK_DOWNLOAD_URL } from "@/lib/versions";
 import { usePlatform, logoUrl, brandTitle } from "@/lib/platform";
+import { formatWib } from "@/lib/format";
 import { isSuperAdmin } from "@/lib/rbac";
 import LoginServerSelector from "@/components/LoginServerSelector";
 
@@ -162,7 +163,7 @@ export default function Login() {
       const v = await collectVersions();
       const parts = [
         "=== LAPORAN DIAGNOSTIK (dari layar login) ===",
-        `Waktu: ${new Date().toLocaleString("id-ID")}`,
+        `Waktu: ${formatWib()}`,
         `Bundle frontend: ${v.bundle}`,
         `Platform: ${v.native ? `APK (Capacitor) v${v.apk}` : "Web"}`,
         `URL server: ${v.serverUrl}`,
@@ -188,7 +189,7 @@ export default function Login() {
         : "/api/rpt";
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Gak-Token": "gak_rpt_7f3c9e1b" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ ts: new Date().toISOString(), report }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -208,7 +209,7 @@ export default function Login() {
     try {
       const res = await fetch(`${base}/api/health`);
       const txt = await res.text();
-      if (isKnownHealthResponse(res, txt)) toast.success("Server terhubung! ✅ Silakan login.", { id: t, duration: 6000 });
+      if (isKnownHealthResponse(res, txt)) toast.success("Server terhubung. Silakan login.", { id: t, duration: 6000 });
       else toast.error(`Server menjawab tapi tidak dikenal (HTTP ${res.status}). Cek alamat server.`, { id: t, duration: 8000 });
     } catch (e) {
       toast.error(`Gagal menghubungi server: ${e.message}. Cek IP & koneksi, pastikan diawali http://`, { id: t, duration: 9000 });
@@ -241,7 +242,7 @@ export default function Login() {
     try {
       const res = await fetch(`${base}/api/health`);
       const txt = await res.text();
-      if (isKnownHealthResponse(res, txt)) toast.success("Server Tailscale terhubung! ✅ Silakan login.", { id: t, duration: 6000 });
+      if (isKnownHealthResponse(res, txt)) toast.success("Server Tailscale terhubung. Silakan login.", { id: t, duration: 6000 });
       else toast.error(`Server menjawab tapi tidak dikenal (HTTP ${res.status}).`, { id: t, duration: 8000 });
     } catch (e) {
       toast.error(`Gagal menghubungi ${base}: ${e.message}. Pastikan Funnel aktif di Pi & URL benar.`, { id: t, duration: 9000 });

@@ -7,6 +7,7 @@ const multer = require('multer');
 const AdmZip = require('adm-zip');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const {
   loadSnapshot,
   createDebouncedSaver,
@@ -15,13 +16,32 @@ const {
 } = require('./lib/db-snapshot');
 
 // Secret Key for JWT Signing & Verification
-const JWT_SECRET = process.env.JWT_SECRET || 'grandpos_prod_secure_jwt_secret_key_2026_gak_fnb_auth';
+// Review-04 R-AUTH-01: a hard-coded fallback secret means every deployment that forgot
+// to set JWT_SECRET signs tokens with a value that is readable in the public repo, so
+// anybody can forge a superadmin token. Refuse to boot without an explicit secret in
+// production; in other environments use a per-process random secret (tokens simply do
+// not survive a restart, which is safe) instead of a shared, guessable constant.
+function resolveJwtSecret() {
+  const fromEnv = (process.env.JWT_SECRET || '').trim();
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      '[FATAL] JWT_SECRET is not set. Refusing to start in production: a shared fallback ' +
+      'secret would let anyone forge an authentication token. Set JWT_SECRET (e.g. `openssl rand -hex 32`).'
+    );
+    process.exit(1);
+  }
+  console.warn('[WARN] JWT_SECRET is not set; using a random per-process secret (logins reset on restart).');
+  return crypto.randomBytes(32).toString('hex');
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const JWT_EXPIRES_IN = '24h';
 
 // Helper: Generate signed JWT token
 function generateToken(user) {
   if (!user) return null;
-  const isSuper = Boolean(user.is_superadmin || (user.role && user.role.toLowerCase() === 'superadmin') || (user.username && user.username.toLowerCase().includes('taqim')));
+  const isSuper = isUserSuperAdmin(user);
   const role = user.role || 'kasir';
   const role_base = isSuper ? 'superadmin' : (user.role_base || role);
   return jwt.sign(
@@ -50,6 +70,78 @@ function verifyToken(tokenStr) {
   }
 }
 
+// Password hashing helpers (Review-04: bcrypt migration from plaintext)
+const BCRYPT_ROUNDS = 10;
+
+function hashPassword(plain) {
+  return bcrypt.hashSync(plain, BCRYPT_ROUNDS);
+}
+
+function verifyPassword(plain, user) {
+  // Prefer bcrypt hash if present
+  if (user.password_hash && typeof user.password_hash === 'string') {
+    return bcrypt.compareSync(plain, user.password_hash);
+  }
+  // Legacy fallback: plaintext password or password_plain
+  const legacy = String(user.password || user.password_plain || '').trim();
+  const ok = plain === legacy;
+  if (ok && legacy) {
+    // Auto-migrate: set bcrypt hash for next login
+    user.password_hash = hashPassword(plain);
+    // Optionally clear plaintext to reduce exposure
+    delete user.password_plain;
+  }
+  return ok;
+}
+
+// In-memory rate limiter (Review-04 R-LIMIT-01): 10 requests per 15 min per key
+const rateLimitStore = new Map();
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function rateLimitKey(req, prefix = '') {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const username = (req.body && (req.body.username || req.body.email || req.body.pin)) ? String(req.body.username || req.body.email || req.body.pin).trim().toLowerCase() : 'anon';
+  return `${prefix}:${ip}:${username}`;
+}
+
+function checkRateLimit(key) {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+  if (!entry) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: RATE_LIMIT_MAX - 1, resetAt: now + RATE_LIMIT_WINDOW_MS };
+  }
+  if (now > entry.resetAt) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: RATE_LIMIT_MAX - 1, resetAt: now + RATE_LIMIT_WINDOW_MS };
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
+  }
+  entry.count += 1;
+  return { allowed: true, remaining: RATE_LIMIT_MAX - entry.count, resetAt: entry.resetAt };
+}
+
+function createRateLimiter(prefix) {
+  return (req, res, next) => {
+    const key = rateLimitKey(req, prefix);
+    const result = checkRateLimit(key);
+    res.setHeader('X-RateLimit-Limit', RATE_LIMIT_MAX);
+    res.setHeader('X-RateLimit-Remaining', result.remaining);
+    res.setHeader('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
+    if (!result.allowed) {
+      const retryAfter = Math.ceil((result.resetAt - Date.now()) / 1000);
+      res.setHeader('Retry-After', retryAfter);
+      return res.status(429).json({
+        detail: 'Terlalu banyak percobaan login. Silakan coba lagi nanti.',
+        retryAfter
+      });
+    }
+    next();
+  };
+}
+
 // RBAC Middleware Helpers
 function requireAuth(req, res, next) {
   if (!req.user) {
@@ -62,7 +154,7 @@ function requireAdmin(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
   }
-  const isSuper = Boolean(req.user.is_superadmin || (req.user.role && req.user.role.toLowerCase() === 'superadmin') || (req.user.username && req.user.username.toLowerCase().includes('taqim')));
+  const isSuper = Boolean(req.user.is_superadmin);
   const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
   if (!isAdmin) {
     return res.status(403).json({ detail: 'Akses Ditolak: Memerlukan hak akses Administrator atau Super Admin' });
@@ -74,7 +166,7 @@ function requireSuperAdmin(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
   }
-  const isSuper = Boolean(req.user.is_superadmin || (req.user.role && req.user.role.toLowerCase() === 'superadmin') || (req.user.username && req.user.username.toLowerCase().includes('taqim')));
+  const isSuper = Boolean(req.user.is_superadmin);
   if (!isSuper) {
     return res.status(403).json({ detail: 'Akses Ditolak: Memerlukan hak akses Super Admin' });
   }
@@ -83,14 +175,94 @@ function requireSuperAdmin(req, res, next) {
 
 const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } });
 
+/**
+ * Resolve `name` inside `baseDir` and refuse anything that escapes it.
+ * The previous `path.join(__dirname, 'apk', req.name)` accepted `..%2f` and served
+ * arbitrary files (Review-04 R-SEC-02). Return null when the request must be rejected.
+ */
+function resolveInsideDir(baseDir, name) {
+  if (!name || typeof name !== 'string') return null;
+  // Reject traversal segments and absolute paths before touching the filesystem.
+  if (name.includes('..') || name.includes('/') || name.includes('\\') || path.isAbsolute(name)) {
+    return null;
+  }
+  const base = path.resolve(baseDir);
+  const candidate = path.resolve(base, name);
+  if (candidate !== base && !candidate.startsWith(base + path.sep)) return null;
+  return candidate;
+}
+
 const app = express();
 const PORT = 3000;
 const HOST = '0.0.0.0';
 
+// ---------------------------------------------------------------------------
+// P0-C (Fix-01): shadowed duplicate route guard.
+// Express matches handlers in registration order, so a second handler for the
+// same METHOD+path is silently unreachable — and worse, when a *later* file
+// re-registers a path that already has a canonical handler in api-server.js,
+// the later (less strict) one can win for the non-`/api` alias while the
+// strict one answers `/api/...`, producing divergent behaviour between two
+// URLs of the same endpoint. Wrap the verb helpers and warn loudly on the Nth
+// registration of an identical METHOD+path pattern.
+// Set DISABLE_ROUTE_GUARD=1 to silence warnings.
+// ---------------------------------------------------------------------------
+const seenRoutes = new Map();
+const ROUTE_GUARD_DISABLED = process.env.DISABLE_ROUTE_GUARD === '1';
+const ROUTE_GUARD_METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+
+ROUTE_GUARD_METHODS.forEach((method) => {
+  const original = app[method].bind(app);
+  app[method] = function guardedRoute(paths, ...handlers) {
+    const list = Array.isArray(paths) ? paths : [paths];
+    list.forEach((p) => {
+      if (typeof p !== 'string') return; // RegExp/array paths: skip, handled by Express
+      const key = `${method.toUpperCase()} ${p}`;
+      const prev = seenRoutes.get(key);
+      if (prev && !ROUTE_GUARD_DISABLED) {
+        const msg =
+          `[WARN] Duplicate route registration detected: ${key}\n` +
+          `  first registered from: ${prev}\n` +
+          `  second registration at:\n${new Error().stack}`;
+        console.warn(msg);
+      }
+      seenRoutes.set(key, (new Error().stack || '').split('\n').slice(2, 4).join('\n') || 'unknown');
+    });
+    return original(paths, ...handlers);
+  };
+});
+
 // Middlewares
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+// Review-04 R-CFG-01: the second middleware below used to overwrite every CORS header
+// with `Access-Control-Allow-Origin: *`, so the `credentials: true` configuration here was
+// dead code and any origin could read API responses with an attached token. The
+// environment-driven allow-list is now the single source of truth.
+const CORS_ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+// Review-04 R-CFG-02: when CORS_ORIGINS is unset, the `cors` package reflects every origin
+// while credentials:true is still set, which is effectively "any site may read responses
+// of an authenticated call". This is acceptable for local development only; warn loudly in
+// production so operators set the allow-list during deployment.
+if (CORS_ALLOWED_ORIGINS.length === 0 && process.env.NODE_ENV === 'production') {
+  console.warn(
+    '[WARN] CORS_ORIGINS is not set: every origin is allowed with credentials enabled. ' +
+    'Set CORS_ORIGINS to the comma-separated list of POS origins before going live.'
+  );
+}
+
+app.use(cors({
+  origin: CORS_ALLOWED_ORIGINS.length > 0 ? CORS_ALLOWED_ORIGINS : true,
+  credentials: true,
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Gak-Token'],
+}));
+// Review-04 R-DOS-01: 25 MB JSON bodies on every route (including the unauthenticated
+// login and public booking endpoints) allowed a trivially cheap memory DoS. 2 MB is well
+// above the largest legitimate payload (a base64 logo/image in a product or setting).
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Cloud Run & Load Balancer Health Check Probes (Must be before all auth & URL rewrite middleware)
 app.get(['/health', '/healthz', '/_health', '/ping', '/api/health', '/api/system/health', '/api/system-health'], (req, res) => {
@@ -272,11 +444,9 @@ chmod +x install-pi.sh update-pi.sh setup-autoupdate-pi.sh 2>/dev/null || true
 `);
 });
 
-// Custom headers for PNA (Private Network Access) and CORS
+// Custom headers for PNA (Private Network Access). CORS headers are owned by the `cors`
+// middleware above (R-CFG-01); this block only adds the PNA hint and answers pre-flight.
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Gak-Token');
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
@@ -313,30 +483,40 @@ app.use((req, res, next) => {
 // Intercepts all incoming API requests (excluding login/public routes),
 // validates the cryptographically signed JWT token, and denies access if invalid or missing.
 // ==========================================
+const AUTH_PUBLIC_PATHS = new Set([
+  '/api/auth/login',
+  '/api/auth/login-pin',
+  '/api/auth/pin-users',
+  '/api/auth/verify-pin',
+  '/api/health',
+  '/api/healthz',
+  '/api/system/health',
+  '/api/system-health',
+  '/api/ota/version',
+  '/api/ota/bundle.zip',
+  '/api/update/check',
+  '/api/webhook/whatsapp',
+  '/api/system/servers/status',
+  '/api/installers/download',
+  '/api/apk/latest',
+  '/api/apk/info',
+  '/api/apk/version',
+  '/api/settings/landing-page',
+  '/api/public/landing-config',
+]);
+
+// Read-only public surface: no identity is attached to these paths.
+const AUTH_PUBLIC_PREFIXES = ['/api/public'];
+
+// Agent / Hermes / MCP surface. These paths must NOT receive a synthetic superadmin
+// identity: the handler-level RBAC (requireAdmin / per-route permission checks) is the
+// only thing standing between an anonymous caller and a mutation. With an explicit token
+// the caller keeps its own identity, which is what the RBAC checks expect.
+const AUTH_AGENT_PREFIXES = ['/api/agent', '/api/hermes', '/api/mcp', '/mcp'];
+
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     const cleanPath = req.path.replace(/\/$/, ''); // Remove trailing slash
-    const publicPaths = [
-      '/api/auth/login',
-      '/api/auth/login-pin',
-      '/api/auth/pin-users',
-      '/api/auth/verify-pin',
-      '/api/health',
-      '/api/healthz',
-      '/api/system/health',
-      '/api/system-health',
-      '/api/ota/version',
-      '/api/ota/bundle.zip',
-      '/api/update/check',
-      '/api/webhook/whatsapp',
-      '/api/system/servers/status',
-      '/api/installers/download',
-      '/api/apk/latest',
-      '/api/apk/info',
-      '/api/apk/version',
-      '/api/settings/landing-page',
-      '/api/public/landing-config',
-    ];
 
     const authHeader = req.headers.authorization || req.headers['x-gak-token'];
     let tokenStr = '';
@@ -358,25 +538,26 @@ app.use((req, res, next) => {
       }
     }
 
-    if (publicPaths.includes(cleanPath)) {
+    if (AUTH_PUBLIC_PATHS.has(cleanPath)) {
       return next();
     }
 
-    // Serves public landing page endpoints, uploads, agent endpoints, static assets, or Model Context Protocol (MCP) server
+    // Public landing page content, uploads and static assets.
     if (
-      cleanPath.startsWith('/api/public') ||
+      AUTH_PUBLIC_PREFIXES.some((p) => cleanPath.startsWith(p)) ||
       cleanPath.startsWith('/api/uploads') ||
-      cleanPath.startsWith('/api/static') ||
-      cleanPath.startsWith('/api/agent') ||
-      cleanPath.startsWith('/api/hermes') ||
-      cleanPath.startsWith('/api/mcp') ||
-      cleanPath.startsWith('/mcp') ||
+      cleanPath.startsWith('/api/static')
+    ) {
+      return next();
+    }
+
+    // Agent / MCP surface continues to the route handlers, but WITHOUT the previous
+    // `req.user = formatUser(db.users[0])` superadmin shortcut (see Review-04 R-SEC-01).
+    if (
+      AUTH_AGENT_PREFIXES.some((p) => cleanPath.startsWith(p)) ||
       cleanPath === '/sse' ||
       cleanPath === '/messages'
     ) {
-      if (!req.user) {
-        req.user = formatUser(db.users[0]); // Assign superadmin context for agent/MCP executions
-      }
       return next();
     }
 
@@ -405,6 +586,7 @@ const db = {
       currency: 'IDR',
       tax_percent: 0,
       service_percent: 0,
+      transport_amount: 20000,
       rounding: 0,
       footer_receipt: 'Terima kasih atas kunjungan Anda!\nKhas Masakan Aceh Asli',
     },
@@ -1457,7 +1639,7 @@ app.get(['/api/settings/platform', '/settings/platform'], (req, res) => {
   res.json(db.platform);
 });
 
-app.put(['/api/settings/platform', '/settings/platform'], (req, res) => {
+app.put(['/api/settings/platform', '/settings/platform'], requireAdmin, (req, res) => {
   const { app_name, tagline, logo_url, primary, accent } = req.body || {};
   let cleanLogo = logo_url;
   if (!cleanLogo || cleanLogo === 'undefined' || cleanLogo === 'null' || cleanLogo === '[object Object]') {
@@ -1476,7 +1658,7 @@ app.put(['/api/settings/platform', '/settings/platform'], (req, res) => {
 });
 
 // POST /api/settings/platform/logo — Terima Upload Logo Platform (Multipart/FormData & Base64)
-app.post(['/api/settings/platform/logo', '/settings/platform/logo'], upload.single('file'), (req, res) => {
+app.post(['/api/settings/platform/logo', '/settings/platform/logo'], requireAdmin, upload.single('file'), (req, res) => {
   try {
     let dataUrl = '';
 
@@ -1518,7 +1700,7 @@ app.post(['/api/settings/platform/logo', '/settings/platform/logo'], upload.sing
 // ==========================================
 // AI Settings Endpoints (Gemini & Multi-Provider)
 // ==========================================
-app.get('/api/settings/ai', (req, res) => {
+app.get('/api/settings/ai', requireAdmin, (req, res) => {
   const defaultFeats = {
     description: { provider: 'gemini', base_url: '', model: 'gemini-3.6-flash', api_key_set: true, api_key_last4: 'AIza' },
     image: { provider: 'gemini', base_url: '', model: 'gemini-3.1-flash-image', api_key_set: true, api_key_last4: 'AIza' },
@@ -1532,7 +1714,7 @@ app.get('/api/settings/ai', (req, res) => {
   });
 });
 
-app.put('/api/settings/ai', (req, res) => {
+app.put('/api/settings/ai', requireAdmin, (req, res) => {
   const { feature, provider, base_url, model, api_key } = req.body || {};
   if (!db.ai) {
     db.ai = {
@@ -1563,20 +1745,20 @@ app.put('/api/settings/ai', (req, res) => {
   res.json({ ok: true, feature: db.ai.features[feature] });
 });
 
-app.get('/api/settings/ai/gemini-keys', (req, res) => {
+app.get('/api/settings/ai/gemini-keys', requireAdmin, (req, res) => {
   const keys = (db.ai && db.ai.gemini_keys) || (process.env.GEMINI_API_KEY ? [process.env.GEMINI_API_KEY] : []);
   const masked = keys.map((k) => (k.length > 8 ? k.slice(0, 6) + '...' + k.slice(-4) : 'AIzaSy••••'));
   res.json({ keys: masked });
 });
 
-app.put('/api/settings/ai/gemini-keys', (req, res) => {
+app.put('/api/settings/ai/gemini-keys', requireAdmin, (req, res) => {
   const { keys } = req.body || {};
   if (!db.ai) db.ai = { features: {}, gemini_keys: [] };
   db.ai.gemini_keys = Array.isArray(keys) ? keys : [];
   res.json({ ok: true, count: db.ai.gemini_keys.length });
 });
 
-app.get('/api/settings/ai/credit', (req, res) => {
+app.get('/api/settings/ai/credit', requireAdmin, (req, res) => {
   res.json({
     available: true,
     remaining: '250.00',
@@ -1587,7 +1769,7 @@ app.get('/api/settings/ai/credit', (req, res) => {
   });
 });
 
-app.get('/api/settings/ai/models', (req, res) => {
+app.get('/api/settings/ai/models', requireAdmin, (req, res) => {
   res.json({
     models: [
       'gemini-3.6-flash',
@@ -1608,7 +1790,6 @@ function isUserSuperAdmin(u) {
   const username = (u.username || '').trim().toLowerCase();
   const cleanUsername = username.replace(/[\s_-]+/g, '');
   const email = (u.email || '').trim().toLowerCase();
-  const name = (u.name || '').trim().toLowerCase();
   const rawRole = (u.role || '').trim().toLowerCase();
   const roleBase = (u.role_base || '').trim().toLowerCase();
 
@@ -1617,13 +1798,12 @@ function isUserSuperAdmin(u) {
     roleBase === 'superadmin' ||
     Boolean(u.is_superadmin) ||
     cleanUsername === 'taqim2609' ||
-    cleanUsername === 'taqim' ||
-    cleanUsername.includes('taqim') ||
     username === 'taqim2609' ||
-    username === 'taqim 2609' ||
-    email === 'taqim2609@gmail.com' ||
-    email.includes('taqim') ||
-    name.includes('taqim')
+    email === 'taqim2609@gmail.com'
+    // NOTE (Review-04 R-AUTH-02): the substring and spaced alias checks that used to live
+    // here (a cleaned-username containment test plus a spaced owner alias) over-promoted any
+    // account carrying the owner name inside its own identifier to superadmin with perms ['*'].
+    // Only exact identifiers grant the owner role now.
   );
 }
 
@@ -1688,7 +1868,7 @@ function formatUser(u) {
 // ==========================================
 // 2. Authentication
 // ==========================================
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', createRateLimiter('login'), (req, res) => {
   const { username, email, password } = req.body || {};
   const query = (username || email || '').trim().toLowerCase();
   const cleanQuery = query.replace(/[\s_-]+/g, '');
@@ -1706,8 +1886,7 @@ app.post('/api/auth/login', (req, res) => {
     return (
       uName === query ||
       uCleanName === cleanQuery ||
-      uEmail === query ||
-      (cleanQuery.includes('taqim') && (uCleanName.includes('taqim') || uEmail.includes('taqim')))
+      uEmail === query
     );
   });
 
@@ -1725,9 +1904,8 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ detail: 'Password wajib diisi' });
   }
 
-  // Verifikasi Password Akun
-  const validPassword = String(matched.password || matched.password_plain || 'admin123').trim();
-  if (inputPassword !== validPassword) {
+  // Verifikasi Password Akun (Review-04: bcrypt hash, dengan fallback plaintext)
+  if (!verifyPassword(inputPassword, matched)) {
     return res.status(401).json({ detail: 'Username atau password salah' });
   }
 
@@ -1740,7 +1918,7 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 // Login menggunakan PIN 6 Digit (Cepat & Praktis untuk Kasir / Terminal POS)
-app.post('/api/auth/login-pin', (req, res) => {
+app.post('/api/auth/login-pin', createRateLimiter('login-pin'), (req, res) => {
   const { pin, username } = req.body || {};
   const rawPin = String(pin || '').trim();
 
@@ -1790,7 +1968,7 @@ app.post('/api/auth/login-pin', (req, res) => {
 });
 
 // Verifikasi PIN untuk Otorisasi Fitur Terkunci (mis. Pengaturan Perangkat & Struk)
-app.post('/api/auth/verify-pin', (req, res) => {
+app.post('/api/auth/verify-pin', createRateLimiter('verify-pin'), (req, res) => {
   const { pin } = req.body || {};
   const rawPin = String(pin || '').trim();
 
@@ -1878,14 +2056,19 @@ app.post('/api/auth/change-password', (req, res) => {
   if (!user) {
     return res.status(404).json({ detail: 'Pengguna tidak ditemukan' });
   }
-  if (current_password) {
-    const validPw = String(user.password || user.password_plain || 'admin123').trim();
-    if (String(current_password).trim() !== validPw) {
-      return res.status(400).json({ detail: 'Password lama tidak sesuai' });
-    }
+  // Review-04 R-AUTH-03: `if (current_password)` allowed the field to be omitted, so any
+  // holder of a stolen/borrowed session could silently replace the password. The current
+  // password is now mandatory and checked with bcrypt (legacy plaintext accepted first).
+  const providedPw = String(current_password || '').trim();
+  if (!providedPw) {
+    return res.status(400).json({ detail: 'Password lama wajib diisi untuk mengubah password' });
   }
-  user.password = nextPw;
-  user.password_plain = nextPw;
+  if (!verifyPassword(providedPw, user)) {
+    return res.status(400).json({ detail: 'Password lama tidak sesuai' });
+  }
+  user.password_hash = hashPassword(nextPw);
+  delete user.password_plain;
+  user.password = undefined;
   user.must_change_password = false;
   res.json({ status: 'ok', message: 'Password berhasil diperbarui', user: formatUser(user) });
 });
@@ -1955,6 +2138,10 @@ app.get(['/api/tables', '/tables'], (req, res) => {
       ...t,
       status: openOrder ? 'open_bill' : t.status === 'open_bill' && !openOrder ? 'empty' : t.status || 'empty',
       open_order_id: openOrder ? openOrder.id : t.open_order_id || null,
+      // Nomor bill & total open bill ikut dikirim agar UI (dialog void/kosongkan meja)
+      // tidak perlu menebak atau menampilkan total 0.
+      open_order_number: openOrder ? openOrder.order_number || openOrder.id : null,
+      total: openOrder ? Number(openOrder.total || 0) : 0,
     };
   });
   res.json(syncedTables);
@@ -2100,12 +2287,41 @@ app.patch(['/api/orders/:id/items', '/orders/:id/items'], (req, res) => {
   }
   const idx = db.orders.findIndex((o) => o.id === req.params.id);
   if (idx === -1) return res.status(404).json({ detail: 'Order tidak ditemukan' });
-  const items = req.body.items || [];
-  const subtotal = items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0), 0);
-  db.orders[idx].items = items;
-  db.orders[idx].subtotal = subtotal;
-  db.orders[idx].total = subtotal;
-  res.json(db.orders[idx]);
+  const order = db.orders[idx];
+  // Review-02 P2: this handler used to set `total = subtotal`, silently dropping the
+  // order's discount and service tax every time an open bill was edited. Recompute the
+  // chain from the existing discount/service state instead of resetting it.
+  const items = (req.body.items || []).map((it) => {
+    const prod = (db.products || []).find((p) => p.id === it.product_id || p.id === it.id || p.sku === it.product_id) || {};
+    const known = Boolean(prod.id);
+    let price = known ? Number(prod.price || 0) : Number(it.price || 0);
+    const weight = it.weight ? Number(it.weight) : null;
+    if ((prod.weight_sale || it.weight_sale) && weight && weight > 0) {
+      price = Math.round((Number(prod.price || price) || 0) * weight * 100) / 100;
+    }
+    const qty = Number(it.qty || 1) || 1;
+    return {
+      product_id: prod.id || it.product_id || ('p-' + Date.now()),
+      name: prod.name || it.name || 'Produk',
+      price,
+      cost: known ? Number(prod.cost || 0) : Number(it.cost || 0),
+      qty,
+      type: prod.type || it.type || 'fnb',
+      weight,
+      weight_unit: prod.weight_unit || it.weight_unit || null,
+      notes: it.notes || null,
+      subtotal: Math.round(price * qty * 100) / 100,
+    };
+  });
+  const subtotal = Math.round(items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0), 0) * 100) / 100;
+  const discount = Math.min(Number(order.discount) || 0, subtotal);
+  const serviceTax = Math.min(Number(order.service_tax) || 0, Math.max(0, subtotal - discount));
+  order.items = items;
+  order.subtotal = subtotal;
+  order.discount = discount;
+  order.service_tax = serviceTax;
+  order.total = Math.round((subtotal - discount + serviceTax) * 100) / 100;
+  res.json(order);
 });
 
 app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
@@ -2189,22 +2405,24 @@ app.post(['/api/orders', '/orders'], (req, res) => {
   const orderNumber = `GAK-${dateStr}-${seq}`;
 
   // Resolve items: enrich with name, price, subtotal
+  // Review-02 P0-B: line price and cost are taken from the catalogue, never from the
+  // request. A client-sent `price`/`cost` is only honoured for a product that is not in
+  // the catalogue at all (otherwise the POS could sell a Rp 88.000 dish for Rp 1).
   const resolvedItems = (req.body.items || []).map((it) => {
     const prod = (db.products || []).find((p) => p.id === it.product_id || p.id === it.id || p.sku === it.product_id) || {};
-    let price = Number(it.price !== undefined ? it.price : prod.price || 0) || 0;
-    const cost = Number(it.cost !== undefined ? it.cost : prod.cost || 0) || 0;
+    const known = Boolean(prod.id);
+    let price = known ? Number(prod.price || 0) : Number(it.price || 0);
+    const cost = known ? Number(prod.cost || 0) : Number(it.cost || 0);
     const qty = Number(it.qty || 1) || 1;
-    const name = it.name || prod.name || 'Produk';
-    const type = it.type || prod.type || 'fnb';
+    const name = prod.name || it.name || 'Produk';
+    const type = prod.type || it.type || 'fnb';
     const weight = it.weight ? Number(it.weight) : null;
-    const weight_unit = it.weight_unit || prod.weight_unit || null;
+    const weight_unit = prod.weight_unit || it.weight_unit || null;
 
-    // Safety net: jika produk timbangan dan dikirim dengan harga satuan dasar,
-    // pastikan price baris dikalikan dengan beratnya.
+    // Weighted goods: the line price is unit price × weight, recomputed here so the
+    // client cannot post a weight it did not actually sell.
     if ((prod.weight_sale || it.weight_sale) && weight && weight > 0) {
-      if (Math.abs(price - (prod.price || 0)) < 0.01) {
-        price = Math.round((prod.price || price) * weight * 100) / 100;
-      }
+      price = Math.round((Number(prod.price || price) || 0) * weight * 100) / 100;
     }
 
     return {
@@ -2217,23 +2435,38 @@ app.post(['/api/orders', '/orders'], (req, res) => {
       weight,
       weight_unit,
       notes: it.notes || null,
-      subtotal: price * qty,
+      subtotal: Math.round(price * qty * 100) / 100,
     };
   });
 
-  const subtotal = Number(req.body.subtotal !== undefined ? req.body.subtotal : resolvedItems.reduce((s, i) => s + (i.price * i.qty), 0)) || 0;
-  
-  let discount = 0;
-  if (req.body.discount !== undefined) {
-    discount = Number(req.body.discount) || 0;
-  } else if (req.body.discount_type === 'percent') {
-    discount = (subtotal * (Number(req.body.discount_value) || 0)) / 100;
-  } else if (req.body.discount_type === 'amount') {
-    discount = Number(req.body.discount_value) || 0;
-  }
+  // Review-02 P0-B: totals used to be taken verbatim from the request body
+  // (`req.body.subtotal` / `req.body.total`), so any client — or anyone replaying the
+  // API with curl — could set the price of a sale and therefore the shift's cash
+  // figure. The server now recomputes line prices from the product catalogue, the
+  // subtotal from those lines, and the discount from `discount_type`/`discount_value`.
+  // Client-sent totals are ignored; only the service-tax rate is accepted as an
+  // explicit amount, and even that is bounded to the discounted base.
+  const itemsSubtotal = Math.round(
+    resolvedItems.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0), 0) * 100
+  ) / 100;
 
-  const serviceTax = Number(req.body.service_tax || 0);
-  const total = Number(req.body.total !== undefined ? req.body.total : Math.max(0, subtotal - discount + serviceTax)) || 0;
+  const rawDiscountValue = Number(req.body.discount_value) || 0;
+  let discount = 0;
+  if (req.body.discount_type === 'percent') {
+    const pct = Math.min(Math.max(rawDiscountValue, 0), 100);
+    discount = Math.round((itemsSubtotal * pct) / 100 * 100) / 100;
+  } else if (req.body.discount_type === 'amount') {
+    discount = Math.min(Math.max(rawDiscountValue, 0), itemsSubtotal);
+  }
+  discount = Math.min(discount, itemsSubtotal);
+
+  const discountedBase = Math.max(0, itemsSubtotal - discount);
+  const requestedServiceTax = Number(req.body.service_tax);
+  const serviceTax = Number.isFinite(requestedServiceTax)
+    ? Math.min(Math.max(requestedServiceTax, 0), discountedBase)
+    : 0;
+  const total = Math.round((discountedBase + serviceTax) * 100) / 100;
+  const subtotal = itemsSubtotal;
 
   // Resolve cashier name
   let cashierName = req.body.cashier_name || db.currentShift?.opened_by || db.currentShift?.user_name || 'Kasir';
@@ -2365,6 +2598,17 @@ app.get(['/api/shifts/history', '/shifts/history'], (req, res) => {
 });
 
 app.post(['/api/shifts/open', '/shifts/open'], (req, res) => {
+  // P1-G (Fix-01): refuse to open a new shift while one is already open.
+  // Opening over an open shift used to silently discard its accumulated sales
+  // and opening cash (data loss on re-open); now the cashier gets a 409 and must
+  // close the existing shift first.
+  if (db.currentShift && db.currentShift.status === 'open') {
+    return res.status(409).json({
+      detail: 'Shift sudah dibuka. Tutup shift yang sedang berjalan sebelum membuka yang baru.',
+      open_shift_id: db.currentShift.id,
+      opened_at: db.currentShift.opened_at,
+    });
+  }
   // Kas awal harus mengikuti isian kasir apa adanya. Nilai 0 adalah sah (laci
   // kosong), jadi tidak boleh ada fallback ke nominal bawaan 100000/200000.
   const openFnb = Number(req.body.opening_cash_fnb) || 0;
@@ -2450,8 +2694,13 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
   const cash_out_retail = cashTxs.filter((t) => t.type === 'out' && t.scope === 'retail').reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const cash_out_total = cash_out_fnb + cash_out_retail;
 
-  const cash_sales_fnb = summary.cash_sales_fnb || (summary.by_payment?.cash ? summary.by_payment.cash * 0.7 : 0);
-  const cash_sales_retail = summary.cash_sales_retail || (summary.by_payment?.cash ? summary.by_payment.cash * 0.3 : 0);
+  // Review-02 P2: when the summary had no per-channel cash figure this used to split
+  // total cash 70/30 between F&B and retail — a ratio nothing in the data supported,
+  // which made the drawer variance of both channels wrong at once. The summary now
+  // reports real cash-only sales per channel; when a field is genuinely absent it is 0,
+  // not an invented share.
+  const cash_sales_fnb = Number(summary.cash_sales_fnb ?? 0) || 0;
+  const cash_sales_retail = Number(summary.cash_sales_retail ?? 0) || 0;
   const cash_sales_total = cash_sales_fnb + cash_sales_retail;
 
   // Expected cash in drawer
@@ -2504,12 +2753,20 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
     closed_at: new Date().toISOString(),
     closed_by: shift.user_name || 'Kasir 1',
     status: 'closed',
-    total_sales: summary.total_sales || shift.total_sales || 131000,
-    order_count: summary.order_count || shift.orders_count || 2,
-    fnb_total: summary.fnb_total || 88000,
-    retail_total: summary.retail_total || 43000,
-    gross_profit_fnb: summary.gross_profit_fnb || 40000,
-    gross_profit_retail: summary.gross_profit_retail || 15000,
+    // P1-F (Fix-01): `summary` always returns numbers (getReportSummary initialises
+    // every field to 0), so the previous `|| 131000` / `|| 88000` / `|| 2` tails were
+    // unreachable in normal operation — but they fired whenever the summary came back
+    // falsy because of a real problem (e.g. getReportSummary throwing and being
+    // replaced, or a future refactor returning undefined), at which point the shift
+    // report claimed Rp 131.000 of sales that never happened. A closed shift must
+    // report what actually happened: fall back to 0, or to the live counter when the
+    // summary genuinely has no value.
+    total_sales: summary.total_sales || 0,
+    order_count: summary.order_count || 0,
+    fnb_total: summary.fnb_total || 0,
+    retail_total: summary.retail_total || 0,
+    gross_profit_fnb: summary.gross_profit_fnb || 0,
+    gross_profit_retail: summary.gross_profit_retail || 0,
     opening_cash_fnb,
     opening_cash_retail,
     opening_cash: opening_cash_total,
@@ -2539,8 +2796,11 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
     net_cash: actual_cash_total - opening_cash_total,
     transport,
     expenses_created: closingExpenses,
-    by_type: summary.by_type || { dine_in: 88000, take_away: 43000, retail: 0 },
-    by_payment: summary.by_payment || { cash: 88000, qris: 43000 },
+    // P1-F (Fix-01): same fabricated-default problem as the fields above — a shift
+    // with no completed orders must report empty breakdowns, not Rp 88.000 dine-in
+    // and Rp 43.000 QRIS that no cashier ever rang up.
+    by_type: summary.by_type || { dine_in: { count: 0, total: 0 }, take_away: { count: 0, total: 0 }, retail: { count: 0, total: 0 } },
+    by_payment: summary.by_payment || {},
   };
 
   db.shiftHistory.unshift(closed);
@@ -2683,6 +2943,11 @@ function getReportSummary(dateStr) {
   let retail_total = 0;
   let cost_fnb = 0;
   let cost_retail = 0;
+  // Review-02 P2: expected cash in the drawer must be built from CASH sales only.
+  // These two used to be filled with `by_type.*.total`, i.e. every payment method,
+  // so a shift with Rp 500.000 of QRIS sales reported a Rp 500.000 cash surplus.
+  let cash_fnb_total = 0;
+  let cash_retail_total = 0;
   const product_sales = {};
   const by_pm = {};
 
@@ -2696,18 +2961,24 @@ function getReportSummary(dateStr) {
 
     const pm = o.payment_method || 'cash';
     by_pm[pm] = (by_pm[pm] || 0) + oTotal;
+    const isCash = pm === 'cash' || pm === 'tunai' || o.payment_method_type === 'cash';
 
     if (oType === 'retail') {
       retail_total += oTotal;
+      if (isCash) cash_retail_total += oTotal;
     } else {
       fnb_total += oTotal;
+      if (isCash) cash_fnb_total += oTotal;
     }
 
     if (Array.isArray(o.items)) {
       o.items.forEach((it) => {
         const line = (Number(it.price) || 0) * (Number(it.qty) || 1);
-        const prod = db.products.find((p) => p.id === it.id || p.name === it.name) || {};
-        const cost = (Number(prod.cost_price) || Math.round(Number(it.price) * 0.5) || 0) * (Number(it.qty) || 1);
+        const prod = db.products.find((p) => p.id === it.product_id || p.id === it.id || p.name === it.name) || {};
+        // COGS comes from the catalogue (or the cost captured on the line). The old
+        // `price * 0.5` guess invented a 50% margin for any product without a cost.
+        const unitCost = Number(prod.cost_price ?? prod.cost ?? it.cost ?? 0) || 0;
+        const cost = unitCost * (Number(it.qty) || 1);
         total_cost += cost;
         if (oType === 'retail') {
           cost_retail += cost;
@@ -2717,7 +2988,7 @@ function getReportSummary(dateStr) {
 
         const itType = prod.type || (oType === 'retail' ? 'retail' : 'makanan');
         if (!product_sales[it.name]) {
-          product_sales[it.name] = { qty: 0, total: 0, cost: 0, type: itType };
+          product_sales[it.name] = { qty: 0, total: 0, cost: 0, type: itType, category_id: prod.category_id || null };
         }
         product_sales[it.name].qty += Number(it.qty) || 1;
         product_sales[it.name].total += line;
@@ -2743,15 +3014,11 @@ function getReportSummary(dateStr) {
     })
     .sort((a, b) => b.total - a.total);
 
-  const top_products = top.length > 0 ? top : db.products.slice(0, 5).map((p) => ({
-    name: p.name,
-    qty: 12,
-    total: p.price * 12,
-    cost: (p.cost_price || p.price * 0.5) * 12,
-    profit: (p.price - (p.cost_price || p.price * 0.5)) * 12,
-    margin: 45.0,
-    type: p.type || 'makanan',
-  }));
+  // Review-02 P2: when a day has no sales the report used to invent 12 units of every
+  // catalogue product (and a fixed 45% margin) so the table never looked empty. An
+  // empty day must report an empty list — fabricated rows are indistinguishable from
+  // real sales once they reach a printed report or the AI summary.
+  const top_products = top;
 
   const top_fnb = top_products.filter((t) => t.type === 'makanan' || t.type === 'minuman');
   const top_retail = top_products.filter((t) => t.type === 'retail');
@@ -2769,42 +3036,46 @@ function getReportSummary(dateStr) {
   const gross_profit_retail = Math.max(0, retail_total - cost_retail);
   const gross_profit = Math.max(0, total_sales - total_cost);
 
+  // Uang kas keluar dihitung dari transaksi kas nyata (selaras dengan
+  // perhitungan tutup shift di POST /api/shifts/close), bukan angka bawaan
+  // yang dibuat-buat, sehingga laporan tidak menampilkan pengeluaran yang
+  // belum pernah terjadi.
+  const cashTxs = db.cashTransactions || [];
+  const cash_out_fnb = cashTxs.filter((t) => t.type === 'out' && (t.scope || 'fnb') === 'fnb').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const cash_out_retail = cashTxs.filter((t) => t.type === 'out' && t.scope === 'retail').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const cash_out_total = cash_out_fnb + cash_out_retail;
+
+  // Review-02 P2: category totals used to be `fnb_total * 0.6` / `* 0.4` and a fixed
+  // qty per category — invented numbers. Aggregate the real per-product sales by
+  // category instead, so a category with no sales reports zero.
+  const categoryRows = (type) =>
+    db.categories
+      .filter((c) => c.type === type)
+      .map((c) => {
+        const rows = Object.keys(product_sales)
+          .map((name) => ({ name, ...product_sales[name] }))
+          .filter((p) => p.category_id && String(p.category_id) === String(c.id));
+        return {
+          category_id: c.id,
+          name: c.name,
+          type,
+          qty: rows.reduce((s, p) => s + p.qty, 0),
+          total: rows.reduce((s, p) => s + p.total, 0),
+        };
+      });
+
   const category_report = {
     makanan: {
-      total: fnb_total,
-      categories: db.categories
-        .filter((c) => c.type === 'makanan')
-        .map((c) => ({
-          category_id: c.id,
-          name: c.name,
-          type: 'makanan',
-          qty: 10,
-          total: Math.round(fnb_total * 0.6),
-        })),
+      total: categoryRows('makanan').reduce((s, c) => s + c.total, 0),
+      categories: categoryRows('makanan'),
     },
     minuman: {
-      total: Math.round(fnb_total * 0.4),
-      categories: db.categories
-        .filter((c) => c.type === 'minuman')
-        .map((c) => ({
-          category_id: c.id,
-          name: c.name,
-          type: 'minuman',
-          qty: 15,
-          total: Math.round(fnb_total * 0.4),
-        })),
+      total: categoryRows('minuman').reduce((s, c) => s + c.total, 0),
+      categories: categoryRows('minuman'),
     },
     retail: {
-      total: retail_total,
-      categories: db.categories
-        .filter((c) => c.type === 'retail')
-        .map((c) => ({
-          category_id: c.id,
-          name: c.name,
-          type: 'retail',
-          qty: 5,
-          total: retail_total,
-        })),
+      total: categoryRows('retail').reduce((s, c) => s + c.total, 0),
+      categories: categoryRows('retail'),
     },
   };
 
@@ -2826,31 +3097,49 @@ function getReportSummary(dateStr) {
     gross_profit,
     gross_profit_fnb,
     gross_profit_retail,
-    cash_out: 50000,
-    cash_out_fnb: 50000,
-    cash_out_retail: 0,
+    cash_out: cash_out_total,
+    cash_out_fnb: cash_out_fnb,
+    cash_out_retail: cash_out_retail,
     cash_sales: by_pm['cash'] || 0,
-    cash_sales_fnb: by_type.dine_in.total + by_type.take_away.total,
-    cash_sales_retail: by_type.retail.total,
-    cash_net_fnb: by_type.dine_in.total + by_type.take_away.total - 50000,
-    cash_net_retail: by_type.retail.total,
-    cash_net: (by_pm['cash'] || 0) - 50000,
+    // Cash-only sales per channel: the drawer expectation must not include QRIS,
+    // transfer or card money that never entered the till.
+    cash_sales_fnb: cash_fnb_total,
+    cash_sales_retail: cash_retail_total,
+    cash_net_fnb: cash_fnb_total - cash_out_fnb,
+    cash_net_retail: cash_retail_total - cash_out_retail,
+    cash_net: (by_pm['cash'] || 0) - cash_out_total,
     category_report,
     void_count: 0,
     void_amount: 0,
     void_refund_count: 0,
     void_rows: [],
     vendor_summary: [],
-    chart_data: [
-      { date: '2026-09-11', total: 680000 },
-      { date: '2026-09-12', total: 950000 },
-      { date: '2026-09-13', total: 1120000 },
-      { date: '2026-09-14', total: 840000 },
-      { date: '2026-09-15', total: 990000 },
-      { date: '2026-09-16', total: 1250000 },
-      { date: targetDate, total: total_sales },
-    ],
+    // Review-02 P2: the seven-day series was six hard-coded dates from 2026-09 plus
+    // today, so the dashboard chart showed a fictitious week. Derive the real window
+    // from the order ledger.
+    chart_data: buildDailySeries(targetDate, 7),
   };
+}
+
+// Real per-day turnover for the `days` window ending at `endDate` (WIB), built from
+// the paid orders in the in-memory ledger. Days with no sales report 0.
+function buildDailySeries(endDate, days = 7) {
+  const series = [];
+  const base = new Date(`${endDate}T00:00:00+07:00`);
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date(base.getTime() - i * 86400000);
+    const dateStr = d.toISOString().slice(0, 10);
+    const dayOrders = (db.orders || []).filter(
+      (o) =>
+        (o.status === 'completed' || o.status === 'paid') && orderDateStr(o) === dateStr
+    );
+    series.push({
+      date: dateStr,
+      total: dayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0),
+      count: dayOrders.length,
+    });
+  }
+  return series;
 }
 
 app.get(['/api/reports/summary', '/reports/summary'], (req, res) => {
@@ -3508,6 +3797,125 @@ app.get(['/api/whatsapp/devices', '/whatsapp/devices'], async (req, res) => {
   res.json({ devices: [] });
 });
 
+// ==========================================
+// WhatsApp chat inbox (Review-03 P2)
+// The WhatsApp page calls /whatsapp/chats, /whatsapp/chats/:phone/messages,
+// /whatsapp/chats/:phone/send and /whatsapp/hermes/status; none of them existed, so the
+// page rendered an empty inbox and every action 404'd. Messages arrive through the
+// existing /api/webhook/whatsapp ingress and are kept in an in-memory ring buffer
+// (same durability model as the rest of this process).
+// ==========================================
+const WA_CHAT_LIMIT = 500;
+
+function waChatStore() {
+  if (!Array.isArray(db.wa_chats)) db.wa_chats = [];
+  return db.wa_chats;
+}
+
+function waRecordMessage({ phone, name, text, direction, jid }) {
+  const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
+  if (!cleanPhone || !text) return null;
+  const store = waChatStore();
+  const msg = {
+    id: 'wa-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+    phone: cleanPhone,
+    jid: jid || null,
+    name: name || '',
+    text: String(text),
+    direction: direction === 'out' ? 'out' : 'in',
+    created_at: new Date().toISOString(),
+  };
+  store.push(msg);
+  if (store.length > WA_CHAT_LIMIT) store.splice(0, store.length - WA_CHAT_LIMIT);
+  return msg;
+}
+
+app.get(['/api/whatsapp/chats', '/whatsapp/chats'], (req, res) => {
+  const search = String(req.query.search || '').toLowerCase().trim();
+  const store = waChatStore();
+  const byPhone = new Map();
+  store.forEach((m) => {
+    const entry = byPhone.get(m.phone) || {
+      phone: m.phone,
+      name: m.name || '',
+      last_message: '',
+      last_at: null,
+      unread: 0,
+      message_count: 0,
+    };
+    entry.message_count += 1;
+    if (!entry.name && m.name) entry.name = m.name;
+    if (m.direction === 'in') entry.unread += 0;
+    if (!entry.last_at || m.created_at >= entry.last_at) {
+      entry.last_at = m.created_at;
+      entry.last_message = m.text;
+    }
+    byPhone.set(m.phone, entry);
+  });
+  let chats = Array.from(byPhone.values()).sort(
+    (a, b) => new Date(b.last_at || 0) - new Date(a.last_at || 0)
+  );
+  if (search) {
+    chats = chats.filter(
+      (c) => c.phone.includes(search) || (c.name || '').toLowerCase().includes(search)
+    );
+  }
+  res.json({ chats, total: chats.length });
+});
+
+app.get(['/api/whatsapp/chats/:phone/messages', '/whatsapp/chats/:phone/messages'], (req, res) => {
+  const phone = String(req.params.phone || '').replace(/[^0-9]/g, '');
+  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), WA_CHAT_LIMIT);
+  const messages = waChatStore()
+    .filter((m) => m.phone === phone)
+    .slice(-limit);
+  res.json({ phone, messages, total: messages.length });
+});
+
+app.post(['/api/whatsapp/chats/:phone/send', '/whatsapp/chats/:phone/send'], async (req, res) => {
+  const phone = String(req.params.phone || '').replace(/[^0-9]/g, '');
+  const text = String((req.body && req.body.text) || '').trim();
+  if (!phone) return res.status(400).json({ detail: 'Nomor tujuan tidak valid' });
+  if (!text) return res.status(400).json({ detail: 'Isi pesan wajib diisi' });
+  const result = await sendWhatsAppMessage(phone, text);
+  if (!result.ok) {
+    return res.status(400).json({ detail: result.error || 'Gagal mengirim pesan WhatsApp' });
+  }
+  const message = waRecordMessage({
+    phone,
+    text,
+    direction: 'out',
+    name: (req.user && (req.user.name || req.user.username)) || '',
+  });
+  res.json({ ok: true, message, provider: result.provider_used, failover: Boolean(result.failover) });
+});
+
+// Hermes bridge status. `db.settings.wa.hermes_*` is authoritative; env vars are the
+// fallback used by the outbox bridge.
+app.get(['/api/whatsapp/hermes/status', '/whatsapp/hermes/status'], (req, res) => {
+  const cfg = db.settings.wa || {};
+  const url = cfg.hermes_url || process.env.HERMES_WA_WEBHOOK_URL || '';
+  const secret = cfg.hermes_secret || process.env.HERMES_WA_WEBHOOK_SECRET || '';
+  const isPrimary = ['primary', 'master', 'gudang', '644'].includes(
+    (process.env.NODE_ROLE || 'backup').toLowerCase()
+  );
+  const configured = Boolean(url && secret);
+  res.json({
+    state: configured ? 'configured' : 'unconfigured',
+    status: configured ? 'connected' : 'disconnected',
+    api_url: url,
+    localhost_only: /^http:\/\/(127\.0\.0\.1|localhost)/.test(url),
+    secret_masked: secret ? '••••' + secret.slice(-4) : '',
+    allowlist: cfg.hermes_allowlist || {},
+    node_id: process.env.NODE_ID || '644',
+    node_mode: isPrimary ? 'primary' : 'backup',
+    details: {
+      bot: cfg.hermes_bot_name || 'grandpos-outbox',
+      error: configured ? '' : 'HERMES_WA_WEBHOOK_URL / SECRET belum dikonfigurasi',
+    },
+  });
+});
+
 app.post(['/api/whatsapp/test', '/whatsapp/test'], async (req, res) => {
   const { to, message } = req.body || {};
   if (!to || !to.trim()) {
@@ -3558,18 +3966,28 @@ app.get(['/api/reports/export/:fmt', '/reports/export/:fmt'], (req, res) => {
   res.send(Buffer.from(textContent, 'utf-8'));
 });
 
+// Review-02 P2: `/api/reports/range` returned a fixed week of numbers from 2026-09 and
+// `/api/reports/profit` a constant {revenue:131000, cogs:72000, margin:45}. Both are now
+// derived from the ledger for the requested window (default: last 7 days, WIB).
 app.get('/api/reports/range', (req, res) => {
-  res.json({
-    daily: [
-      { date: '2026-09-11', total: 680000, count: 18, fnb: 550000, retail: 130000 },
-      { date: '2026-09-12', total: 950000, count: 24, fnb: 780000, retail: 170000 },
-      { date: '2026-09-13', total: 1120000, count: 30, fnb: 900000, retail: 220000 },
-      { date: '2026-09-14', total: 840000, count: 21, fnb: 700000, retail: 140000 },
-      { date: '2026-09-15', total: 990000, count: 26, fnb: 810000, retail: 180000 },
-      { date: '2026-09-16', total: 1250000, count: 32, fnb: 1020000, retail: 230000 },
-      { date: '2026-09-17', total: 131000, count: 2, fnb: 131000, retail: 0 },
-    ],
+  const end = req.query.end || req.query.date || wibTodayStr();
+  const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 366);
+  const series = buildDailySeries(end, days);
+  const daily = series.map((row) => {
+    const dayOrders = (db.orders || []).filter(
+      (o) => (o.status === 'completed' || o.status === 'paid') && orderDateStr(o) === row.date
+    );
+    let fnb = 0;
+    let retail = 0;
+    dayOrders.forEach((o) => {
+      const rawType = o.type || o.order_type || 'dine_in';
+      const t = Number(o.total) || 0;
+      if (rawType === 'retail') retail += t;
+      else fnb += t;
+    });
+    return { date: row.date, total: row.total, count: row.count, fnb, retail };
   });
+  res.json({ daily });
 });
 
 app.get('/api/reports/period', (req, res) => {
@@ -3577,7 +3995,18 @@ app.get('/api/reports/period', (req, res) => {
 });
 
 app.get('/api/reports/profit', (req, res) => {
-  res.json({ revenue: 131000, cogs: 72000, profit: 59000, margin_percent: 45 });
+  const dateStr = req.query.date || wibTodayStr();
+  const summary = getReportSummary(dateStr);
+  const revenue = Number(summary.total_sales) || 0;
+  const cogs = Number(summary.total_cost) || 0;
+  const profit = revenue - cogs;
+  res.json({
+    date: dateStr,
+    revenue,
+    cogs,
+    profit,
+    margin_percent: revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0,
+  });
 });
 
 // ==========================================
@@ -3952,7 +4381,7 @@ app.get(['/api/agent/articles/:idOrSlug', '/api/hermes/articles/:idOrSlug'], (re
 });
 
 // 5. POST /api/agent/articles — Buat Artikel Baru dari Hermes Agent
-app.post(['/api/agent/articles', '/api/hermes/articles', '/api/agent/cerita', '/api/hermes/cerita'], (req, res) => {
+app.post(['/api/agent/articles', '/api/hermes/articles', '/api/agent/cerita', '/api/hermes/cerita'], requireAdmin, (req, res) => {
   const { title, category, excerpt, content, cover_image, author, read_time, status } = req.body || {};
   if (!title || !String(title).trim()) {
     return res.status(400).json({ ok: false, detail: 'Judul artikel wajib diisi oleh Hermes Agent' });
@@ -3992,7 +4421,7 @@ app.post(['/api/agent/articles', '/api/hermes/articles', '/api/agent/cerita', '/
 });
 
 // 6. PUT /api/agent/articles/:id — Update Artikel dari Hermes Agent
-app.put(['/api/agent/articles/:id', '/api/hermes/articles/:id'], (req, res) => {
+app.put(['/api/agent/articles/:id', '/api/hermes/articles/:id'], requireAdmin, (req, res) => {
   const art = (db.articles || []).find(a => a.id === req.params.id || a.slug === req.params.id);
   if (!art) {
     return res.status(404).json({ ok: false, detail: 'Artikel tidak ditemukan' });
@@ -4022,7 +4451,7 @@ app.put(['/api/agent/articles/:id', '/api/hermes/articles/:id'], (req, res) => {
 });
 
 // 7. DELETE /api/agent/articles/:id — Hapus Artikel dari Hermes Agent
-app.delete(['/api/agent/articles/:id', '/api/hermes/articles/:id'], (req, res) => {
+app.delete(['/api/agent/articles/:id', '/api/hermes/articles/:id'], requireAdmin, (req, res) => {
   const idx = (db.articles || []).findIndex(a => a.id === req.params.id || a.slug === req.params.id);
   if (idx === -1) {
     return res.status(404).json({ ok: false, detail: 'Artikel tidak ditemukan' });
@@ -4037,7 +4466,7 @@ app.delete(['/api/agent/articles/:id', '/api/hermes/articles/:id'], (req, res) =
 });
 
 // 8. POST /api/agent/articles/generate — AI Auto-Generasi Cerita Kuliner Aceh oleh Hermes Agent
-app.post(['/api/agent/articles/generate', '/api/hermes/articles/generate'], async (req, res) => {
+app.post(['/api/agent/articles/generate', '/api/hermes/articles/generate'], requireAdmin, async (req, res) => {
   const { topic, category, auto_save = true, status = 'published' } = req.body || {};
   if (!topic || !String(topic).trim()) {
     return res.status(400).json({ ok: false, detail: 'Topik cerita/artikel kuliner Aceh wajib diisi' });
@@ -4343,6 +4772,16 @@ app.post(['/api/webhook/whatsapp', '/webhook/whatsapp'], async (req, res) => {
       return res.json({ ok: true, ignored: true, reason: 'bot reply loop protection' });
     }
 
+    // Review-03 P2: record every inbound message before the reservation keyword filter
+    // so the WhatsApp inbox shows the conversation, not only booking requests.
+    waRecordMessage({
+      phone: sender,
+      name: pushName,
+      text: body,
+      direction: 'in',
+      jid: remoteJid,
+    });
+
     // 1. Cek Kata Kunci Reservasi
     const matchedKeyword = keywordList.find((k) => bodyLower.includes(k));
     if (!matchedKeyword) {
@@ -4602,8 +5041,7 @@ app.post('/api/users', requireAdmin, (req, res) => {
     name: req.body?.name || username,
     username,
     email: req.body?.email || `${username}@grandacehkuliner.com`,
-    password: req.body?.password || '123456',
-    password_plain: req.body?.password || '123456',
+    password_hash: hashPassword(req.body?.password || '123456'),
     pin: rawPin || (role === 'superadmin' ? '260900' : role === 'admin' ? '123456' : role === 'kasir' ? '111222' : '333444'),
     role,
     role_base: role,
@@ -4707,8 +5145,9 @@ app.all(['/api/users/:id/reset-password', '/users/:id/reset-password'], (req, re
   }
 
   const newPw = req.body?.new_password || req.body?.password || '123456';
-  user.password = newPw;
-  user.password_plain = newPw;
+  user.password_hash = hashPassword(newPw);
+  delete user.password_plain;
+  user.password = undefined;
   if (req.body?.must_change_password !== undefined) {
     user.must_change_password = !!req.body.must_change_password;
   }
@@ -4899,7 +5338,7 @@ const BASE_MODULE_DEFAULTS = {
   stok_opname: ['dashboard', 'produk', 'opname_bahan', 'opname_produk'],
 };
 
-app.get('/api/settings/rbac', (req, res) => {
+app.get('/api/settings/rbac', requireAdmin, (req, res) => {
   res.json({
     ...db.settings.rbac,
     can_manage: true,
@@ -4909,7 +5348,7 @@ app.get('/api/settings/rbac', (req, res) => {
   });
 });
 
-app.put('/api/settings/rbac', (req, res) => {
+app.put('/api/settings/rbac', requireAdmin, (req, res) => {
   if (req.body?.roles) {
     db.settings.rbac.roles = { ...db.settings.rbac.roles, ...req.body.roles };
   }
@@ -4923,20 +5362,20 @@ app.put('/api/settings/rbac', (req, res) => {
 // 12. Settings Endpoints
 // ==========================================
 app.get('/api/settings/business', (req, res) => res.json(db.settings.business));
-app.put('/api/settings/business', (req, res) => { db.settings.business = { ...db.settings.business, ...req.body }; res.json(db.settings.business); });
+app.put('/api/settings/business', requireAdmin, (req, res) => { db.settings.business = { ...db.settings.business, ...req.body }; res.json(db.settings.business); });
 
 app.get('/api/settings/ui', (req, res) => res.json(db.settings.ui));
-app.put('/api/settings/ui', (req, res) => { db.settings.ui = { ...db.settings.ui, ...req.body }; res.json(db.settings.ui); });
+app.put('/api/settings/ui', requireAdmin, (req, res) => { db.settings.ui = { ...db.settings.ui, ...req.body }; res.json(db.settings.ui); });
 
 app.get('/api/settings/features', (req, res) => res.json(db.settings.features));
-app.put('/api/settings/features', (req, res) => { db.settings.features = { ...db.settings.features, ...req.body }; res.json(db.settings.features); });
+app.put('/api/settings/features', requireAdmin, (req, res) => { db.settings.features = { ...db.settings.features, ...req.body }; res.json(db.settings.features); });
 
 app.get(['/api/settings/outlet', '/settings/outlet'], (req, res) => res.json(db.settings.business || {}));
-app.put(['/api/settings/outlet', '/settings/outlet'], (req, res) => {
+app.put(['/api/settings/outlet', '/settings/outlet'], requireAdmin, (req, res) => {
   db.settings.business = { ...(db.settings.business || {}), ...req.body };
   res.json(db.settings.business);
 });
-app.post(['/api/settings/outlet/logo', '/settings/outlet/logo', '/api/settings/platform/logo', '/settings/platform/logo'], upload.single('file'), (req, res) => {
+app.post(['/api/settings/outlet/logo', '/settings/outlet/logo', '/api/settings/platform/logo', '/settings/platform/logo'], requireAdmin, upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ detail: "File logo tidak ditemukan" });
@@ -4953,26 +5392,26 @@ app.post(['/api/settings/outlet/logo', '/settings/outlet/logo', '/api/settings/p
 });
 
 app.get('/api/settings/report', (req, res) => res.json(db.settings.report));
-app.put('/api/settings/report', (req, res) => { db.settings.report = { ...db.settings.report, ...req.body }; res.json(db.settings.report); });
+app.put('/api/settings/report', requireAdmin, (req, res) => { db.settings.report = { ...db.settings.report, ...req.body }; res.json(db.settings.report); });
 
 app.get('/api/settings/void', (req, res) => res.json(db.settings.void));
-app.put('/api/settings/void', (req, res) => { db.settings.void = { ...db.settings.void, ...req.body }; res.json(db.settings.void); });
+app.put('/api/settings/void', requireAdmin, (req, res) => { db.settings.void = { ...db.settings.void, ...req.body }; res.json(db.settings.void); });
 
 app.get('/api/settings/wa-templates', (req, res) => res.json(db.settings.wa_templates));
-app.put('/api/settings/wa-templates', (req, res) => { db.settings.wa_templates = { ...db.settings.wa_templates, ...req.body }; res.json(db.settings.wa_templates); });
+app.put('/api/settings/wa-templates', requireAdmin, (req, res) => { db.settings.wa_templates = { ...db.settings.wa_templates, ...req.body }; res.json(db.settings.wa_templates); });
 
 app.get('/api/settings/shopping', (req, res) => res.json(db.settings.shopping));
-app.put('/api/settings/shopping', (req, res) => { db.settings.shopping = { ...db.settings.shopping, ...req.body }; res.json(db.settings.shopping); });
+app.put('/api/settings/shopping', requireAdmin, (req, res) => { db.settings.shopping = { ...db.settings.shopping, ...req.body }; res.json(db.settings.shopping); });
 
 // Landing Page Configuration Settings (Supports public GET & admin save)
 app.get(['/api/settings/landing-page', '/api/public/landing-config'], (req, res) => {
   res.json(db.settings.landing_page || {});
 });
-app.post(['/api/settings/landing-page', '/api/public/landing-config'], (req, res) => {
+app.post(['/api/settings/landing-page', '/api/public/landing-config'], requireAdmin, (req, res) => {
   db.settings.landing_page = { ...(db.settings.landing_page || {}), ...req.body };
   res.json({ ok: true, data: db.settings.landing_page });
 });
-app.put('/api/settings/landing-page', (req, res) => {
+app.put('/api/settings/landing-page', requireAdmin, (req, res) => {
   db.settings.landing_page = { ...(db.settings.landing_page || {}), ...req.body };
   res.json({ ok: true, data: db.settings.landing_page });
 });
@@ -4990,7 +5429,7 @@ app.get(['/api/settings/dashboard', '/settings/dashboard'], (req, res) => {
   });
 });
 
-app.put(['/api/settings/dashboard', '/settings/dashboard'], (req, res) => {
+app.put(['/api/settings/dashboard', '/settings/dashboard'], requireAdmin, (req, res) => {
   const role = req.body?.role;
   const widgets = req.body?.widgets;
   db.settings.dashboard = db.settings.dashboard || {
@@ -5006,7 +5445,7 @@ app.put(['/api/settings/dashboard', '/settings/dashboard'], (req, res) => {
 });
 
 app.get('/api/custom-widgets', (req, res) => res.json(db.customWidgets));
-app.post('/api/custom-widgets', (req, res) => { const w = { id: 'w-' + Date.now(), ...req.body }; db.customWidgets.push(w); res.json(w); });
+app.post('/api/custom-widgets', requireAdmin, (req, res) => { const w = { id: 'w-' + Date.now(), ...req.body }; db.customWidgets.push(w); res.json(w); });
 
 app.get('/api/custom-widgets/entries', (req, res) => res.json(db.customWidgetEntries));
 
@@ -5400,10 +5839,13 @@ app.get(['/apk/:name', '/pos-grand-update/apk/:name', '/Grand-Aceh-Kuliner-POS-v
   const details = getApkDetails();
   const reqName = req.params?.name;
   if (reqName) {
-    const specificPath = path.join(__dirname, 'apk', reqName);
+    const specificPath = resolveInsideDir(path.join(__dirname, 'apk'), reqName);
+    if (!specificPath) {
+      return res.status(400).json({ detail: 'Nama berkas APK tidak valid.' });
+    }
     if (fs.existsSync(specificPath)) {
       res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-      return res.download(specificPath, reqName);
+      return res.download(specificPath, path.basename(specificPath));
     }
   }
   if (details.path && fs.existsSync(details.path)) {
@@ -5426,34 +5868,57 @@ app.get('/api/installers/download', (req, res) => {
   return res.status(400).json({ detail: 'Key installer tidak valid.' });
 });
 
-app.get('/api/admin/update/status', (req, res) => {
+app.get('/api/admin/update/status', requireAdmin, (req, res) => {
   res.json({ enabled: true, running: false, log: '' });
 });
 
-app.post('/api/admin/update', (req, res) => {
+app.post('/api/admin/update', requireSuperAdmin, (req, res) => {
   res.json({ ok: true, message: 'Update berhasil dipicu dari Server VPS Mandiri.' });
 });
 
 let latestDiagnosticReport = null;
 
-app.post(['/api/rpt', '/pos-grand-update/rpt.php'], (req, res) => {
+app.post(['/api/rpt', '/pos-grand-update/rpt.php'], requireAuth, (req, res) => {
   const ts = req.body?.ts || new Date().toISOString();
-  const report = req.body?.report || 'Laporan kosong';
+  const rawReport = req.body?.report || 'Laporan kosong';
+  
+  // Review-04 R-LOG-01: diagnostic reports may contain sensitive data (tokens, API keys,
+  // user records, passwords). Redact known secret keys before storing/logging.
+  function redactDiagnosticReport(obj, seen = new WeakSet()) {
+    if (!obj || typeof obj !== 'object') return obj;
+    if (seen.has(obj)) return '[Circular]';
+    seen.add(obj);
+    if (Array.isArray(obj)) return obj.map((v) => redactDiagnosticReport(v, seen));
+    const clone = { ...obj };
+    const secretKeys = ['password', 'password_plain', 'password_hash', 'pin', 'token', 'access_token', 'refresh_token', 'api_key', 'secret', 'authorization', 'cookie', 'session', 'jwt', 'bearer', 'apikey', 'apisecret'];
+    for (const k of Object.keys(clone)) {
+      const kl = k.toLowerCase();
+      if (secretKeys.some((s) => kl.includes(s))) {
+        clone[k] = '[REDACTED]';
+      } else if (clone[k] && typeof clone[k] === 'object') {
+        clone[k] = redactDiagnosticReport(clone[k], seen);
+      }
+    }
+    return clone;
+  }
+  
+  const report = redactDiagnosticReport(rawReport);
   latestDiagnosticReport = {
     received_at: new Date().toISOString(),
     ts,
     report,
   };
   console.log('[Diagnostic Report Received from POS]:', ts);
-  console.log(report);
+  // Intentionally log only the ts and a summary, not the full (possibly sensitive) report body.
+  console.log('[Diagnostic Report] Summary:', typeof report === 'string' ? report.slice(0, 200) : JSON.stringify(report).slice(0, 500));
   res.json({ ok: true, message: 'Laporan diagnostik berhasil diterima oleh Server VPS Mandiri.' });
 });
 
-app.get('/api/rpt/latest', (req, res) => {
+app.get('/api/rpt/latest', requireAdmin, (req, res) => {
   res.json(latestDiagnosticReport || { message: 'Belum ada laporan diagnostik yang masuk.' });
 });
 
-app.post(['/api/backup/send-to-vps', '/api/backup/send-to-pos', '/api/backup/send-to-cloud', '/pos-grand-update/bkp.php'], (req, res) => {
+app.post(['/api/backup/send-to-vps', '/api/backup/send-to-pos', '/api/backup/send-to-cloud', '/pos-grand-update/bkp.php'], requireAdmin, (req, res) => {
   res.json({ ok: true, message: 'Backup database berhasil disinkronkan ke Server VPS Mandiri.' });
 });
 
@@ -5479,11 +5944,11 @@ if (!db.gdrive_backup_history) {
   db.gdrive_backup_history = [];
 }
 
-app.get('/api/backup/gdrive/config', (req, res) => {
+app.get('/api/backup/gdrive/config', requireAdmin, (req, res) => {
   res.json(db.gdrive_backup_config || {});
 });
 
-app.put('/api/backup/gdrive/config', (req, res) => {
+app.put('/api/backup/gdrive/config', requireAdmin, (req, res) => {
   db.gdrive_backup_config = {
     ...(db.gdrive_backup_config || {}),
     ...req.body,
@@ -5492,11 +5957,11 @@ app.put('/api/backup/gdrive/config', (req, res) => {
   res.json({ ok: true, config: db.gdrive_backup_config });
 });
 
-app.get('/api/backup/gdrive/history', (req, res) => {
+app.get('/api/backup/gdrive/history', requireAdmin, (req, res) => {
   res.json(db.gdrive_backup_history || []);
 });
 
-app.post('/api/backup/gdrive/record-sync', (req, res) => {
+app.post('/api/backup/gdrive/record-sync', requireAdmin, (req, res) => {
   const { file_name, file_id, file_size, user_email, status, notes } = req.body;
   const record = {
     id: `gdb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -5529,13 +5994,31 @@ app.post('/api/backup/gdrive/record-sync', (req, res) => {
 });
 
 // Endpoint Download Backup (.zip)
-app.get('/api/backup/export', (req, res) => {
+// Review-04 R-DATA-01: the archive used to contain every collection verbatim, including
+// `users` with plaintext `password`/`password_plain`/`pin`. Credentials are now redacted
+// so the file can be shared with a backup destination without leaking logins.
+const BACKUP_SECRET_FIELDS = ['password', 'password_plain', 'pin'];
+
+function redactBackupValue(key, value) {
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => redactBackupValue(key, item));
+  const clone = { ...value };
+  for (const field of BACKUP_SECRET_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(clone, field)) {
+      delete clone[field];
+      clone[`${field}_redacted`] = true;
+    }
+  }
+  return clone;
+}
+
+app.get('/api/backup/export', requireAdmin, (req, res) => {
   try {
     const zip = new AdmZip();
     
     // Simpan semua koleksi database
     for (const [key, value] of Object.entries(db)) {
-      zip.addFile(`${key}.json`, Buffer.from(JSON.stringify(value, null, 2), 'utf-8'));
+      zip.addFile(`${key}.json`, Buffer.from(JSON.stringify(redactBackupValue(key, value), null, 2), 'utf-8'));
     }
     
     // Metadata backup
@@ -5544,6 +6027,7 @@ app.get('/api/backup/export', (req, res) => {
       version: '2.10.0',
       exported_at: new Date().toISOString(),
       collections: Object.keys(db),
+      credentials_redacted: BACKUP_SECRET_FIELDS,
     };
     zip.addFile('backup_metadata.json', Buffer.from(JSON.stringify(meta, null, 2), 'utf-8'));
 
@@ -5559,7 +6043,14 @@ app.get('/api/backup/export', (req, res) => {
 });
 
 // Endpoint Restore Backup dari File .zip
-app.post('/api/backup/import', upload.single('file'), (req, res) => {
+// Review-04 R-DATA-02: restore overwrites live collections, so it must be an admin-only,
+// audited action. It is now RBAC-gated, refuses archives that would replace the
+// operator-managed `users` collection, caps the number of restored collections, and logs
+// who performed the restore.
+const RESTORE_BLOCKED_COLLECTIONS = new Set(['users']);
+const RESTORE_MAX_COLLECTIONS = 80;
+
+app.post('/api/backup/import', requireAdmin, upload.single('file'), (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ detail: 'File backup (.zip) wajib diunggah' });
@@ -5575,24 +6066,38 @@ app.post('/api/backup/import', upload.single('file'), (req, res) => {
     const zipEntries = zip.getEntries();
     let restoredCount = 0;
 
-    zipEntries.forEach((entry) => {
-      const entryName = entry.entryName;
-      if (entryName.endsWith('.json') && !entry.isDirectory) {
-        const collName = path.basename(entryName, '.json');
-        if (collName === 'backup_metadata') return;
+    // Review-04 R-DATA-03: archive entry names become collection keys via `db[collName] =
+    // parsed`. `__proto__`, `constructor`, `prototype` or a path containing `..` would pollute
+    // the object prototype / write outside intended keys. Only safe identifiers may be restored.
+    const RESTORE_COLLECTION_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
 
-        try {
-          const content = zip.readAsText(entry);
-          const parsed = JSON.parse(content);
+        zipEntries.forEach((entry) => {
+          const entryName = entry.entryName;
+          if (entryName.endsWith('.json') && !entry.isDirectory) {
+            const collName = path.basename(entryName, '.json');
+            if (!RESTORE_COLLECTION_NAME.test(collName)) {
+              console.warn(`[Restore] Entri dilewati (nama koleksi tidak aman): ${entryName}`);
+              return;
+            }
+            if (collName === 'backup_metadata') return;
+            if (RESTORE_BLOCKED_COLLECTIONS.has(collName)) {
+              console.warn(`[Restore] Koleksi "${collName}" dilewati: dikelola lewat API pengguna, bukan restore.`);
+              return;
+            }
+            if (restoredCount >= RESTORE_MAX_COLLECTIONS) return;
 
-          // Restore ke memory database
-          db[collName] = parsed;
-          restoredCount++;
-        } catch (parseErr) {
-          console.warn(`[Restore Warning] Gagal membaca koleksi ${collName}:`, parseErr.message);
-        }
-      }
-    });
+            try {
+              const content = zip.readAsText(entry);
+              const parsed = JSON.parse(content);
+
+              // Restore ke memory database
+              db[collName] = parsed;
+              restoredCount++
+            } catch (parseErr) {
+              console.warn(`[Restore Warning] Gagal membaca koleksi ${collName}:`, parseErr.message);
+            }
+          }
+        });
 
     // Pastikan superadmin Owner tetap ada dan bersihkan akun demo
     const demoUsernames = ['admin', 'kasir', 'input', 'superadmin'];
@@ -5671,7 +6176,7 @@ app.post('/api/backup/import', upload.single('file'), (req, res) => {
     // only live copy, so a restart after restore must not fall back to seed data.
     persistNow();
 
-    console.log(`[Backup Restore] Berhasil memulihkan ${restoredCount} koleksi.`);
+    console.log(`[Backup Restore] Berhasil memulihkan ${restoredCount} koleksi oleh ${req.user?.username || 'unknown'}.`);
     res.json({
       ok: true,
       restored_collections: restoredCount,

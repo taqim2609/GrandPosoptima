@@ -179,6 +179,20 @@ api.interceptors.response.use(
   }
 );
 
+// Auth header for raw `fetch()` calls that bypass the axios instance above.
+// Review-03 P0-2: the diagnostic/report calls used to send a hard-coded
+// `X-Gak-Token: gak_rpt_...` literal that shipped inside the JS bundle, so anyone
+// who downloaded the app could read it. The server authenticates those routes with
+// the same JWT the axios instance uses, so reuse that token instead.
+export function authHeaders(extra = {}) {
+  const headers = { ...extra };
+  try {
+    const t = localStorage.getItem("gak_token");
+    if (t) headers.Authorization = `Bearer ${t}`;
+  } catch (_) {}
+  return headers;
+}
+
 export function apiError(detail) {
   if (detail == null) return "Terjadi kesalahan. Coba lagi.";
   if (typeof detail === "string") {

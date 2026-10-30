@@ -17,6 +17,8 @@ import {
   TrendingUp,
   Database
 } from "lucide-react";
+import { formatWib } from "@/lib/format";
+import { authHeaders } from "@/lib/api";
 
 export default function HybridSyncDiagnosticPanel() {
   const [syncing, setSyncing] = useState(false);
@@ -65,13 +67,9 @@ export default function HybridSyncDiagnosticPanel() {
     setSyncing(true);
     const toastId = toast.loading("Memulai sinkronisasi hybrid real-time...");
     try {
-      const token = localStorage.getItem("gak_token") || "";
       const res = await fetch("/api/system/health/sync-now", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "X-Gak-Token": "gak_rpt_7f3c9e1b"
-        }
+        headers: authHeaders()
       });
       if (res.ok) {
         const data = await res.json();
@@ -93,13 +91,9 @@ export default function HybridSyncDiagnosticPanel() {
     setBenchmarking(true);
     const toastId = toast.loading("Memulai benchmark performa (Lokal vs Cloud)...");
     try {
-      const token = localStorage.getItem("gak_token") || "";
       const res = await fetch("/api/system/health/speed-test", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "X-Gak-Token": "gak_rpt_7f3c9e1b"
-        }
+        headers: authHeaders()
       });
       if (res.ok) {
         const data = await res.json();
@@ -174,7 +168,7 @@ export default function HybridSyncDiagnosticPanel() {
               <div className="space-y-1">
                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Terakhir Sinkron</span>
                 <div className="text-xs font-bold text-slate-700 mt-1">
-                  {syncState.last_sync ? new Date(syncState.last_sync).toLocaleString("id-ID") : "-"}
+                  {syncState.last_sync ? formatWib(syncState.last_sync) : "-"}
                 </div>
               </div>
               <Badge variant="success" className="rounded-md font-bold uppercase tracking-wider text-[10px]">

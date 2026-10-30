@@ -5,6 +5,7 @@ import {
   RefreshCw, 
   Send, 
   AlertCircle, 
+  AlertTriangle,
   CheckCircle2, 
   Activity, 
   Wifi, 
@@ -32,8 +33,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildDiagReport, installDiag, errorLog } from "@/lib/diag";
+import { formatWib } from "@/lib/format";
 import { copyText } from "@/lib/utils";
-import { getServerUrl } from "@/lib/api";
+import { getServerUrl, authHeaders } from "@/lib/api";
 import {
   fetchRemoteErrorLogs,
   logRuntimeErrorToFirestore,
@@ -239,14 +241,14 @@ export default function Diagnostik() {
         updateStep(
           "firestore",
           "success",
-          `Firestore Error Telemetry aktif & terhubung (${fsTest.latency_ms} ms). Koleksi error_logs siap menerima data debugging.`,
+          `Firestore Error Telemetry aktif & terhubung${fsTest.latencyMs ? ` (${fsTest.latencyMs} ms)` : ""}. Koleksi error_logs siap menerima data debugging.`,
           "Koneksi Firestore siap memantau crash runtime dan remote debugging."
         );
       } else {
         updateStep(
           "firestore",
           "warning",
-          `Firestore Error Telemetry: ${fsTest.message || "Tidak dapat terhubung"}`,
+          `Firestore Error Telemetry: ${fsTest.error || "Tidak dapat terhubung"}`,
           "Periksa izin jaringan atau koneksi Firebase."
         );
       }
@@ -707,7 +709,7 @@ export default function Diagnostik() {
         : "/api/rpt";
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Gak-Token": "gak_rpt_7f3c9e1b" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ ts: new Date().toISOString(), report }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -760,7 +762,11 @@ export default function Diagnostik() {
     const tId = toast.loading("Mengirim telemetry error uji coba ke Firestore...");
     try {
       const docId = await logRuntimeErrorToFirestore({
-        message: `Uji Coba Remote Error Telemetry (${new Date().toLocaleTimeString()})`,
+        message: `Uji Coba Remote Error Telemetry (${formatWib(new Date(), {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })})`,
         stack: "Error: Uji Coba Remote Telemetry Diagnostik\n    at handleSendTestError (Diagnostik.jsx:line)\n    at HTMLButtonElement.dispatch (react-dom.production.min.js)",
         type: "test_telemetry",
         details: {
@@ -911,7 +917,7 @@ export default function Diagnostik() {
           <div className="space-y-6">
             
             {/* Score Banner */}
-            <div className={`p-6 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+            <div data-testid="score-banner" className={`p-6 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 ${
               diagScore === 100 
                 ? "bg-emerald-50 border-emerald-100 text-emerald-950"
                 : diagScore >= 80 
@@ -919,12 +925,12 @@ export default function Diagnostik() {
                   : "bg-rose-50 border-rose-100 text-rose-950"
             }`}>
               <div className="space-y-1">
-                <div className="text-lg font-black tracking-tight">
-                  {diagScore === 100 
-                    ? "🎉 Sistem Beroperasi Sempurna!" 
-                    : diagScore >= 80 
-                      ? "⚠️ Beberapa Fitur Memerlukan Perhatian" 
-                      : "🚨 Sistem Mengalami Gangguan Kritis"}
+                <div className="text-lg font-black tracking-tight flex items-center gap-2">
+                  {diagScore === 100
+                    ? <><CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" /><span>Sistem Beroperasi Sempurna!</span></>
+                    : diagScore >= 80
+                      ? <><AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" /><span>Beberapa Fitur Memerlukan Perhatian</span></>
+                      : <><AlertCircle className="h-5 w-5 shrink-0" aria-hidden="true" /><span>Sistem Mengalami Gangguan Kritis</span></>}
                 </div>
                 <p className="text-sm opacity-90">
                   {diagScore === 100 
@@ -1117,7 +1123,7 @@ export default function Diagnostik() {
                 {filteredLogs.map((log) => {
                   const isExpanded = expandedLogId === log.id;
                   const formattedDate = log.created_at
-                    ? new Date(log.created_at).toLocaleString("id-ID", {
+                    ? formatWib(log.created_at, {
                         dateStyle: "medium",
                         timeStyle: "medium",
                       })

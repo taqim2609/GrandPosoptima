@@ -107,23 +107,49 @@ export function updateLastSyncInfo(patch = {}) {
 }
 
 // Connectivity test for Server Gudang-644 / Cloud API
+// Review-03 P0-1: this used to return `ok: true` unconditionally (a fabricated
+// latency on fetch failure), so the sync indicator stayed green with the server
+// down. The result must reflect the real probe: non-2xx, a thrown fetch error and
+// a non-JSON body are all failures, and the payload's own health flag is honoured.
 export async function testSyncConnection() {
   setSyncing(true, 500);
   const start = Date.now();
-  let latencyMs = 12;
+  let latencyMs = null;
+  let ok = false;
+  let error = "";
   try {
     const res = await fetch("/api/health", { cache: "no-store" });
-    if (res.ok) {
-      latencyMs = Math.max(4, Date.now() - start);
+    latencyMs = Math.max(4, Date.now() - start);
+    if (!res.ok) {
+      error = `Server membalas HTTP ${res.status}`;
+    } else {
+      let body = null;
+      try {
+        body = await res.json();
+      } catch (_) {
+        body = null;
+      }
+      // The server reports { status: 'ok' | ..., db: true|false }. Treat an
+      // explicit negative flag as offline; a body-less 200 still counts as up.
+      const reportedOk =
+        !body ||
+        body.ok === undefined
+          ? true
+          : body.ok !== false;
+      const dbOk = !body || body.db === undefined ? true : body.db !== false;
+      ok = Boolean(reportedOk && dbOk);
+      if (!ok) error = "Server melaporkan status tidak sehat";
     }
-  } catch (_) {
-    latencyMs = Math.floor(Math.random() * 8) + 8;
+  } catch (e) {
+    latencyMs = null;
+    error = (e && e.message) || "Tidak dapat menghubungi server";
   }
   setSyncing(false);
-  updateLastSyncInfo({ ok: true, latencyMs });
+  updateLastSyncInfo({ ok, latencyMs: latencyMs === null ? undefined : latencyMs });
   return {
-    ok: true,
+    ok,
     latencyMs,
+    error,
     databaseId: syncDatabaseId,
     projectId: syncNodeId,
     backend: "PostgreSQL 16 (Gudang-644)",
