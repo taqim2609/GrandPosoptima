@@ -44,6 +44,7 @@ import { copyText } from "@/lib/utils";
 import { getBundleVersion } from "@/lib/versions";
 import { getServerUrl } from "@/lib/api";
 import { testFirestoreConnection, logRuntimeErrorToFirestore } from "@/lib/firebase";
+import { formatWib } from "@/lib/format";
 
 export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
   const [logs, setLogs] = useState([]);
@@ -339,7 +340,7 @@ export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
       else if (diffMin < 60) rel = `${diffMin} menit lalu`;
       else rel = `${Math.floor(diffMin / 60)} jam lalu`;
 
-      const exact = d.toLocaleTimeString("id-ID", {
+      const exact = formatWib(d, {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",

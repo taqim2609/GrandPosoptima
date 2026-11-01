@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, Monitor, Cpu, CheckCircle2, RefreshCw, DatabaseBackup, Globe, CloudUpload, Bug, Loader2, ShieldCheck, Cloud } from "lucide-react";
+import { Download, Monitor, Cpu, CheckCircle2, RefreshCw, DatabaseBackup, Globe, CloudUpload, Bug, Loader2, ShieldCheck, Cloud, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { BOOTSTRAP_PI_SH, BOOTSTRAP_WINDOWS_BAT, START_PC_SERVER_BAT, SETUP_RASPBERRYPI_SH, downloadText, AISTUDIO_DEFAULT_URL } from "@/lib/installers";
@@ -209,8 +209,9 @@ export default function SettingsInstaller() {
               Otomatis memasang <b>Docker</b>, menjalankan <b>Evolution API v2 (Port 8080)</b>, dukungan <b>Hermes Agent AI Gateway</b>, dan <b>Watchtower</b> untuk pembaruan container otomatis setiap hari.
             </p>
             <Code>{`bash <(curl -fsSL ${AISTUDIO_URL}/bootstrap-vps.sh)`}</Code>
-            <div className="text-[11px] text-[#4338CA] font-semibold">
-              ✅ Langsung aktif &amp; siap dihubungkan ke WhatsApp Gateway POS!
+            <div className="text-[11px] text-[#4338CA] font-semibold flex items-center gap-1">
+              <CheckCircle2 size={12} className="shrink-0" aria-hidden="true" />
+              <span>Langsung aktif &amp; siap dihubungkan ke WhatsApp Gateway POS!</span>
             </div>
           </div>
 
@@ -311,7 +312,7 @@ install-windows.bat`}</Code>
               <div className="text-[11px] text-[#52525B] mt-1">Sistem di Raspberry Pi akan otomatis mengecek &amp; menerapkan versi terbaru setiap hari pukul 03:30 subuh tanpa perlu buka terminal lagi.</div>
             </div>
             <div className="pt-2 border-t border-[#E4E4E7] bg-[#F8FAFC] -mx-4 -mb-4 p-4 rounded-b-xl">
-              <div className="font-bold flex items-center gap-1.5 mb-1 text-[#475569]">💡 Update 1-Klik Meminta Sudo / Permission Denied?</div>
+              <div className="font-bold flex items-center gap-1.5 mb-1 text-[#475569]"><Lightbulb size={14} /> Update 1-Klik Meminta Sudo / Permission Denied?</div>
               <Code>{`cd ${APP_DIR} && bash fix-permission-pi.sh`}</Code>
               <div className="text-[11px] text-[#64748B] mt-1">Jalankan sekali di terminal Pi. Perintah ini memberikan hak akses Docker &amp; merapikan kepemilikan folder agar update 1-klik di browser bisa langsung jalan tanpa sudo.</div>
             </div>
@@ -372,7 +373,7 @@ install-windows.bat`}</Code>
 ./check-integrity-pi.sh                  # periksa sekarang (ringkasan berwarna; 0=sehat, 2=peringatan, 1=berat)
 ./check-integrity-pi.sh --read-only      # tampilkan hasil terakhir saja
 ./check-integrity-pi.sh --notify 62812xx # sekaligus kirim ringkasan ke WhatsApp`}</Code>
-            <p className="text-[11px] text-[#52525B]">Dokumentasi lengkap daftar pemeriksaan: <b>docs/PANDUAN-INTEGRITAS.md</b> di folder proyek.</p>
+            <p className="text-[11px] text-[#52525B]">Dokumentasi lengkap daftar pemeriksaan tersedia di panduan integritas pada folder proyek.</p>
           </div>
         </Section>
 

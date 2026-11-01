@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useOffline } from "@/context/OfflineContext";
-import { rupiah, ORDER_TYPE_LABEL } from "@/lib/format";
+import { rupiah, ORDER_TYPE_LABEL, formatWib } from "@/lib/format";
 import api, { apiError } from "@/lib/api";
 import { loadFeatures, useFeatures } from "@/lib/features";
 import { toast } from "sonner";
@@ -178,7 +178,7 @@ function HeaderConnectionBadge({ onOpenQueue, onOpenSyncModal }) {
         <NavLink
           to="/shift"
           data-testid="header-shift-badge"
-          title={shift ? `Shift aktif sejak ${new Date(shift.opened_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}` : "Shift belum dibuka - klik untuk buka shift"}
+          title={shift ? `Shift aktif sejak ${formatWib(shift.opened_at, { hour: "2-digit", minute: "2-digit" })}` : "Shift belum dibuka - klik untuk buka shift"}
           className={`tap h-9 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-bold border transition-colors ${
             shift
               ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
@@ -242,7 +242,7 @@ function OfflineStatus({ onOpenQueue, isCollapsed }) {
       </div>
       {cacheAt && (
         <div className="mt-1 text-[10px] text-white/40 flex items-center gap-1" data-testid="cache-time">
-          <Database size={10} /> Data ter-cache {new Date(cacheAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+          <Database size={10} /> Data ter-cache {formatWib(cacheAt, { hour: "2-digit", minute: "2-digit" })}
         </div>
       )}
       {pendingCount > 0 && (
@@ -302,7 +302,7 @@ function SyncQueueDialog({ open, onClose }) {
                           <span className="text-[#047857] font-num">{rupiah(p.meta?.total || p.payload?.total || 0)}</span>
                         </div>
                         <div className="text-xs text-[#52525B] truncate mt-1">{p.meta?.preview || "Tidak ada pratampil"}</div>
-                        <div className="text-[10px] text-[#a1a1aa] font-num mt-0.5">{new Date(p.created_at).toLocaleString("id-ID")}</div>
+                        <div className="text-[10px] text-[#a1a1aa] font-num mt-0.5">{formatWib(p.created_at)}</div>
                         {p.error && <div className="text-[11px] text-[#EF4444] font-bold mt-1 bg-red-50 p-1 rounded">Gagal: {p.error}</div>}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -392,7 +392,7 @@ function SyncQueueDialog({ open, onClose }) {
               {syncLog.map((e) => (
                 <div key={e.at} data-testid="history-item" className="rounded-lg bg-[#F4F5F7] p-2.5">
                   <div className="text-xs font-bold text-[#047857]">
-                    {e.ok} transaksi disinkron <span className="text-[#52525B] font-normal font-num">· {new Date(e.at).toLocaleString("id-ID")}</span>
+                    {e.ok} transaksi disinkron <span className="text-[#52525B] font-normal font-num">· {formatWib(e.at)}</span>
                   </div>
                   {e.items.map((it) => (
                     <div key={it.client_ref} className="text-[11px] text-[#52525B] font-num mt-0.5 truncate">

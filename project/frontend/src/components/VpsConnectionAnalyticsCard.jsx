@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { testFirestoreConnection } from "@/lib/firebase";
+import { formatWib } from "@/lib/format";
 
 export default function VpsConnectionAnalyticsCard({ className = "" }) {
   const [loading, setLoading] = useState(false);
@@ -445,7 +446,7 @@ export default function VpsConnectionAnalyticsCard({ className = "" }) {
           </span>
         </div>
         <div className="text-[11px] text-neutral-400 font-mono shrink-0">
-          Uji Terakhir: {lastChecked.toLocaleTimeString("id-ID")} WIB
+          Uji Terakhir: {formatWib(lastChecked)} WIB
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import {
   Search, BookOpen, Coffee, Award, Users, ArrowRight,
   Flame, HeartHandshake, ShieldCheck, X, Share2
 } from "lucide-react";
-import { rupiah } from "@/lib/format";
+import { rupiah, wibToday } from "@/lib/format";
 import { toast } from "sonner";
 
 export default function LandingPage({ defaultSection = "hero" }) {
@@ -32,7 +32,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
   const [bookingForm, setBookingForm] = useState({
     customer_name: "",
     phone: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: wibToday(),
     time: "19:00",
     pax: 2,
     seating_area: "Indoor",
@@ -645,7 +645,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
                           setBookingForm({
                             customer_name: "",
                             phone: "",
-                            date: new Date().toISOString().slice(0, 10),
+                            date: wibToday(),
                             time: "19:00",
                             pax: 2,
                             seating_area: "Indoor",
@@ -704,7 +704,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
                         <input
                           type="date"
                           required
-                          min={new Date().toISOString().slice(0, 10)}
+                          min={wibToday()}
                           value={bookingForm.date}
                           onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })}
                           className="w-full px-3.5 py-2.5 text-xs bg-stone-50 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-800/30 text-stone-900"

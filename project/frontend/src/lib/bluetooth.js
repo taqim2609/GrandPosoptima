@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { formatWib, rupiah } from "@/lib/format";
 import { getDeviceConfig, setDeviceConfig } from "./device";
 
 // ============================================================
@@ -95,9 +96,8 @@ export function clearBluetoothPrinter() {
 }
 
 function buildEscPos(order, cfg) {
-  const rupiah = (n) => "Rp" + Math.round(Number(n || 0)).toLocaleString("id-ID");
   const LABEL = { dine_in: "Dine-In", take_away: "Take Away", retail: "Retail" };
-  const dt = new Date(order.paid_at || order.created_at).toLocaleString("id-ID");
+  const dt = formatWib(order.paid_at || order.created_at || Date.now());
   const L = [];
   L.push(cmd(ESC, 0x40)); // init
   L.push(cmd(ESC, 0x61, 1)); // center
@@ -133,9 +133,8 @@ function buildEscPos(order, cfg) {
   }
   L.push(text("--------------------------------\n"));
   (order.items || []).forEach((i) => {
-    const rp = (n) => "Rp" + Math.round(Number(n || 0)).toLocaleString("id-ID");
-    const qp = `${i.qty}x${rp(i.price)}`;
-    const tot = rp(i.price * i.qty);
+    const qp = `${i.qty}x${rupiah(i.price)}`;
+    const tot = rupiah(i.price * i.qty);
     const right = `${qp} ${tot}`;
     const nameW = 40 - right.length - 1;
     let nm = String(i.name || "");

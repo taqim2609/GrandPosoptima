@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { isSuperAdmin } from "@/lib/rbac";
 import { featBool } from "@/lib/features";
+import { formatWib } from "@/lib/format";
 import {
   Sparkles, MessageSquare, Send, Loader2, Bot, User, Trash2,
   X, Maximize2, Minimize2, Lightbulb, Code2, AlertTriangle, CheckCircle2,
@@ -11,11 +12,11 @@ import {
 } from "lucide-react";
 
 const SUGGESTIONS = [
-  "📊 Berapa total omzet dan transaksi hari ini?",
-  "⚠️ Ada stok produk atau bahan baku yang hampir habis?",
-  "💡 Berikan saran promosi untuk meningkatkan penjualan malam ini",
-  "🪑 Bagaimana status keterisian meja restoran saat ini?",
-  "👥 Siapa kasir yang sedang aktif dan berapa kas awalnya?",
+  "Berapa total omzet dan transaksi hari ini?",
+  "Ada stok produk atau bahan baku yang hampir habis?",
+  "Berikan saran promosi untuk meningkatkan penjualan malam ini",
+  "Bagaimana status keterisian meja restoran saat ini?",
+  "Siapa kasir yang sedang aktif dan berapa kas awalnya?",
 ];
 
 export default function PosAiChatWidget() {
@@ -28,7 +29,7 @@ export default function PosAiChatWidget() {
     {
       role: "assistant",
       text: "Halo Superadmin! Saya asisten Gemini AI POS Grand Aceh Kuliner. Anda bisa bertanya tentang omzet, status meja, stok bahan, atau mengirimkan instruksi fitur ke AI Studio langsung dari sini.",
-      time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+      time: formatWib(new Date(), { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
   const [input, setInput] = useState("");
@@ -83,7 +84,7 @@ export default function PosAiChatWidget() {
     const userMsg = {
       role: "user",
       text: textToSend,
-      time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+      time: formatWib(new Date(), { hour: "2-digit", minute: "2-digit" }),
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -102,14 +103,14 @@ export default function PosAiChatWidget() {
       const assistantMsg = {
         role: "assistant",
         text: reply,
-        time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        time: formatWib(new Date(), { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
       const errorMsg = {
         role: "assistant",
-        text: "⚠️ Gagal terhubung ke layanan AI: " + apiError(err.response?.data?.detail || err.message),
-        time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        text: "Gagal terhubung ke layanan AI: " + apiError(err.response?.data?.detail || err.message),
+        time: formatWib(new Date(), { hour: "2-digit", minute: "2-digit" }),
         isError: true,
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -124,7 +125,7 @@ export default function PosAiChatWidget() {
       {
         role: "assistant",
         text: "Riwayat percakapan telah dibersihkan. Ada yang bisa saya bantu terkait operasional POS?",
-        time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        time: formatWib(new Date(), { hour: "2-digit", minute: "2-digit" }),
       },
     ]);
     setSessionId("pos_sess_" + Date.now());
@@ -478,7 +479,7 @@ export default function PosAiChatWidget() {
                             {t.priority || "normal"}
                           </span>
                           <span className="text-[10px] text-zinc-400 font-mono">
-                            {new Date(t.created_at || Date.now()).toLocaleTimeString("id-ID", {
+                            {formatWib(t.created_at || Date.now(), {
                               hour: "2-digit",
                               minute: "2-digit",
                             })}

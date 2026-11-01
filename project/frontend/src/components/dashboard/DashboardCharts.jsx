@@ -15,7 +15,8 @@ export const WidgetTrend = memo(function WidgetTrend({ view }) {
   useEffect(() => {
     const days = period === "week" ? 7 : 30;
     const end = wibToday();
-    const start = new Date(Date.now() + 7 * 3600 * 1000 - (days - 1) * 86400000).toISOString().slice(0, 10);
+    const wibNow = new Date(Date.now() + 7 * 3600 * 1000);
+    const start = new Date(wibNow.getTime() - (days - 1) * 86400000).toISOString().slice(0, 10);
     setLoading(true);
     api.get("/reports/range", { params: { start, end } })
       .then((r) => {
@@ -23,7 +24,7 @@ export const WidgetTrend = memo(function WidgetTrend({ view }) {
         (Array.isArray(r.data?.daily) ? r.data.daily : []).forEach((d) => { map[d.date] = d; });
         const out = [];
         for (let i = days - 1; i >= 0; i--) {
-          const d = new Date(Date.now() + 7 * 3600 * 1000 - i * 86400000).toISOString().slice(0, 10);
+          const d = new Date(wibNow.getTime() - i * 86400000).toISOString().slice(0, 10);
           const rec = map[d] || { total: 0, count: 0, fnb: 0, retail: 0 };
           out.push({ date: d, label: d.slice(5), total: view === "retail" ? (rec.retail || 0) : (rec.fnb || rec.total || 0), count: rec.count });
         }

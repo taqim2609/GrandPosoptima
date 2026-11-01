@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Armchair, Plus, Pencil, Trash2, Power, ArrowRightLeft, RotateCcw } from "lucide-react";
+import { Armchair, Plus, Pencil, Trash2, Power, ArrowRightLeft, RotateCcw, CalendarDays } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const empty = { name: "", area: "Umum", capacity: 4, active: true };
@@ -169,7 +169,7 @@ export default function Tables() {
                         className="mt-2 text-[10px] font-bold text-[#4338CA] bg-[#E0E7FF] rounded px-1.5 py-0.5 truncate"
                         data-testid={`table-res-${t.id}`}
                       >
-                        📅 {t.reservation.time} · {t.reservation.customer_name} ({t.reservation.pax} pax)
+                        <CalendarDays size={10} className="inline shrink-0" aria-hidden="true" /> {t.reservation.time} · {t.reservation.customer_name} ({t.reservation.pax} pax)
                       </div>
                     )}
                   </div>

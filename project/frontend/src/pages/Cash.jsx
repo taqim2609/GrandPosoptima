@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import api, { apiError } from "@/lib/api";
-import { rupiah, wibToday } from "@/lib/format";
+import { rupiah, wibToday, formatWib } from "@/lib/format";
 import { toast } from "sonner";
 import { Wallet, ArrowDownCircle, ArrowUpCircle, Plus, ScanLine, Loader2, Utensils, Store, Trash2, Info } from "lucide-react";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
@@ -214,7 +214,7 @@ export default function Cash() {
               {(!data || (data.movements || []).length === 0) && <tr><td colSpan={5} className="p-8 text-center text-[#a1a1aa]">Belum ada transaksi kas</td></tr>}
               {(data?.movements || []).map((m) => (
                 <tr key={m.id} className="border-t">
-                  <td className="p-3 text-[#52525B]">{new Date(m.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</td>
+                  <td className="p-3 text-[#52525B]">{formatWib(m.created_at, { hour: "2-digit", minute: "2-digit" })}</td>
                   <td className="p-3">{m.category}{m.note ? ` · ${m.note}` : ""}</td>
                   <td className="p-3"><span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#F4F5F7]">{scLabel(m.scope || "fnb")}</span></td>
                   <td className="p-3">{m.cashier_name}</td>

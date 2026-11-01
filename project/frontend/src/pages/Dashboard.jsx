@@ -8,7 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { isSuperAdmin, roleBaseOf, isAdmin } from "@/lib/rbac";
 import {
   LayoutDashboard, TrendingUp, Utensils, ShoppingBag, Store, Coffee,
-  Sparkles, Loader2, Receipt, Percent, AlertTriangle, PackageX, Coins, Wallet, MessageCircle, RefreshCw,
+  Sparkles, Loader2, Receipt, Percent, AlertTriangle, PackageX, Coins, Wallet, MessageCircle, RefreshCw, ShoppingCart,
   Settings2, Eye, EyeOff, ChevronUp, ChevronDown, Save, LayoutGrid, AlertCircle,
 } from "lucide-react";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
@@ -668,8 +668,8 @@ export default function Dashboard() {
 
       {hasSummary && (
         <div className="flex gap-2 mb-5">
-          <button data-testid="view-fnb" onClick={() => setView("fnb")} className={`tap h-10 px-5 rounded-xl font-bold text-sm ${view === "fnb" ? "bg-[#E63946] text-white" : "bg-white border"}`}>🍽️ {lb.fnb}</button>
-          <button data-testid="view-retail" onClick={() => setView("retail")} className={`tap h-10 px-5 rounded-xl font-bold text-sm ${view === "retail" ? "bg-[#E63946] text-white" : "bg-white border"}`}>🛒 {lb.retail}</button>
+          <button data-testid="view-fnb" onClick={() => setView("fnb")} className={`tap h-10 px-5 rounded-xl font-bold text-sm inline-flex items-center gap-1.5 ${view === "fnb" ? "bg-[#E63946] text-white" : "bg-white border"}`}><Utensils size={14} /> {lb.fnb}</button>
+          <button data-testid="view-retail" onClick={() => setView("retail")} className={`tap h-10 px-5 rounded-xl font-bold text-sm inline-flex items-center gap-1.5 ${view === "retail" ? "bg-[#E63946] text-white" : "bg-white border"}`}><ShoppingCart size={14} /> {lb.retail}</button>
           <div className="ml-auto flex items-center text-xs text-[#52525B] font-bold">
             {data && <>Total {view === "fnb" ? lb.fnb : lb.retail}: <span className="font-num text-lg text-[#E63946] ml-1">{rupiah(view === "fnb" ? (data.fnb_total || 0) : (data.retail_total || 0))}</span></>}
           </div>

@@ -62,112 +62,16 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       layout: 'default',
     };
   }
-  if (!db.landingPageConfig) {
-    db.landingPageConfig = {};
-  }
 
   // ==========================================
   // 1. POS / Orders Endpoints
   // ==========================================
-
-  // GET /api/orders/:id
-  app.get(['/api/orders/:id', '/orders/:id'], (req, res) => {
-    const order = db.orders.find((o) => o.id === req.params.id || o.order_number === req.params.id);
-    if (!order) {
-      return res.status(404).json({ detail: 'Order tidak ditemukan' });
-    }
-    res.json(order);
-  });
-
-  // PATCH /api/orders/:id/items
-  app.patch(['/api/orders/:id/items', '/orders/:id/items'], (req, res) => {
-    const order = db.orders.find((o) => o.id === req.params.id);
-    if (!order) {
-      return res.status(404).json({ detail: 'Order tidak ditemukan' });
-    }
-    const items = req.body.items || [];
-    order.items = items;
-    const subtotal = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 1)), 0);
-    order.subtotal = subtotal;
-    const disc = order.discount_type === 'percent'
-      ? (subtotal * (Number(order.discount_value) || 0)) / 100
-      : Number(order.discount_value) || 0;
-    order.discount = disc;
-    order.total = Math.max(0, subtotal - disc);
-    order.updated_at = new Date().toISOString();
-
-    broadcastRealtimeSync('order_updated', { id: order.id, total: order.total });
-    res.json(order);
-  });
-
-  // POST /api/orders/:id/pay
-  app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
-    const order = db.orders.find((o) => o.id === req.params.id);
-    if (!order) {
-      return res.status(404).json({ detail: 'Order tidak ditemukan' });
-    }
-
-    order.status = 'completed';
-    order.payment_method = req.body.payment_method || order.payment_method || 'cash';
-    order.paid_at = new Date().toISOString();
-    order.splits = req.body.splits || null;
-    order.amount_paid = req.body.amount_paid || order.total;
-    if (req.body.discount_type) order.discount_type = req.body.discount_type;
-    if (req.body.discount_value !== undefined) order.discount_value = Number(req.body.discount_value);
-    if (req.body.discount_reason) order.discount_reason = req.body.discount_reason;
-    if (req.body.coupon_code) {
-      order.coupon_code = req.body.coupon_code;
-      const cp = db.coupons.find((c) => c.code.toUpperCase() === req.body.coupon_code.toUpperCase());
-      if (cp) cp.used = (cp.used || 0) + 1;
-    }
-    if (req.body.member_id) {
-      order.member_id = req.body.member_id;
-      const mem = db.members.find((m) => m.id === req.body.member_id);
-      if (mem) {
-        if (req.body.redeem_points) {
-          mem.points = Math.max(0, (mem.points || 0) - Number(req.body.redeem_points));
-          order.redeem_points = Number(req.body.redeem_points);
-        }
-        const earned = Math.floor((order.total || 0) / 10000);
-        mem.points = (mem.points || 0) + earned;
-        mem.total_spent = (mem.total_spent || 0) + (order.total || 0);
-      }
-    }
-
-    // Free table if dine-in
-    if (order.table_id || order.table_name) {
-      const tbl = db.tables.find((t) => t.id === order.table_id || t.name === order.table_name);
-      if (tbl) {
-        tbl.status = 'empty';
-        tbl.open_order_id = null;
-      }
-    }
-
-    // Deduct stock for items
-    if (Array.isArray(order.items)) {
-      order.items.forEach((item) => {
-        const prod = db.products.find((p) => p.id === (item.product_id || item.id) || p.name === item.name);
-        if (prod && typeof prod.stock === 'number') {
-          prod.stock = Math.max(0, prod.stock - (item.qty || 1));
-        }
-      });
-    }
-
-    // Update current shift
-    if (db.currentShift) {
-      const tot = Number(order.total) || 0;
-      if (order.payment_method === 'cash') {
-        db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + tot;
-      } else {
-        db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + tot;
-      }
-      db.currentShift.total_sales = (db.currentShift.total_sales || 0) + tot;
-      db.currentShift.orders_count = (db.currentShift.orders_count || 0) + 1;
-    }
-
-    broadcastRealtimeSync('order_paid', { order_number: order.order_number, total: order.total });
-    res.json(order);
-  });
+  // NOTE: Canonical handlers for orders are registered in api-server.js first.
+  // The following shadowed duplicates were removed (P0-C Fix-01):
+  // - GET /api/orders/:id
+  // - PATCH /api/orders/:id/items
+  // - POST /api/orders/:id/pay
+  // Startup duplicate-route guard in api-server.js prevents future shadowing.
 
   // GET /api/orders/:id/void-preview
   app.get(['/api/orders/:id/void-preview', '/orders/:id/void-preview'], (req, res) => {
@@ -1525,19 +1429,6 @@ Terima kasih atas kerja keras hari ini!
   app.put(['/api/settings/dashboard', '/settings/dashboard'], (req, res) => {
     Object.assign(db.dashboardConfig, req.body);
     res.json(db.dashboardConfig);
-  });
-
-  // GET & POST /api/settings/landing-page
-  app.get(['/api/settings/landing-page', '/settings/landing-page'], (req, res) => {
-    res.json(db.landingPageConfig || {});
-  });
-
-  app.post(['/api/settings/landing-page', '/settings/landing-page'], (req, res) => {
-    db.landingPageConfig = req.body || {};
-    if (typeof broadcastRealtimeSync === 'function') {
-      broadcastRealtimeSync('landing_config_updated', db.landingPageConfig);
-    }
-    res.json({ ok: true, data: db.landingPageConfig });
   });
 
   // GET, PUT, POST test /api/settings/webhook

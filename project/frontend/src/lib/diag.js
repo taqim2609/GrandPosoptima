@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getServerUrl } from "./api";
+import { formatWib } from "./format";
 import { getBundleVersion } from "./versions";
 import { logRuntimeErrorToFirestore, testFirestoreConnection } from "./firebase";
 
@@ -297,7 +298,7 @@ export async function buildDiagReport() {
   const out = [];
   const ts = new Date();
   out.push("=== LAPORAN DIAGNOSTIK Grand Aceh Kuliner POS ===");
-  out.push(`Waktu: ${ts.toLocaleString("id-ID")} (${ts.toISOString()})`);
+  out.push(`Waktu: ${formatWib(ts)} (${ts.toISOString()})`);
   out.push(`Bundle frontend: ${getBundleVersion()}`);
   try {
     const base = getServerUrl();

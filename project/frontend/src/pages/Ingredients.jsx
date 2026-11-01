@@ -8,7 +8,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { wibToday } from "@/lib/format";
+import { wibToday, formatWib } from "@/lib/format";
 import { useAuth } from "@/context/AuthContext";
 import { can, canAny } from "@/lib/rbac";
 import {
@@ -638,7 +638,7 @@ export default function IngredientsPage() {
                 {purchases.map((p) => (
                   <div key={p.id} className="rounded-xl border px-3 py-2 flex justify-between items-center gap-2">
                     <div><div className="font-bold text-sm">{p.ingredient_name} <span className="text-[#a1a1aa] font-normal">+{nf(p.qty)}{p.unit ? " " + p.unit : ""}</span></div>
-                      <div className="text-[11px] text-[#a1a1aa]">{new Date(p.created_at).toLocaleString("id-ID")} · {p.by}{p.note ? ` · ${p.note}` : ""}</div></div>
+                      <div className="text-[11px] text-[#a1a1aa]">{formatWib(p.created_at)} · {p.by}{p.note ? ` · ${p.note}` : ""}</div></div>
                     <div className="font-num font-bold">{fmtRp(p.total_cost)}</div>
                   </div>
                 ))}

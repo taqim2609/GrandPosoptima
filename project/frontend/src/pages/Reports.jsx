@@ -15,7 +15,8 @@ function weekRange(dateStr) {
   const day = (d.getDay() + 6) % 7; // Monday = 0
   const mon = new Date(d); mon.setDate(d.getDate() - day);
   const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-  const f = (x) => x.toISOString().slice(0, 10);
+  // Tanggal lokal (WIB di perangkat toko), bukan UTC — toISOString() bisa mundur 1 hari.
+  const f = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
   return [f(mon), f(sun)];
 }
 function monthRange(ym) {
@@ -27,7 +28,8 @@ function enumerateDates(start, end) {
   const out = [];
   const d = new Date(start + "T00:00:00");
   const e = new Date(end + "T00:00:00");
-  while (d <= e) { out.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); }
+  const f = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  while (d <= e) { out.push(f(d)); d.setDate(d.getDate() + 1); }
   return out;
 }
 
@@ -149,8 +151,8 @@ export default function Reports() {
       ) : (
         <>
           <div className="flex gap-2 mb-4">
-            <button data-testid="report-view-fnb" onClick={() => setView("fnb")} className={`tap h-10 px-5 rounded-xl font-bold text-sm ${view === "fnb" ? "bg-[#E63946] text-white" : "bg-white border"}`}>🍽️ {lb.fnb}</button>
-            <button data-testid="report-view-retail" onClick={() => setView("retail")} className={`tap h-10 px-5 rounded-xl font-bold text-sm ${view === "retail" ? "bg-[#E63946] text-white" : "bg-white border"}`}>🛒 {lb.retail}</button>
+            <button data-testid="report-view-fnb" onClick={() => setView("fnb")} className={`tap h-10 px-5 rounded-xl font-bold text-sm inline-flex items-center gap-1.5 ${view === "fnb" ? "bg-[#E63946] text-white" : "bg-white border"}`}><Utensils size={14} /> {lb.fnb}</button>
+            <button data-testid="report-view-retail" onClick={() => setView("retail")} className={`tap h-10 px-5 rounded-xl font-bold text-sm inline-flex items-center gap-1.5 ${view === "retail" ? "bg-[#E63946] text-white" : "bg-white border"}`}><Store size={14} /> {lb.retail}</button>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
             <Stat label={`Total Penjualan ${view === "fnb" ? lb.fnb : lb.retail}`} value={rupiah(viewTotal)} accent />

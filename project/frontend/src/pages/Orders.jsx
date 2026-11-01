@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
-import { rupiah, ORDER_TYPE_LABEL, wibToday } from "@/lib/format";
+import { rupiah, ORDER_TYPE_LABEL, wibToday, formatWib } from "@/lib/format";
 import { printReceipt } from "@/lib/receipt";
 import { toast } from "sonner";
 import { FileSpreadsheet, Receipt, Ban, RotateCcw, Eye } from "lucide-react";
@@ -57,7 +57,7 @@ export default function Orders() {
                   {o.client_ref && <span data-testid={`offline-tag-${o.id}`} className="ml-1.5 align-middle text-[9px] font-bold bg-[#FEF3C7] text-[#B45309] px-1.5 py-0.5 rounded" title="Transaksi ini dibuat offline lalu tersinkron">EKS-OFFLINE</span>}
                 </td>
                 <td className="p-3"><span className={`ot-${o.order_type} text-xs font-bold px-2 py-0.5 rounded border`}>{ORDER_TYPE_LABEL[o.order_type]}</span></td>
-                <td className="p-3 text-[#52525B]">{new Date(o.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</td>
+                <td className="p-3 text-[#52525B]">{formatWib(o.created_at, { hour: "2-digit", minute: "2-digit" })}</td>
                 <td className="p-3">{o.cashier_name}</td>
                 <td className="p-3 text-right font-num font-bold">{rupiah(o.total)}</td>
                 <td className="p-3 text-center"><span className={`text-xs font-bold px-2 py-1 rounded ${STATUS_STYLE[o.status]}`}>{o.status.toUpperCase()}</span></td>

@@ -4,7 +4,7 @@ import { CheckCircle2, Copy, Check, Printer, MessageCircle, Send, Loader2, X, Im
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { printReceipt } from "@/lib/receipt";
-import { rupiah, ORDER_TYPE_LABEL } from "@/lib/format";
+import { rupiah, ORDER_TYPE_LABEL, formatWib } from "@/lib/format";
 import ReceiptPaper from "./ReceiptPaper";
 
 export default function ReceiptModal({
@@ -74,7 +74,7 @@ export default function ReceiptModal({
       ...(cfg?.outletAddress || propOutlet?.address ? [cfg?.outletAddress || propOutlet?.address] : []),
       "================================",
       `No. Order : ${order.order_number}`,
-      `Tanggal   : ${new Date(order.paid_at || order.created_at || Date.now()).toLocaleString("id-ID")}`,
+      `Tanggal   : ${formatWib(order.paid_at || order.created_at || Date.now())}`,
       `Kasir     : ${order.cashier_name || "-"}`,
       `Layanan   : ${ORDER_TYPE_LABEL[order.order_type] || order.order_type || "Umum"}${order.table_name ? ` (Meja ${order.table_name})` : ""}`,
       ...(order.customer_name ? [`Pelanggan : ${order.customer_name}`] : []),

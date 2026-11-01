@@ -79,6 +79,15 @@ let webpackConfig = {
       },
     },
   },
+  // Jest: samakan alias "@/..." dengan webpack di atas supaya file *.test.js
+  // bisa me-mock modul `@/lib/*` dan me-render halaman apa adanya.
+  jest: {
+    configure: {
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+      },
+    },
+  },
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

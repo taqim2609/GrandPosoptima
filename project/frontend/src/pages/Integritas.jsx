@@ -5,6 +5,7 @@ import {
   ShieldCheck, RefreshCw, Wrench, Loader2, CalendarClock, Database, Info,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { formatWib } from "@/lib/format";
 
 /* Halaman Cek Integritas Data (Pengaturan → Fitur & Integrasi → Integritas).
    Backend: GET /admin/integrity (hasil terakhir + jadwal + daftar perbaikan),
@@ -23,7 +24,7 @@ function timeID(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+  return formatWib(d, { dateStyle: "medium", timeStyle: "short" });
 }
 
 function StatCard({ label, value, tone = "neutral", testid }) {

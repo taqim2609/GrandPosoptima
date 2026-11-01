@@ -6,10 +6,10 @@
 import { useEffect, useState } from "react";
 import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { FileText, Save, RotateCcw, Loader2, MessageSquareText } from "lucide-react";
+import { FileText, Save, RotateCcw, Loader2, MessageSquareText, BarChart3, Clock, ReceiptText, Handshake, ShoppingCart, Package } from "lucide-react";
 
 const TEMPLATE_META = [
-  { key: "daily", label: "Laporan Harian (penjualan otomatis/manual)", icon: "📊",
+  { key: "daily", label: "Laporan Harian (penjualan otomatis/manual)", icon: BarChart3,
     vars: [
       ["nama_aplikasi", "Nama aplikasi"], ["tanggal", "Tanggal laporan"],
       ["total_penjualan", "Total penjualan"], ["order_count", "Jumlah order"],
@@ -19,7 +19,7 @@ const TEMPLATE_META = [
       ["rincian_metode", "Blok metode bayar (otomatis)"], ["rincian_terlaris", "Blok produk terlaris (otomatis)"],
       ["rincian_ai", "Blok analisis AI (bila aktif)"],
     ] },
-  { key: "shift", label: "Laporan Shift (penutupan shift)", icon: "🕐",
+  { key: "shift", label: "Laporan Shift (penutupan shift)", icon: Clock,
     vars: [
       ["nama_aplikasi", "Nama aplikasi"], ["kasir", "Nama kasir"], ["tanggal_shift", "Tanggal buka shift"],
       ["total_penjualan", "Total penjualan"], ["order_count", "Jumlah order"],
@@ -44,7 +44,7 @@ const TEMPLATE_META = [
       ["pengeluaran_fnb", "Total pengeluaran harian F&B"], ["pengeluaran_retail", "Total pengeluaran harian Retail"],
       ["catatan_pengeluaran", "Catatan bila pengeluaran harian belum diisi (otomatis)"],
     ] },
-  { key: "settlement", label: "Bukti Pembayaran Vendor (settlement)", icon: "🧾",
+  { key: "settlement", label: "Bukti Pembayaran Vendor (settlement)", icon: ReceiptText,
     vars: [
       ["nama_aplikasi", "Nama aplikasi"], ["nomor", "Nomor bukti (STL-...)"], ["vendor", "Nama vendor"],
       ["tanggal", "Tanggal periode"], ["omzet_vendor", "Omzet penjualan vendor hari itu"],
@@ -54,18 +54,18 @@ const TEMPLATE_META = [
       ["sisa_saldo", "Sisa saldo (dibawa ke berikutnya)"], ["metode", "Metode pembayaran"],
       ["catatan", "Catatan pembayaran"], ["rincian_produk", "Blok rincian produk terjual (otomatis)"],
     ] },
-  { key: "vendor", label: "Bagi Hasil Vendor", icon: "🤝",
+  { key: "vendor", label: "Bagi Hasil Vendor", icon: Handshake,
     vars: [
       ["nama_aplikasi", "Nama aplikasi"], ["periode", "Periode laporan"],
       ["total_omzet", "Total omzet vendor"], ["total_bagi_hasil", "Total bagi hasil vendor"],
       ["bagian_outlet", "Bagian outlet"], ["rincian_vendor", "Blok rincian per vendor (otomatis)"],
     ] },
-  { key: "shopping", label: "Daftar Belanja Bahan", icon: "🛒",
+  { key: "shopping", label: "Daftar Belanja Bahan", icon: ShoppingCart,
     vars: [
       ["tanggal", "Tanggal daftar belanja"], ["items", "Daftar item (otomatis, satu per baris)"],
       ["jumlah_item", "Banyaknya item"], ["total_estimasi", "Estimasi total biaya"],
     ] },
-  { key: "purchase", label: "Laporan Belanja Retail (otomatis)", icon: "📦",
+  { key: "purchase", label: "Laporan Belanja Retail (otomatis)", icon: Package,
     vars: [
       ["nama_aplikasi", "Nama aplikasi"], ["tanggal", "Tanggal"],
       ["total_belanja", "Total belanja"], ["jumlah_item", "Jumlah item"], ["items", "Rincian item (otomatis)"],
@@ -121,8 +121,8 @@ export default function SettingsWATemplates() {
       <div className="flex flex-wrap gap-1.5 mb-4">
         {TEMPLATE_META.map((m) => (
           <button key={m.key} data-testid={`tpl-tab-${m.key}`} onClick={() => setActive(m.key)}
-            className={`tap h-9 px-3 rounded-xl text-xs font-bold border ${active === m.key ? "bg-[#E63946] text-white border-[#E63946]" : "bg-white text-[#52525B]"}`}>
-            {m.icon} {m.label}
+            className={`tap h-9 px-3 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 ${active === m.key ? "bg-[#E63946] text-white border-[#E63946]" : "bg-white text-[#52525B]"}`}>
+            <m.icon size={13} aria-hidden="true" /> {m.label}
           </button>
         ))}
       </div>

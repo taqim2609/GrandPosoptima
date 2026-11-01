@@ -411,7 +411,7 @@ export default function Login() {
                       className="w-full h-12 rounded-xl border border-[#D4D4D8] px-3.5 bg-white text-sm font-bold text-[#09090B] focus:border-[#E63946] focus:ring-2 focus:ring-[#E63946]/20 outline-none shadow-xs"
                     >
                       <option value="">-- Pilih Akun yang Menggunakan PIN --</option>
-                      <option value="auto">⚡ Deteksi Otomatis (Auto PIN Semua Akun)</option>
+                      <option value="auto">[AUTO] Deteksi Otomatis (Auto PIN Semua Akun)</option>
                       {pinUsers.map((u) => (
                         <option key={u.id} value={u.username || u.id}>
                           {u.name} (@{u.username || u.email}) — {u.role_name || u.role}

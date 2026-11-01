@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { rupiah, ORDER_TYPE_LABEL } from "@/lib/format";
+import { rupiah, ORDER_TYPE_LABEL, formatWib } from "@/lib/format";
 import { getDeviceConfig } from "@/lib/device";
 import { generateBarcodeSvg } from "@/lib/receipt";
 import { Sparkles, Store, AlertTriangle } from "lucide-react";
@@ -82,7 +82,7 @@ export default function ReceiptPaper({
 
   const alignClass = (a) => (a === "left" ? "text-left" : a === "right" ? "text-right" : "text-center");
 
-  const formattedDate = new Date(order.paid_at || order.created_at || Date.now()).toLocaleString("id-ID", {
+  const formattedDate = formatWib(order.paid_at || order.created_at || Date.now(), {
     day: "numeric",
     month: "short",
     year: "numeric",

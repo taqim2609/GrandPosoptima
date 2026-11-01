@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import api, { apiError } from "@/lib/api";
 import { rupiah } from "@/lib/format";
 import { toast } from "sonner";
-import { Boxes, PackagePlus, ClipboardCheck, Plus, Camera, ScanLine, Loader2, RefreshCw } from "lucide-react";
+import { Boxes, PackagePlus, ClipboardCheck, Plus, Camera, ScanLine, Loader2, RefreshCw, ArrowLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { wibToday } from "@/lib/format";
 import { syncStockToFirestore } from "@/lib/firebase";
@@ -394,7 +394,7 @@ function InvoiceScan({ open, onClose, onDone }) {
               </div>
               <div className="flex gap-2">
                 <button data-testid="invoice-back-btn" onClick={() => setStep("edit")} disabled={saving}
-                  className="tap h-12 px-5 rounded-xl bg-[#F4F5F7] border font-bold disabled:opacity-50">← Kembali Edit</button>
+                  className="tap h-12 px-5 rounded-xl bg-[#F4F5F7] border font-bold disabled:opacity-50 inline-flex items-center gap-1.5"><ArrowLeft size={15} /> Kembali Edit</button>
                 <button data-testid="invoice-save-btn" onClick={save} disabled={saving}
                   className="tap flex-1 h-12 rounded-xl bg-[#E63946] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Konfirmasi & Simpan Semua

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { testFirestoreConnection } from "@/lib/firebase";
+import { formatWib } from "@/lib/format";
 
 export default function ThreeServerMatrix({ compact = false, showHeader = true, className = "" }) {
   const [loading, setLoading] = useState(true);
@@ -203,7 +204,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
               item.id === "hermes" ? { ...item, status: "disconnected" } : item
             ),
           }));
-          toast.info("Hermes Gateway belum aktif di host (Ikuti panduan PANDUAN-WHATSAPP-HERMES.md)", { id: toastId, duration: 4500 });
+          toast.info("Hermes Gateway belum aktif di host (ikuti panduan WhatsApp Hermes di dokumentasi proyek)", { id: toastId, duration: 4500 });
         }
       }
     } catch (err) {
@@ -440,7 +441,7 @@ export default function ThreeServerMatrix({ compact = false, showHeader = true, 
           </span>
         </div>
         <div className="text-[11px] text-neutral-400 font-mono shrink-0">
-          Diperbarui: {lastUpdated.toLocaleTimeString("id-ID")} WIB
+          Diperbarui: {formatWib(lastUpdated)} WIB
         </div>
       </div>
     </div>

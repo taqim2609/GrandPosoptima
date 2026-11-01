@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import api, { apiError } from "@/lib/api";
+import { formatWib } from "@/lib/format";
 import { toast } from "sonner";
 import {
   initAuth,
@@ -163,7 +164,7 @@ export default function GDriveBackupManager() {
       const uploadRes = await uploadBackupToDrive(
         blob,
         filename,
-        `Backup manual Grand Aceh POS via Web (${new Date().toLocaleString("id-ID")})`,
+        `Backup manual Grand Aceh POS via Web (${formatWib()})`,
         activeToken
       );
 
@@ -318,7 +319,7 @@ export default function GDriveBackupManager() {
     if (!isoStr) return "—";
     try {
       const d = new Date(isoStr);
-      return d.toLocaleDateString("id-ID", {
+      return formatWib(d, {
         day: "2-digit",
         month: "short",
         year: "numeric",

@@ -1,4 +1,5 @@
 // Standalone Google Drive OAuth 2.0 Auth (No Firebase SDK)
+import { formatWib } from "./format";
 const OAUTH_CLIENT_ID = "956375484215-icprobcchq0sjbiiath1lnvdkp8i1cgv.apps.googleusercontent.com";
 const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive";
 
@@ -286,7 +287,7 @@ export async function uploadBackupToDrive(blob, filename, description = "", acce
   const metadata = {
     name: filename || `gak-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.zip`,
     parents: [folderId],
-    description: description || `Backup server POS pada ${new Date().toLocaleString("id-ID")}`,
+    description: description || `Backup server POS pada ${formatWib()}`,
   };
 
   const form = new FormData();

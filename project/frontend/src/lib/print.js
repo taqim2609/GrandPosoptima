@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { getDeviceConfig } from "@/lib/device";
 import { printPlainViaBluetooth } from "@/lib/bluetooth";
 import { isNativeApp } from "@/lib/versions";
+import { rupiah } from "@/lib/format";
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -146,7 +147,7 @@ export function printText(text, title = "Cetak") {
 export function printShiftClosingReport(report, options = {}) {
   const rp = (val) => {
     if (val === undefined || val === null) return "Rp 0";
-    return "Rp " + Number(val).toLocaleString("id-ID");
+    return rupiah(val);
   };
 
   const outlet = options.outletName || "KASIR AKUNTANSI";

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { apiError } from "@/lib/api";
-import { rupiah } from "@/lib/format";
+import { rupiah, formatWib } from "@/lib/format";
 import { printReceipt } from "@/lib/receipt";
 import { getDeviceConfig, setDeviceConfig, getPrinterStatus } from "@/lib/device";
 import { bizCache, loadBusiness } from "@/lib/business";
@@ -792,7 +792,7 @@ export default function POS() {
             </div>
             <div className="text-right text-xs text-[#52525B]">
               <div>Tanggal &amp; Waktu:</div>
-              <div className="font-mono font-semibold text-xs text-[#0A0A0A]">{new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" })}</div>
+              <div className="font-mono font-semibold text-xs text-[#0A0A0A]">{formatWib(new Date(), { weekday: "short", day: "numeric", month: "short" })}</div>
             </div>
           </div>
 
@@ -961,7 +961,7 @@ export default function POS() {
         {cacheAt && (
           <div data-testid="cache-indicator" title="Waktu data produk/harga terakhir diperbarui dari server"
             className={`hidden xl:flex h-10 px-3 rounded-xl items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap ${online ? "bg-zinc-100 text-zinc-600 border border-zinc-200/60" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>
-            <Database size={13} className="text-zinc-500" /> {new Date(cacheAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+            <Database size={13} className="text-zinc-500" /> {formatWib(cacheAt, { hour: "2-digit", minute: "2-digit" })}
           </div>
         )}
         {orderType === "dine_in" && (
@@ -1276,7 +1276,21 @@ export default function POS() {
         onMoveTable={(t) => { setTableOpen(false); handleOpenMoveTable(t); }}
         onClearTable={clearTable}
         onDeleteTable={deleteTable}
-        onCancelBill={(t) => { setTableOpen(false); setVoidBill({ id: t.open_order_id, order_number: t.name, status: "open", order_type: "dine_in", items: [], total: 0 }); }}
+        onCancelBill={(t) => {
+          setTableOpen(false);
+          // Metadata nyata dari meja (bukan placeholder) agar dialog void menampilkan
+          // nomor bill, status, dan total open bill yang benar sebelum konfirmasi.
+          setVoidBill({
+            id: t.open_order_id,
+            order_number: t.open_order_number || t.name,
+            status: "open",
+            order_type: "dine_in",
+            items: [],
+            total: Number(t.total ?? 0),
+            table_id: t.id,
+            table_name: t.name,
+          });
+        }}
         onManageTables={() => { setTableOpen(false); nav("/settings?tab=tables"); }}
       />
       <MoveTableDialog

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
+import { formatWib } from "@/lib/format";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { can, isSuperAdmin, roleNameOf, moduleLabel } from "@/lib/rbac";
@@ -282,7 +283,7 @@ export default function AssistantAI() {
       }]);
       loadSessions();
     } catch (e) {
-      setMessages((m) => [...m, { role: "assistant", text: `⚠️ ${apiError(e.response?.data?.detail)}`, error: true }]);
+      setMessages((m) => [...m, { role: "assistant", text: apiError(e.response?.data?.detail), error: true }]);
     } finally { setLoading(false); }
   };
 
@@ -324,7 +325,7 @@ export default function AssistantAI() {
       if (!data.rows?.length) return toast.error("File tidak berisi baris valid", { id: t });
       setMessages((m) => [...m, {
         role: "assistant",
-        text: `📊 File **${f.name}** siap diimpor: ${data.valid_count} valid (${data.new_count} baru, ${data.update_count} update), ${data.error_count} error. Tekan Terapkan untuk menyimpan.`,
+        text: `File **${f.name}** siap diimpor: ${data.valid_count} valid (${data.new_count} baru, ${data.update_count} update), ${data.error_count} error. Tekan Terapkan untuk menyimpan.`,
         action: { type: "import_excel", rows: data.rows, summary: data },
         actionState: "pending",
       }]);
@@ -433,7 +434,7 @@ export default function AssistantAI() {
               <MessageSquare size={16} className="text-[#E63946] shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold truncate">{s.title}</div>
-                <div className="text-[11px] text-[#a1a1aa]">{s.count} pesan · {s.updated_at ? new Date(s.updated_at).toLocaleString("id-ID") : ""}</div>
+                <div className="text-[11px] text-[#a1a1aa]">{s.count} pesan · {s.updated_at ? formatWib(s.updated_at) : ""}</div>
               </div>
               <button data-testid={`assistant-session-del-${s.id}`} onClick={(e) => deleteSession(s.id, e)}
                 className="tap p-1.5 rounded-lg text-[#a1a1aa] hover:text-[#DC2626] hover:bg-[#FEF2F2]">

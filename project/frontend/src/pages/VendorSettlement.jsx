@@ -14,11 +14,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api, { apiError } from "@/lib/api";
-import { rupiah } from "@/lib/format";
+import { rupiah, formatWib } from "@/lib/format";
 import { toast } from "sonner";
 import {
   HandCoins, Loader2, Printer, Send, Wallet, Receipt, History, ChevronDown, ChevronRight,
-  Ban, RefreshCw, AlertTriangle, Users,
+  Ban, RefreshCw, AlertTriangle, Users, CheckCircle2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { printText } from "@/lib/print";
@@ -36,7 +36,7 @@ const shiftDay = (s, n) => {
 };
 const dayLabel = (s) => {
   try {
-    return new Date(`${s}T00:00:00Z`).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    return formatWib(`${s}T00:00:00Z`, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   } catch (e) { return s; }
 };
 
@@ -401,7 +401,10 @@ function Riwayat() {
         <h3 className="font-extrabold flex items-center gap-2 mb-1"><Users size={17} className="text-[#7C3AED]" /> Saldo per Vendor (setelah {end})</h3>
         <p className="text-xs text-[#52525B] mb-3">Sisa bagi hasil yang belum diserahkan — otomatis terbawa ke settlement berikutnya.</p>
         {balances.length === 0 ? (
-          <div className="text-sm text-[#15803D]">Semua vendor lunas — tidak ada saldo tertunggak. 🎉</div>
+          <div className="text-sm text-[#15803D] flex items-center gap-1.5">
+            <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
+            <span>Semua vendor lunas — tidak ada saldo tertunggak.</span>
+          </div>
         ) : (
           <div className="flex flex-wrap gap-2">
             {balances.map((b) => (

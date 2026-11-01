@@ -37,7 +37,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { rupiah } from "@/lib/format";
+import { rupiah, formatWib } from "@/lib/format";
 import { toast } from "sonner";
 import { copyText } from "@/lib/utils";
 import { printText as printText_, printShiftClosingReport } from "@/lib/print";
@@ -104,43 +104,43 @@ export default function ShiftClosingReportView({
   const handleCopyReportText = async () => {
     try {
       const lines = [];
-      lines.push(`📊 *LAPORAN PENUTUPAN SHIFT*`);
-      lines.push(`🏪 *${outletName}*`);
-      lines.push(`🕒 Tanggal: ${report.closed_at ? new Date(report.closed_at).toLocaleDateString("id-ID") : new Date().toLocaleDateString("id-ID")}`);
-      lines.push(`👤 Pembuka: ${report.dibuka_oleh || "-"}`);
-      lines.push(`👤 Penutup: ${report.ditutup_oleh || report.closed_by || "-"}`);
+      lines.push(`*LAPORAN PENUTUPAN SHIFT*`);
+      lines.push(`*${outletName}*`);
+      lines.push(`Tanggal: ${report.closed_at ? formatWib(report.closed_at, { dateStyle: "medium" }) : formatWib(new Date(), { dateStyle: "medium" })}`);
+      lines.push(`Pembuka: ${report.dibuka_oleh || "-"}`);
+      lines.push(`Penutup: ${report.ditutup_oleh || report.closed_by || "-"}`);
       lines.push(`----------------------------------------`);
-      lines.push(`📦 *TOTAL PENJUALAN*: ${rupiah(report.total_sales)} (${report.order_count || 0} Order)`);
+      lines.push(`*TOTAL PENJUALAN*: ${rupiah(report.total_sales)} (${report.order_count || 0} Order)`);
       lines.push(`  • ${lbFnb}: ${rupiah(report.fnb_total || 0)} (Dine-in: ${rupiah(report.by_type?.dine_in || 0)}, Takeaway: ${rupiah(report.by_type?.take_away || 0)})`);
       lines.push(`  • ${lbRetail}: ${rupiah(report.retail_total || 0)}`);
       lines.push(`----------------------------------------`);
-      lines.push(`💳 *METODE PEMBAYARAN*:`);
+      lines.push(`*METODE PEMBAYARAN*:`);
       Object.entries(paymentMethods).forEach(([k, v]) => {
         lines.push(`  • ${k}: ${rupiah(v)}`);
       });
       lines.push(`----------------------------------------`);
-      lines.push(`💸 *PENGELUARAN KAS*:`);
+      lines.push(`*PENGELUARAN KAS*:`);
       lines.push(`  • ${lbFnb}: ${rupiah(report.cash_out_fnb || 0)}`);
       lines.push(`  • ${lbRetail}: ${rupiah(report.cash_out_retail || 0)}`);
       if (report.transport > 0) lines.push(`  • Uang Transport (Wajib): ${rupiah(report.transport)}`);
       lines.push(`----------------------------------------`);
-      lines.push(`⚖️ *REKONSILIASI KAS FISIK*:`);
+      lines.push(`*REKONSILIASI KAS FISIK*:`);
       lines.push(`  • Kas Sistem (Expected): ${rupiah(varianceReport?.expected ?? report.expected_cash ?? 0)}`);
       lines.push(`  • Kas Fisik (Actual): ${rupiah(varianceReport?.actual ?? (Number(report.closing_cash_fnb || 0) + Number(report.closing_cash_retail || 0)))}`);
-      lines.push(`  • Status: ${isMatch ? "✓ MATCH (Seimbang)" : isSurplus ? `+ SURPLUS (+${rupiah(varianceVal)})` : `- SHORTAGE (-${rupiah(Math.abs(varianceVal))})`}`);
+      lines.push(`  • Status: ${isMatch ? "[OK] MATCH (Seimbang)" : isSurplus ? `[+] SURPLUS (+${rupiah(varianceVal)})` : `[-] SHORTAGE (-${rupiah(Math.abs(varianceVal))})`}`);
       if (report.variance_report?.variance_reason) {
         lines.push(`  • Catatan Selisih: "${report.variance_report.variance_reason}"`);
       }
       if (vendorShares.length > 0) {
         lines.push(`----------------------------------------`);
-        lines.push(`👥 *BAGI HASIL VENDOR*:`);
+        lines.push(`*BAGI HASIL VENDOR*:`);
         lines.push(`  • Omzet Vendor: ${rupiah(vendorTotalGross)}`);
         lines.push(`  • Hak Vendor: ${rupiah(vendorTotalShare)} (Diserahkan: ${rupiah(vendorTotalPaid)})`);
         lines.push(`  • Bagian Outlet: ${rupiah(vendorTotalOutlet)}`);
       }
       lines.push(`----------------------------------------`);
-      lines.push(`💰 *UANG BERSIH OUTLET*: ${rupiah(report.net_cash || 0)}`);
-      lines.push(`💵 *SISA KAS FISIK*: ${rupiah(report.sisa_cash || 0)}`);
+      lines.push(`*UANG BERSIH OUTLET*: ${rupiah(report.net_cash || 0)}`);
+      lines.push(`*SISA KAS FISIK*: ${rupiah(report.sisa_cash || 0)}`);
 
       const text = lines.join("\n");
       const ok = await copyText(text);
@@ -195,11 +195,11 @@ export default function ShiftClosingReportView({
                 <Clock size={14} className="text-zinc-400" />
                 <span>
                   {report.closed_at
-                    ? new Date(report.closed_at).toLocaleString("id-ID", {
+                    ? formatWib(report.closed_at, {
                         dateStyle: "medium",
                         timeStyle: "short",
                       })
-                    : new Date().toLocaleString("id-ID")}
+                    : formatWib()}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -795,8 +795,8 @@ export default function ShiftClosingReportView({
               <div className="text-[11px] text-zinc-600 font-bold">LAPORAN TUTUP SHIFT</div>
               <div className="text-[10px] text-zinc-500">
                 {report.closed_at
-                  ? new Date(report.closed_at).toLocaleString("id-ID")
-                  : new Date().toLocaleString("id-ID")}
+                  ? formatWib(report.closed_at)
+                  : formatWib()}
               </div>
               <div className="text-[10px] text-zinc-500">
                 Buka: {report.dibuka_oleh || "-"} | Tutup: {report.ditutup_oleh || report.closed_by || "-"}

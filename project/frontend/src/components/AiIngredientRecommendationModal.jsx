@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api, { apiError } from "@/lib/api";
-import { rupiah } from "@/lib/format";
+import { rupiah, wibToday, formatWib } from "@/lib/format";
+import { numID } from "@/lib/customWidgets";
 import { toast } from "sonner";
 import {
   Sparkles,
@@ -32,9 +33,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { printText } from "@/lib/print";
-
-const nf = (n) =>
-  n == null ? "0" : Number(n).toLocaleString("id-ID", { maximumFractionDigits: 2 });
 
 const DEFAULT_MODELS = [
   {
@@ -200,7 +198,7 @@ export default function AiIngredientRecommendationModal({
     // Direct fallback call to API
     setApplying(true);
     try {
-      const targetDate = currentShoppingDate || new Date().toISOString().slice(0, 10);
+      const targetDate = currentShoppingDate || wibToday();
       await api.post("/shopping-list", {
         date: targetDate,
         items: itemsToApply,
@@ -249,12 +247,12 @@ export default function AiIngredientRecommendationModal({
     let text = `*REKOMENDASI BELANJA BAHAN BAKU (AI)*\n`;
     text += `*Grand Aceh Kuliner*\n`;
     text += `Periode Analisis: Penjualan ${days} Hari Terakhir\n`;
-    text += `Tanggal: ${new Date().toLocaleDateString("id-ID")}\n\n`;
+    text += `Tanggal: ${formatWib(new Date(), { dateStyle: "medium" })}\n\n`;
     text += `*Ringkasan Kebutuhan Dapur:*\n`;
     chosen.forEach((item, i) => {
       const qty = editedQuantities[item.ingredient_id] ?? item.recommended_qty;
       const subtotal = qty * item.unit_cost;
-      const urg = item.urgency === "critical" ? "🔴 KRITIS" : item.urgency === "warning" ? "🟡 PERLU" : "🟢 BUFFER";
+      const urg = item.urgency === "critical" ? "KRITIS" : item.urgency === "warning" ? "PERLU" : "BUFFER";
       text += `${i + 1}. *${item.ingredient_name}* [${urg}]\n`;
       text += `   - Jumlah: ${qty} ${item.unit}\n`;
       text += `   - Est. Harga: ${rupiah(subtotal)} (${rupiah(item.unit_cost)}/${item.unit})\n`;
@@ -281,7 +279,10 @@ export default function AiIngredientRecommendationModal({
     pText += `   GRAND ACEH KULINER\n`;
     pText += ` REKOMENDASI BELANJA BAHAN (AI)\n`;
     pText += ` Periode: Penjualan ${days} Hari\n`;
-    pText += ` Tgl: ${new Date().toLocaleDateString("id-ID")} ${new Date().toLocaleTimeString("id-ID")}\n`;
+    const nowWib = new Date();
+    pText += ` Tgl: ${formatWib(nowWib, { dateStyle: "medium" })} ${formatWib(nowWib, {
+      timeStyle: "medium",
+    })}\n`;
     pText += `================================\n\n`;
 
     chosen.forEach((item, i) => {
@@ -397,7 +398,7 @@ export default function AiIngredientRecommendationModal({
                     {rupiah(data.total_sales_revenue)}
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    {nf(data.total_items_sold)} porsi/item terjual
+                    {numID(data.total_items_sold)} porsi/item terjual
                   </div>
                 </div>
 
@@ -559,12 +560,12 @@ export default function AiIngredientRecommendationModal({
                               </td>
                               <td className="p-3 text-center font-mono">
                                 <span className={item.current_stock <= item.min_stock ? "text-rose-600 font-bold" : "text-slate-700"}>
-                                  {nf(item.current_stock)}
+                                  {numID(item.current_stock)}
                                 </span>
-                                <span className="text-slate-400"> / {nf(item.min_stock)} {item.unit}</span>
+                                <span className="text-slate-400"> / {numID(item.min_stock)} {item.unit}</span>
                               </td>
                               <td className="p-3 text-center font-mono text-slate-700">
-                                {nf(item.weekly_usage)} {item.unit}
+                                {numID(item.weekly_usage)} {item.unit}
                               </td>
                               <td className="p-3 text-center">
                                 <span

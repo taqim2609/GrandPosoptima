@@ -1,3 +1,4 @@
+import { rupiah } from "@/lib/format";
 /* ================================================================
    WIDGET KUSTOM DASHBOARD — pustaka bersama (Dashboard & Pengaturan)
    Widget = angka hasil dari RUMUS sederhana yang menggabungkan:
@@ -147,7 +148,7 @@ export function numID(n) {
 export function formatValue(widget, n) {
   const v = Number(n);
   if (!isFinite(v)) return "—";
-  if (widget?.format === "rupiah") return "Rp" + Math.round(v).toLocaleString("id-ID");
+  if (widget?.format === "rupiah") return rupiah(v);
   if (widget?.format === "persen") return v.toLocaleString("id-ID", { maximumFractionDigits: 2 }) + "%";
   if (widget?.format === "jumlah") return Math.round(v).toLocaleString("id-ID");
   return numID(v);

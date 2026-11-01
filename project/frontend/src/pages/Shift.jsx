@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { apiError } from "@/lib/api";
-import { rupiah } from "@/lib/format";
+import { rupiah, ORDER_TYPE_LABEL, formatWib } from "@/lib/format";
 import { toast } from "sonner";
 import {
   Clock, Play, Square, Loader2, Wallet, Users, MessageCircle, ChevronDown, ChevronRight,
   Printer, Ban, Plus, Trash2, Utensils, Store, UserCheck, Info, AlertTriangle,
   Coins, Calculator, CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, AlertCircle,
-  Scale, ShieldAlert, Sparkles, Check,
+  Scale, ShieldAlert, Sparkles, Check, FileText,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
@@ -431,7 +431,7 @@ export default function Shift() {
             </div>
             <div className="text-sm text-[#52525B] mt-3">
               Dibuka oleh <b data-testid="shift-opened-by">{session.opened_by || "-"}</b>
-              <br />Waktu buka: <b>{session.opened_at ? new Date(session.opened_at).toLocaleString("id-ID") : "-"}</b>
+              <br />Waktu buka: <b>{session.opened_at ? formatWib(session.opened_at) : "-"}</b>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]" data-testid="shift-accounts">
               <span className="font-extrabold uppercase tracking-wider text-[#52525B] flex items-center gap-1">
@@ -1210,7 +1210,7 @@ export default function Shift() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 pb-3">
                   <div>
                     <span className="font-extrabold text-base text-zinc-900">
-                      {s.opened_at ? new Date(s.opened_at).toLocaleDateString("id-ID", { dateStyle: "full" }) : "-"}
+                      {s.opened_at ? formatWib(s.opened_at, { dateStyle: "full" }) : "-"}
                     </span>
                     <div className="text-xs text-zinc-500 mt-0.5">
                       Dibuka: <b className="text-zinc-700" data-testid={`history-opened-by-${s.id}`}>{s.opened_by || s.cashier_name || "-"}</b>
@@ -1218,7 +1218,7 @@ export default function Shift() {
                       Ditutup: <b className="text-zinc-700" data-testid={`history-closed-by-${s.id}`}>{s.closed_by || "-"}</b>
                       {" · "}
                       <span className="font-mono text-[11px]">
-                        {new Date(s.opened_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} – {s.closed_at ? new Date(s.closed_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
+                        {formatWib(s.opened_at, { hour: "2-digit", minute: "2-digit" })} – {s.closed_at ? formatWib(s.closed_at, { hour: "2-digit", minute: "2-digit" }) : "-"}
                       </span>
                     </div>
                   </div>

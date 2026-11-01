@@ -9,7 +9,7 @@
 import { useEffect, useState, useCallback } from "react";
 import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { wibToday } from "@/lib/format";
+import { wibToday, formatWib } from "@/lib/format";
 import { useAuth } from "@/context/AuthContext";
 import { isAdmin } from "@/lib/rbac";
 import {
@@ -18,7 +18,7 @@ import {
 
 const nf = (n) => (n == null ? "0" : Number(n).toLocaleString("id-ID", { maximumFractionDigits: 2 }));
 const fmtRp = (n) => "Rp" + Math.round(Number(n || 0)).toLocaleString("id-ID");
-const dt = (s) => (s ? new Date(s).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
+const dt = (s) => (s ? formatWib(s, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 
 export default function VoidRefund() {
   const { user } = useAuth();

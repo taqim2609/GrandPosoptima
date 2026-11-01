@@ -7,6 +7,7 @@ import {
   Receipt, FileText, Bookmark, Settings, Layers, AlertTriangle, ArrowRight,
   Server, ShieldCheck, PanelLeftClose, PanelLeftOpen, Info
 } from "lucide-react";
+import { formatWib } from "@/lib/format";
 
 export default function WhatsApp() {
   const [activeTab, setActiveTab] = useState("livechat"); // "livechat" | "settings"
@@ -475,7 +476,7 @@ export default function WhatsApp() {
                             {c.name || c.phone}
                           </span>
                           <span className="text-[10px] font-mono tabular-nums text-slate-400 shrink-0">
-                            {c.updated_at ? new Date(c.updated_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : ""}
+                            {c.updated_at ? formatWib(c.updated_at, { hour: "2-digit", minute: "2-digit" }) : ""}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 truncate mt-0.5">
@@ -564,7 +565,7 @@ export default function WhatsApp() {
                                 {isOutbound ? (m.sender_name || "Kasir Grand POS") : selectedPhone}
                               </span>
                               <span className="font-mono tabular-nums">
-                                {m.created_at ? new Date(m.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : ""}
+                                {m.created_at ? formatWib(m.created_at, { hour: "2-digit", minute: "2-digit" }) : ""}
                               </span>
                             </div>
 
@@ -871,7 +872,7 @@ export default function WhatsApp() {
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 border space-y-1">
                   <span className="text-[10px] font-black uppercase text-slate-400">Otentikasi Sinkronisasi</span>
-                  <div className="font-mono text-emerald-700 font-bold">WA_OUTBOX_SYNC_TOKEN Active ✓</div>
+                  <div className="font-mono text-emerald-700 font-bold">WA_OUTBOX_SYNC_TOKEN Active</div>
                 </div>
               </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
 import { loadFeatures, FEAT_DEFAULTS } from "@/lib/features";
+import { formatWib } from "@/lib/format";
 import {
   Sparkles, BellRing, Gauge, ShieldCheck, Save, Loader2, RefreshCw,
   Webhook, Database, Activity, CheckCircle2, XCircle, KeyRound, Send,
@@ -161,7 +162,7 @@ export default function SettingsIntegrations() {
       const r = await api.post("/admin/orphan-check");
       setOrphan((o) => ({ ...o, last: r.data }));
       const total = (r.data.results || []).reduce((s, x) => s + x.count, 0);
-      toast.success(total === 0 ? "Pemeriksaan selesai — tidak ada data yatim 🎉" : `Pemeriksaan selesai — ${total} data yatim ditemukan`);
+      toast.success(total === 0 ? "Pemeriksaan selesai — tidak ada data yatim" : `Pemeriksaan selesai — ${total} data yatim ditemukan`);
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
     finally { setRunningOrphan(false); }
   };
@@ -279,7 +280,7 @@ export default function SettingsIntegrations() {
               {wh.last && (
                 <span className={`text-xs font-bold inline-flex items-center gap-1 ${wh.last.ok ? "text-[#16A34A]" : "text-[#EF4444]"}`}>
                   {wh.last.ok ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                  Terakhir {wh.last.event} {wh.last.at ? new Date(wh.last.at).toLocaleString("id-ID") : ""} — {wh.last.ok ? `HTTP ${wh.last.status}` : (wh.last.error || "gagal")}
+                  Terakhir {wh.last.event} {wh.last.at ? formatWib(wh.last.at) : ""} — {wh.last.ok ? `HTTP ${wh.last.status}` : (wh.last.error || "gagal")}
                 </span>
               )}
             </div>
@@ -300,7 +301,7 @@ export default function SettingsIntegrations() {
           <div className="text-xs text-[#71717A] mb-3">Jadwal otomatis: <b>{orphan?.auto ? "AKTIF — " : "nonaktif — "}{orphan?.schedule || "Minggu 04:00 WIB"}</b> (atur di grup Operasional & Keamanan)</div>
           {orphan?.last && (
             <div className="rounded-xl bg-[#FAFAFA] border p-3">
-              <div className="text-[11px] font-bold text-[#71717A] mb-2">Terakhir: {new Date(orphan.last.at).toLocaleString("id-ID")}</div>
+              <div className="text-[11px] font-bold text-[#71717A] mb-2">Terakhir: {formatWib(orphan.last.at)}</div>
               {(orphan.last.results || []).length === 0 ? (
                 <div className="text-sm font-bold text-[#16A34A]">Tidak ada data yatim.</div>
               ) : (

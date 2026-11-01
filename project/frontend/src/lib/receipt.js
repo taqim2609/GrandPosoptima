@@ -1,4 +1,4 @@
-import { rupiah, ORDER_TYPE_LABEL } from "@/lib/format";
+import { rupiah, ORDER_TYPE_LABEL, formatWib } from "@/lib/format";
 import { getDeviceConfig, printViaEpson } from "@/lib/device";
 import { printViaBluetooth } from "@/lib/bluetooth";
 import { getServerUrl } from "@/lib/api";
@@ -96,9 +96,8 @@ function alignCss(a) { return a === "left" ? "left" : a === "right" ? "right" : 
 
 // Format satu baris item di struk thermal monospace: NAMA (kiri) .... QTY x HARGA + TOTAL (kanan)
 export function itemLine(name, qty, price, width = 42) {
-  const rp = (n) => "Rp" + Math.round(Number(n || 0)).toLocaleString("id-ID");
-  const qp = `${qty}x${rp(price)}`;
-  const tot = rp(price * qty);
+  const qp = `${qty}x${rupiah(price)}`;
+  const tot = rupiah(price * qty);
   const right = `${qp} ${tot}`;
   const nameW = width - right.length - 1;
   let n = String(name || "");
@@ -150,7 +149,7 @@ function trySunmiPrinter(order, cfg, logoB64) {
     // Metadata Transaksi
     if (sp.setAlignment) sp.setAlignment(0);
     sp.printText(`No. Order : ${order.order_number}\n`);
-    sp.printText(`Tanggal   : ${new Date(order.paid_at || order.created_at).toLocaleString("id-ID")}\n`);
+    sp.printText(`Tanggal   : ${formatWib(order.paid_at || order.created_at || Date.now())}\n`);
     sp.printText(`Kasir     : ${order.cashier_name || "-"}\n`);
     const typeLabel = ORDER_TYPE_LABEL[order.order_type] || order.order_type || "Umum";
     const tableInfo = order.table_name ? ` (${order.table_name})` : "";
@@ -222,7 +221,7 @@ function trySunmiPrinter(order, cfg, logoB64) {
 }
 
 export function generateReceiptHtml(order, cfg, logoB64) {
-  const dt = new Date(order.paid_at || order.created_at).toLocaleDateString("id-ID", {
+  const dt = formatWib(order.paid_at || order.created_at, {
     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
   });
 
@@ -608,7 +607,7 @@ export function generateReceiptHtml(order, cfg, logoB64) {
 
     ${order.points_earned ? `
       <div class="loyalty-box">
-        🎉 Selamat! Anda mendapat +${order.points_earned} Poin Member
+        [HADIAH] Selamat! Anda mendapat +${order.points_earned} Poin Member
       </div>
     ` : ""}
 

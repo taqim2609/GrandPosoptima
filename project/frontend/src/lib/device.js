@@ -1,6 +1,7 @@
 // Per-device configuration (printer, outlet header, cash drawer) stored on THIS device.
 // Server URL lives in api.js (getServerUrl/setServerUrl); this file re-exports helpers for convenience.
 import { getServerUrl, setServerUrl } from "@/lib/api";
+import { formatWib, rupiah } from "@/lib/format";
 
 export { getServerUrl, setServerUrl };
 
@@ -41,9 +42,8 @@ const escXml = (v) =>
 
 // Build an Epson ePOS-Print SOAP envelope for a receipt.
 function buildEposEnvelope(order, cfg) {
-  const rupiah = (n) => "Rp" + Math.round(Number(n || 0)).toLocaleString("id-ID");
   const LABEL = { dine_in: "Dine-In", take_away: "Take Away", retail: "Retail" };
-  const dt = new Date(order.paid_at || order.created_at).toLocaleString("id-ID");
+  const dt = formatWib(order.paid_at || order.created_at || Date.now());
   const t = (txt) => `<text>${escXml(txt)}&#10;</text>`;
   let body = "";
   body += `<text align="center"/><text em="true">${escXml(cfg.outletName)}&#10;</text><text em="false"/>`;

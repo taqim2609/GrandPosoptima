@@ -13,12 +13,12 @@ import {
   Clock,
   Layers,
   ArrowRight,
+  Zap,
   ShieldCheck,
   Cpu,
   Thermometer,
   Server,
   Radio,
-  Zap,
   Check,
   ExternalLink,
   Terminal,
@@ -30,6 +30,7 @@ import toast from "react-hot-toast";
 import HybridSyncDiagnosticPanel from "@/components/HybridSyncDiagnosticPanel";
 import ThreeServerMatrix from "@/components/ThreeServerMatrix";
 import GlobalErrorDiagnosticPanel from "@/components/GlobalErrorDiagnosticPanel";
+import { formatWib } from "@/lib/format";
 
 export default function SystemHealthPanel({ embedded = false }) {
   const [data, setData] = useState(null);
@@ -76,7 +77,7 @@ export default function SystemHealthPanel({ embedded = false }) {
     {
       id: "ev-0",
       type: "realtime",
-      title: "⚡ Sinkronisasi Real-Time Otomatis Aktif",
+      title: <><Zap size={16} /> Sinkronisasi Real-Time Otomatis Aktif</>,
       desc: "Koneksi event-driven standby: setiap order kasir seketika disinkronkan ke Google Cloud.",
       time: new Date().toISOString(),
       status: "success",
@@ -127,7 +128,7 @@ export default function SystemHealthPanel({ embedded = false }) {
               {
                 id: "ev-" + Date.now(),
                 type: "sync-live",
-                title: `⚡ Replikasi Real-Time (${parsed.event})`,
+                title: <><Zap size={16} /> Replikasi Real-Time ({parsed.event})</>,
                 desc: "Data transaksi tereplikasi seketika antara Raspberry Pi dan Google Cloud.",
                 time: new Date().toISOString(),
                 status: "success",
@@ -323,7 +324,7 @@ export default function SystemHealthPanel({ embedded = false }) {
     if (!isoString) return "-";
     try {
       const d = new Date(isoString);
-      return d.toLocaleDateString("id-ID", {
+      return formatWib(d, {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -1034,7 +1035,7 @@ export default function SystemHealthPanel({ embedded = false }) {
             Log Aktivitas Kesehatan &amp; Sinkronisasi Sistem
           </div>
           <span className="text-[11px] text-[#A1A1AA] font-num">
-            Pembaruan terakhir: {lastRefreshedAt.toLocaleTimeString("id-ID")}
+            Pembaruan terakhir: {formatWib(lastRefreshedAt)}
           </span>
         </div>
 
