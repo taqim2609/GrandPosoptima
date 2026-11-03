@@ -2,7 +2,7 @@
 import { getServerUrl } from "./api";
 
 // Wajib sinkron dengan android/app/build.gradle (versionName) setiap kali rebuild APK.
-export const APK_VERSION = "2.10";
+export const APK_VERSION = "3.0.0";
 export const APK_FILENAME = `Grand-Aceh-Kuliner-POS-v${APK_VERSION}.apk`;
 export const APK_DOWNLOAD_URL = `/apk/${APK_FILENAME}`;
 

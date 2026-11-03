@@ -3,33 +3,33 @@ import axios from "axios";
 // Standard preset servers for hybrid architecture
 export const SERVER_PRESETS = [
   {
-    id: "frontend_app_server",
-    name: "Server Frontend & POS App (UI Web Kasir)",
-    subname: "Port 3000 (Vite / React SPA / Local Engine)",
-    defaultUrl: "http://grandpos.local:3000",
-    badge: "Frontend & UI App",
-    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
-    description: "Server khusus menyajikan Antarmuka Web Kasir (Frontend SPA), PWA, dan Offline-First Queue (Tanpa DB Utama).",
-    iconType: "server",
-  },
-  {
-    id: "vps_database_server",
-    name: "Server VPS Database Khusus (Remote DB Only)",
-    subname: "Port 8000 / Dedicated DB Endpoint (FastAPI + MongoDB/PostgreSQL)",
+    id: "vps_server",
+    name: "Server VPS Utama (Backend, Server WA & Landing Page)",
+    subname: "Port 8000 / Tailscale (FastAPI/Node + Database + Bot WA)",
     defaultUrl: "http://100.117.186.13:8000",
-    badge: "Database Murni (No Frontend)",
+    badge: "VPS Master (24/7)",
     badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    description: "Server VPS backend khusus database 24/7. Murni melayani query data, transaksi, dan REST API tanpa menyajikan file frontend.",
+    description: "Server utama 24/7 di VPS melayani seluruh API backend, autentikasi, database, gateway WhatsApp, dan Landing Page publik.",
     iconType: "database",
   },
   {
+    id: "frontend_pi_server",
+    name: "Raspberry Pi Kasir Toko (Frontend UI Only)",
+    subname: "Port 3000 (React Web Kasir, Struk Sunmi & Offline Cache)",
+    defaultUrl: "http://grandpos.local:3000",
+    badge: "Frontend Pi Only",
+    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
+    description: "Khusus menyajikan antarmuka web kasir di Raspberry Pi outlet, cache offline IndexedDB, dan printer thermal Sunmi/Bluetooth.",
+    iconType: "server",
+  },
+  {
     id: "cloud",
-    name: "Server Standby Hybrid",
-    subname: "Server Mandiri (Port 3000)",
+    name: "Server Standby / Same-Origin",
+    subname: "Port 3000 (Same Origin / Port Lokal)",
     defaultUrl: "", // relative / current origin
-    badge: "Hybrid Standby",
+    badge: "Same Origin",
     badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
-    description: "Node terpadu siaga otomatis saat koneksi langsung ke VPS DB mengalami gangguan.",
+    description: "Menggunakan host/origin saat ini (misal diakses via Tailscale Funnel atau domain langsung).",
     iconType: "cloud",
   },
 ];
@@ -42,7 +42,11 @@ export function getServerUrl() {
     const s = localStorage.getItem("gak_server_url");
     if (s !== null && s !== undefined) return s.replace(/\/+$/, "");
   } catch (e) {}
-  return (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
+  const envUrl =
+    (typeof process !== "undefined" && process?.env?.REACT_APP_BACKEND_URL) ||
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_BACKEND_URL) ||
+    "";
+  return envUrl.replace(/\/+$/, "");
 }
 
 export function setServerUrl(url) {
@@ -161,14 +165,27 @@ const api = axios.create({
 api.interceptors.request.use((cfg) => {
   const t = localStorage.getItem("gak_token");
   if (t) cfg.headers.Authorization = `Bearer ${t}`;
-  cfg.headers["X-API-Key"] = process.env.REACT_APP_GRANDPOS_API_KEY || "65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551b";
+  const apiKey =
+    (typeof process !== "undefined" && process?.env?.REACT_APP_GRANDPOS_API_KEY) ||
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_GRANDPOS_API_KEY) ||
+    "65325897d59d3d5d5e0b86a69e818dffc9d051aee365193b8c1dda174ada551b";
+  cfg.headers["X-API-Key"] = apiKey;
   return cfg;
 });
 
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401 && !window.location.pathname.includes("login")) {
+    const path = typeof window !== "undefined" ? window.location.pathname : "";
+    const isPublicPage =
+      path.includes("login") ||
+      path.includes("landing") ||
+      path === "/" ||
+      path === "/menu" ||
+      path === "/cerita" ||
+      path === "/reservasi";
+
+    if (err.response?.status === 401 && !isPublicPage) {
       localStorage.removeItem("gak_token");
       window.location.href = "/login";
     }

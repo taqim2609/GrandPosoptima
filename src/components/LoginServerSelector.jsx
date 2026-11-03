@@ -15,33 +15,33 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
     ? window.location.origin
     : "http://grandpos.local:3000";
 
-  // Daftar Node Standar Multi-Node (Kasir LAN Toko, VPS Tailscale, Cloud Pusat)
+  // Daftar Node Standar Multi-Node (VPS Backend, Kasir LAN Toko Pi, Cloud/Same-Origin)
   const NODE_OPTIONS = [
     {
-      id: "frontend_app_server",
-      url: "http://grandpos.local:3000",
-      altUrl: "http://localhost:3000",
-      title: "Server Frontend & POS App (UI Web Kasir)",
-      subtitle: "Port 3000 (UI Web, Offline Cache, Struk Sunmi)",
-      badge: "Frontend UI Only",
-      badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
-      icon: Wifi,
-    },
-    {
-      id: "vps_database_server",
+      id: "vps_server",
       url: "http://100.117.186.13:8000",
-      title: "Server VPS Database Khusus (Remote DB Only)",
-      subtitle: "Port 8000 (FastAPI + Database MongoDB/PostgreSQL)",
-      badge: "Database Murni",
+      title: "Server VPS Utama (Backend, Server WA & Landing Page)",
+      subtitle: "Port 8000 / Tailscale (FastAPI/Node + Database + Bot WA)",
+      badge: "VPS Master (24/7)",
       badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
       icon: Server,
     },
     {
+      id: "frontend_app_server",
+      url: "http://grandpos.local:3000",
+      altUrl: "http://localhost:3000",
+      title: "Raspberry Pi Kasir Toko (Frontend UI Only)",
+      subtitle: "Port 3000 (UI Web Kasir, Struk Sunmi & Offline Cache)",
+      badge: "Frontend Pi Only",
+      badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
+      icon: Wifi,
+    },
+    {
       id: "cloud_primary",
       url: "",
-      title: "Server Hybrid Auto-Fallback",
-      subtitle: "Mode Siaga (Same Origin)",
-      badge: "Hybrid Standby",
+      title: "Server Mandiri / Same-Origin",
+      subtitle: "Port 3000 (Origin Browser Saat Ini)",
+      badge: "Same Origin",
       badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
       icon: Globe,
     },

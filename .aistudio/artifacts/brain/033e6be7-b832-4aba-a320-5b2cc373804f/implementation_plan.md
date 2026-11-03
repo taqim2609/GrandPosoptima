@@ -1,110 +1,167 @@
-# Rencana Implementasi: Paket Dokumentasi Lengkap & Prompt Instalasi Hermes AI Agent
+# Migrasi Backend Rust, PRD Planora v3.0, & Panduan Komprehensif Hermes Agent
 
-Dokumen ini merinci rencana pembuatan direktori `dokumentasi/` yang memuat seluruh prompt instalasi untuk Agen AI Hermes, panduan fitur & operasional kasir, fungsi lengkap seluruh file, serta indeks navigasi kode cepat untuk Grand Aceh Kuliner POS.
+Rencana komprehensif arsitektur migrasi backend Grand Aceh Kuliner POS ke Rust (Axum/Tokio), pemisahan server frontend dan backend secara mandiri, penyusunan PRD Planora baru, penyediaan panduan AI Hermes Agent untuk modifikasi kode, pembaruan APK ke versi 3.0.0, serta audit integritas teks dan penghapusan istilah asing.
 
----
-
-## 1. Analisis Arsitektur yang Sudah Ada (Existing Setup)
-
-Berdasarkan inventaris repositori saat ini, sistem telah memiliki infrastruktur modular berbasis:
-1. **Node 1: Server Gudang 644 (Cloud VPS)**
-   - **Skrip Fondasi**: `bootstrap-vps.sh`, `scripts/install-vps-one-click.sh`.
-   - **Komponen**:
-     - POS Backend & MCP SSE Server (`server.ts` / Node 20 pada port `3000` atau FastAPI port `8000`).
-     - Baileys WhatsApp Gateway (`HERMES_WA_WEBHOOK_URL` pada port `8644`).
-     - Public Landing Page & Menu Online terintegrasi.
-     - Nginx Reverse Proxy otomatis dengan sertifikat SSL Let's Encrypt / Caddy.
-     - Master Database (PostgreSQL / MongoDB) yang menjadi sumber kebenaran tunggal (*single source of truth*).
-2. **Node 2: GrandPOS (Raspberry Pi Toko)**
-   - **Skrip Fondasi**: `bootstrap-pi.sh`, `install-pi.sh`, `setup-tailscale.sh`, `Buka-POS-Linux.desktop`.
-   - **Komponen**:
-     - React 19 Frontend Single-Bundle (CRACO/Vite) untuk layar sentuh kasir POS.
-     - Koneksi printer thermal ESC/POS (USB/Bluetooth) & laci kasir (*cash drawer*).
-     - Antrean sinkronisasi offline IndexedDB idempoten (`OfflineContext.jsx`) — transaksi tetap berjalan lancar saat internet padam dan otomatis tersinkronisasi saat online kembali.
-3. **Jaringan Penghubung: Tailscale Private Mesh**
-   - Menghubungkan Raspberry Pi di toko fisik dengan Gudang 644 secara aman tanpa perlu buka port publik atau IP publik statis di toko.
+> [!IMPORTANT]
+> **Keputusan Kunci & Konfirmasi Revisi (Hasil Klarifikasi Pengguna)**:
+> - **Versi Rilis APK & OTA**: Ditetapkan sebagai **Versi 3.0.0 (Rilis Mayor Migrasi Arsitektur)**, memperbarui bundle OTA, metadata Capacitor, dan file APK release.
+> - **Cakupan Panduan Hermes Agent**: **Komprehensif (Semua Aspek)** — mencakup standar aturan modifikasi kode, Golden Rules, prompt instruksi perbaikan/penambahan fitur, integrasi webhook otomatisasi WhatsApp 2-arah (HMAC V2), dan utilitas CLI toolchain.
+> - **Hasil Audit "Vibecoder"**: Telah diperiksa melalui pemindaian menyeluruh di repositori (`grep`) dan terkonfirmasi **0 temuan (bersih)**. Seluruh terminologi dipastikan konsisten menggunakan standar resmi **Grand Aceh Kuliner POS**.
+> - **Pemisahan Server Terisolasi**: Backend Rust berjalan sebagai daemon HTTP native mandiri (port 8000), frontend Vite/React berjalan di server terpisah (port 3000), dihubungkan via reverse proxy / environment `VITE_API_BASE_URL`.
 
 ---
 
-## 2. Struktur Paket Dokumentasi di Folder `dokumentasi/`
+## 1. Overview & Core Concept
 
-Seluruh dokumentasi akan dibuat rapi di dalam folder `/dokumentasi/` sesuai instruksi pengguna:
+- **Tujuan Utama**: Mentransformasi fondasi sistem Grand Aceh Kuliner POS menjadi arsitektur dual-service generasi baru:
+  1. *Backend Rust Engine*: Layanan performa tinggi, zero-cost abstractions, memory-safe, dan startup instan (<50ms) yang sangat efisien untuk Raspberry Pi 3/4 dan terminal Sunmi T2.
+  2. *Frontend Web & APK v3.0.0*: Antarmuka kasir layar sentuh React 19 berbasis single-bundle CRACO/Vite dengan dukungan thermal printer Sunmi, laci kasir otomatis, dan antrean offline IndexedDB.
+- **Hermes Agent Operational Readiness**: Agen AI Hermes (Nous Research) dibekali dokumen panduan modifikasi kode yang mendalam agar agen dapat secara mandiri memelihara, memperluas fitur, memperbaiki bug, dan mengeksekusi otomatisasi WhatsApp tanpa merusak *Golden Rules* POS.
+- **Target Pengguna**: Kasir restoran & retail, manajer toko, teknisi deployment, dan pengembang/agen AI otomatis.
+
+---
+
+## 2. User Experience & Visual Design
+
+- **Stabilitas & Latensi Transaksi**:
+  - Penambahan pesanan menu, scan barcode produk retail, dan perhitungan timbangan berat (ons/kg) memberikan feedback instan (<5ms) di layar kasir.
+  - Alur dialog pembayaran multi-metode (Tunai, QRIS Netzme, Debit) dengan perhitungan kembalian dan pemisahan otomatis kas F&B vs Retail.
+- **Indikator Diagnostik Server Mandiri**:
+  - Menu Diagnostik dan System Health menampilkan status independen antara *Frontend Server* dan *Backend Rust Core Engine* dengan latency probe real-time.
+- **Konsistensi Visual & Tipografi**:
+  - Tema visual konsisten: Slate gelap untuk sidebar navigasi kasir, aksen Merah Aceh (`#E63946`) untuk aksi utama dan badge status, tipografi Manrope & Work Sans untuk angka kasir yang mudah dibaca dari jarak pandang kasir.
+
+---
+
+## 3. Key Product Decisions & Trade-Offs
+
+- **Keputusan 1: Pemisahan Fisik Server Frontend & Backend**
+  - *Pendekatan*: Frontend (port 3000) dan Backend (port 8000) berjalan sebagai dua proses terpisah. Di level runtime produksi lokal/VPS, Nginx atau Caddy bertindak sebagai ingress reverse proxy yang mengarahkan request `/api/*` ke backend Rust dan request lainnya ke frontend statis/SPA.
+  - *Alasan*: Menghilangkan ketergantungan monolitik; frontend APK Android dapat langsung berkomunikasi ke backend mana pun melalui Tailscale mesh tanpa membutuhkan server Node.js perantara.
+
+- **Keputusan 2: Pembaruan APK & Versi OTA ke 3.0.0**
+  - *Pendekatan*: Menetapkan nomor versi `3.0.0` pada `package.json`, `capacitor.config.json`, `public/ota/version.json`, serta memperbarui nama file rilis APK menjadi `Grand-Aceh-Kuliner-POS-v3.0.0.apk`.
+  - *Alasan*: Menandai lompatan arsitektural dari backend script Python/Node ke native compiled binary Rust.
+
+- **Keputusan 3: Desain Panduan AI Hermes Agent (Self-Guiding Instructions)**
+  - *Pendekatan*: Membuat dokumen panduan operasional lengkap di `PANDUAN-HERMES-AGENT.md` dan `dokumentasi/05-PANDUAN-KODING-HERMES-AGENT.md` yang merinci:
+    1. Konvensi struktur direktori dan cara memodifikasi kode tanpa melanggar Golden Rules.
+    2. Format prompt sistem untuk agen Hermes saat menangani task bug fix, penambahan endpoint, dan pengujian.
+    3. Standar webhook WhatsApp 2-arah dengan autentikasi HMAC SHA256.
+    4. Penggunaan script CLI pemeliharaan database dan indeks berkas.
+
+---
+
+## 4. Technical Architecture & Data Strategy
+
+### Diagram Arsitektur Sistem Terpisah (v3.0.0)
 
 ```
-dokumentasi/
-├── README.md                           # Pintu gerbang & indeks navigasi master dokumentasi
-├── 01-PROMPT-HERMES-INSTALLER.md       # Prompt siap copy-paste untuk Agen AI Hermes (Instalasi Gudang 644 & Pi)
-├── 02-PANDUAN-FITUR-DAN-PENGGUNAAN.md  # Manual operasional lengkap seluruh fitur POS, F&B, Retail, Vendor, WA, Promo
-├── 03-FUNGSI-SELURUH-FILE.md           # Kamus arsitektur & fungsi detail tiap berkas (Backend, Frontend, Skrip)
-└── 04-INDEX-NAVIGASI-KODE.md           # Indeks pencarian cepat file berdasarkan fitur & alur transaksi
+┌────────────────────────────────────────────────────────────────────────┐
+│                        CLIENT LAYER (FRONTEND)                         │
+│                                                                        │
+│   ┌─────────────────────────┐           ┌───────────────────────────┐  │
+│   │   Sunmi T2 APK v3.0.0   │           │   Web POS & Back-Office   │  │
+│   │   (Capacitor + Capgo)   │           │   (React 19 / Port 3000)  │  │
+│   └────────────┬────────────┘           └─────────────┬─────────────┘  │
+└────────────────┼──────────────────────────────────────┼────────────────┘
+                 │                                      │                 
+                 ▼                                      ▼                 
+┌────────────────────────────────────────────────────────────────────────┐
+│                      REVERSE PROXY & GATEWAY INGRESS                   │
+│                                                                        │
+│   • /api/*                   ──► Rust Backend Engine (Port 8000)       │
+│   • /webhooks/hermes/*       ──► Hermes WA Dispatcher Adapter          │
+│   • /*                       ──► Static Assets / SPA (Port 3000)       │
+└────────────────────────────────────┬───────────────────────────────────┘
+                                     │                                    
+                                     ▼                                    
+┌────────────────────────────────────────────────────────────────────────┐
+│                    RUST BACKEND CORE (Port 8000)                       │
+│                     [Axum 0.8 + Tokio Asynchronous]                    │
+│                                                                        │
+│   ┌─────────────────────┐  ┌──────────────────┐  ┌─────────────────┐   │
+│   │ Tower HTTP & CORS   │  │ JWT Auth & RBAC  │  │ Idempotent Sync │   │
+│   └──────────┬──────────┘  └────────┬─────────┘  └────────┬────────┘   │
+│              │                      │                     │            │
+│   ┌──────────▼──────────────────────▼─────────────────────▼────────┐   │
+│   │                     DOMAIN LOGIC MODULES                       │   │
+│   │  • Order Engine (F&B / Retail Strict Type Isolation)           │   │
+│   │  • Weight-Scale Math (rust_decimal 128-bit fixed point)        │   │
+│   │  • Consignment Vendor Split & Shift Closing Reconciliation    │   │
+│   │  • Sunmi ESC/POS Monospace Receipt Streamer                    │   │
+│   └─────────────────────────────────┬──────────────────────────────┘   │
+└─────────────────────────────────────┼──────────────────────────────────┘
+                                      │                                   
+                 ┌────────────────────┴───────────────────┐               
+                 ▼                                        ▼               
+      ┌──────────────────────┐               ┌────────────────────────┐   
+      │   MongoDB Primary    │               │  SQLite Edge Replica   │   
+      │   (Driver mongodb)   │               │  (Emergency Offline)   │   
+      └──────────────────────┘               └────────────────────────┘   
+                 ▲                                                        
+                 │ (Audit / Reports / Inbound Orders)                     
+                 ▼                                                        
+┌────────────────────────────────────────────────────────────────────────┐
+│                   HERMES AGENT AI AUTOMATION SYSTEM                    │
+│                                                                        │
+│   • OpenAI-Compatible REST API (/v1/chat/completions)                  │
+│   • WhatsApp Gateway 2-Arah (Baileys + Webhook HMAC SHA256)            │
+│   • Automated Daily Sales Digest & Low Stock Warnings                  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Rincian Berkas Dokumentasi yang Akan Dibuat
+## 5. Rencana Penyusunan Dokumen Planora v3.0
 
-### Berkas 1: `dokumentasi/01-PROMPT-HERMES-INSTALLER.md`
-- **Tujuan**: Menjadi instruksi komprehensif, terstruktur, dan bebas ambiguitas yang siap dikirimkan langsung ke Agen AI Hermes untuk mengeksekusi instalasi mandiri di dua mesin:
-  - **Instalasi Server Gudang 644**:
-    - Persiapan environment (Docker, Node.js 20, Nginx, UFW).
-    - Menjalankan Master Database & POS Backend Engine (Port 3000 / MCP SSE `/api/mcp/sse`).
-    - Menjalankan WhatsApp Baileys Gateway di port 8644 & menghubungkan webhook.
-    - Menyiapkan Landing Page publik pada domain outlet.
-  - **Instalasi GrandPOS (Raspberry Pi)**:
-    - Menjalankan bootstrap installer Pi (`bootstrap-pi.sh` / `install-pi.sh`).
-    - Mengonfigurasi Tailscale agar tersambung ke Gudang 644 secara aman.
-    - Mengatur autostart Kiosk Chromium mode layar sentuh untuk kasir (`Buka-POS-Linux.desktop`).
-    - Verifikasi hardware: Port printer thermal USB/Bluetooth & cash drawer.
-  - **Konfigurasi MCP Client pada Hermes**:
-    - Cara menghubungkan Hermes ke SSE MCP Server (`http://<ip-tailscale>:3000/api/mcp/sse`).
-    - Daftar 11 MCP Tools yang siap dipanggil Hermes untuk kontrol WhatsApp, server, promo, dan POS.
-  - **Prosedur Pengujian & Healthcheck 1-Klik**:
-    - Skrip verifikasi koneksi antar node, status database, outbox WA, dan printer thermal.
-
-### Berkas 2: `dokumentasi/02-PANDUAN-FITUR-DAN-PENGGUNAAN.md`
-- **Tujuan**: Panduan komprehensif untuk pemilik outlet, kasir, dan pengembang mengenai cara kerja dan penggunaan fitur:
-  - **Modul Transaksi F&B**: Manajemen meja/dine-in, pesanan take-away, split bill, tiket dapur, reservasi meja.
-  - **Modul Transaksi Retail**: Barcode scanner, multi-satuan, penjualan per berat (ons/kg) dengan kalkulasi dinamis.
-  - **Titipan Vendor Konsinyasi (Satu Pintu)**: Mekanisme bagi hasil vendor, pencatatan otomatis saat tutup shift tanpa pemotongan ganda (*double-deduction*).
-  - **Manajemen Shift Kasir**: Buka shift (modal awal), mutasi kas masuk/keluar, rekonsiliasi kas fisik vs sistem, hitung uang bersih F&B & Retail (`net_cash_fnb`, `net_cash_retail`).
-  - **Diskon & Promo Dinamis**: Diskon persentase/nominal, kupon member, banner promo landing page (yang dapat dikelola langsung oleh Agen Hermes).
-  - **WhatsApp Gateway Integrasi**: Pengiriman struk digital otomatis via Baileys port 8644, notifikasi reservasi, blast promo.
-  - **Offline-First & Auto-Sync**: Alur kerja IndexedDB saat koneksi toko terputus dan pemulihan otomatis saat kembali online.
-  - **Pengaturan & Audit Agen AI**: Antarmuka kontrol di `SettingsMCP.jsx` untuk memantau mutasi yang dilakukan oleh Hermes Agent.
-
-### Berkas 3: `dokumentasi/03-FUNGSI-SELURUH-FILE.md`
-- **Tujuan**: Penjelasan terperinci mengenai fungsi teknis setiap berkas dalam repositori:
-  - **Backend & Integrasi**:
-    - `server.ts` & `api-server.js`: Web server Express, proxy Vite, mounting endpoint `/api`.
-    - `routes/mcpServer.js`: Model Context Protocol server (11 tools, 5 resources, 4 prompts, SSE stream).
-    - `routes/agentRoutes.js`: Dedicated REST API untuk manajemen WhatsApp, cluster server, promo, dan audit log.
-  - **Frontend Core & State**:
-    - `src/contexts/OfflineContext.jsx`: IndexedDB sync queue (Aturan Emas: tidak boleh di-refactor).
-    - `src/contexts/AuthContext.jsx`: Manajemen sesi kasir & RBAC peran pengguna.
-    - `src/contexts/CartContext.jsx`: Keranjang belanja hybrid (F&B vs Retail terpisah).
-  - **Komponen Halaman UI**:
-    - `src/pages/POS.jsx`: Antarmuka kasir layar sentuh utama (katalog menu, pencarian, keypad bayar).
-    - `src/pages/SettingsMCP.jsx`: Pusat kendali Agen AI, playground tool MCP, dan audit mutasi before/after.
-    - `src/pages/LandingPage.jsx`: Etalase menu publik & banner promo interaktif.
-  - **Skrip Instalasi & Pemeliharaan**:
-    - Skrip bootstrap VPS & Pi, backup otomatis, sync Tailscale, dan perbaikan izin.
-
-### Berkas 4: `dokumentasi/04-INDEX-NAVIGASI-KODE.md`
-- **Tujuan**: Tabel lookup instan dan peta navigasi cepat:
-  - Pencarian berdasarkan fungsi bisnis (misal: "Di mana letak kode hitung diskon?", "Di mana kode cetak struk ESC/POS?", "Di mana logika bagi hasil vendor?").
-  - Menghubungkan konsep bisnis langsung ke berkas dan baris fungsi terkait.
-
-### Berkas 5: `dokumentasi/README.md`
-- **Tujuan**: Ringkasan indeks tingkat atas (*table of contents*) yang memudahkan siapa saja (manusia maupun AI) membuka panduan yang dibutuhkan.
+1. **`.planora/PRD/fitur/migrasi-backend-rust.md`**:
+   - Spesifikasi fitur teknis migrasi dengan kode kebutuhan stabil:
+     - `[RUST-FR-001]` Runtime Axum & Tokio asynchronous multi-threaded.
+     - `[RUST-FR-002]` Pemisahan port dan isolasi server frontend-backend.
+     - `[RUST-FR-003]` Perhitungan mata uang Rupiah & timbangan berat dengan fixed-point precision.
+     - `[RUST-FR-004]` Pemrosesan transaksi titipan vendor dan tutup shift satu pintu.
+     - `[RUST-FR-005]` Autentikasi JWT RS256/HS256 dengan proteksi anti brute-force.
+     - `[RUST-FR-006]` Antrean sinkronisasi offline ber-ID unik `client_ref`.
+     - `[RUST-FR-007]` Generator cetak struk ESC/POS 58mm/80mm monospace.
+     - `[RUST-FR-008]` Endpoint audit & webhook adapter untuk Hermes Agent AI.
+   - Kriteria penerimaan terukur (`[RUST-AC-001]` s/d `[RUST-AC-008]`).
+2. **`.planora/PRD/PRD.md`**:
+   - Pembaruan dokumen induk PRD yang mencatat transisi ke versi 3.0.0, arsitektur server terpisah, dan spesifikasi performa.
+3. **`.planora/DX/api-rust-ergonomics.md` & `api-ergonomics.md`**:
+   - Panduan API Rust dengan dokumentasi skema OpenAPI dan format error standar RFC 7807.
+4. **`.planora/EXECUTION/TODO.md` & Phase 03**:
+   - Buku besar tugas implementasi bertahap dari scaffolding Cargo hingga pengujian integrasi.
 
 ---
 
-## 4. Langkah Validasi & Penyelesaian
-1. Membuat seluruh berkas dalam folder `/dokumentasi/`.
-2. Menjalankan skrip pembaruan indeks berkas resmi:
-   ```bash
-   python3 project/scripts/update_file_index.py
-   ```
-   sehingga `INDEX-BERKAS.md` otomatis mencakup berkas-berkas dokumentasi baru.
-3. Menjalankan `compile_applet` untuk memverifikasi bahwa seluruh struktur aplikasi tetap lulus kompilasi tanpa kesalahan.
-4. Menyajikan ringkasan singkat yang mengarahkan pengguna ke folder `dokumentasi/`.
+## 6. Rencana Panduan Koding AI Hermes Agent
+
+Dokumen panduan baru `dokumentasi/05-PANDUAN-KODING-HERMES-AGENT.md` dan pembaruan `PANDUAN-HERMES-AGENT.md`:
+- **Aturan Modifikasi Kode (Strict Conventions)**:
+  - Larangan memodifikasi `OfflineContext.jsx` dan mengaktifkan `sw.js`.
+  - Aturan single-bundle CRACO (tanpa dynamic import) demi Sunmi Android 7.
+  - Larangan menampilkan kode teknis (`[SCR-*]`, `*-FR-*`, dll.) pada antarmuka kasir.
+  - Selalu menggunakan ikon Lucide, bukan emoji.
+  - Aturan pembulatan Rupiah dan pemisahan mutlak F&B vs Retail.
+- **Workflow Agen AI**:
+  - Langkah-langkah membaca berkas sebelum menulis (`Read-Before-Write`).
+  - Cara mengeksekusi pengujian regresi dan verifikasi build frontend/backend.
+  - Prosedur pembaruan indeks berkas secara otomatis via `python3 project/scripts/update_file_index.py`.
+- **Integrasi WhatsApp & Webhook**:
+  - Format payload webhook HMAC SHA256 untuk perintah bot `/stok`, `/laporan-shift`, `/omzet`.
+
+---
+
+## 7. Rencana Rilis Pembaruan APK v3.0.0 & Kebersihan Repositori
+
+1. **Pembaruan Nomor Versi ke 3.0.0**:
+   - `package.json`: `"version": "3.0.0"`
+   - `capacitor.config.json`: Sinkronisasi versi dan nama aplikasi.
+   - `public/ota/version.json`: Pembaruan rilis OTA v3.0.0.
+   - Penyiapan paket APK rilis `Grand-Aceh-Kuliner-POS-v3.0.0.apk`.
+2. **Pembersihan Istilah & Penulisan**:
+   - Konfirmasi hasil pencarian: Istilah "vibecoder" telah dicek dan **0 temuan** di repositori.
+   - Standarisasi penulisan nama di seluruh dokumentasi dan meta tag: **Grand Aceh Kuliner POS**.
+3. **Verifikasi Server Terpisah**:
+   - Memastikan `server.ts` dan konfigurasi dev/prod memisahkan penanganan static frontend dan backend API dengan route proxy `/api/*` yang bersih.

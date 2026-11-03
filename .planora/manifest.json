@@ -6,20 +6,20 @@
     "name": "Grand Aceh Kuliner POS",
     "locale": "id-ID"
   },
-  "generatedDate": "2026-10-13",
+  "generatedDate": "2026-11-03",
   "guideType": "hybrid",
   "status": "ready",
   "sourceVersions": {
-    "prd": "1.1",
+    "prd": "3.0",
     "uiGuide": "1.1",
-    "dxGuide": "1.0",
-    "executionPlan": "1.1"
+    "dxGuide": "2.0",
+    "executionPlan": "2.0"
   },
   "artifacts": {
     "prd": {
       "directory": "PRD",
       "entry": "PRD/README.md",
-      "sourceVersion": "1.1",
+      "sourceVersion": "3.0",
       "status": "ready"
     },
     "uiGuide": {
@@ -31,13 +31,13 @@
     "dxGuide": {
       "directory": "DX",
       "entry": "DX/README.md",
-      "sourceVersion": "1.0",
+      "sourceVersion": "2.0",
       "status": "ready"
     },
     "executionPlan": {
       "directory": "EXECUTION",
       "entry": "EXECUTION/README.md",
-      "sourceVersion": "1.1",
+      "sourceVersion": "2.0",
       "status": "ready"
     }
   },
@@ -45,6 +45,7 @@
     "manifest.json",
     "DX/README.md",
     "DX/api-ergonomics.md",
+    "DX/api-rust-ergonomics.md",
     "DX/authentication-experience.md",
     "DX/compatibility-and-versioning.md",
     "DX/documentation-standards.md",
@@ -60,6 +61,7 @@
     "EXECUTION/phases/phase-00-decisions.md",
     "EXECUTION/phases/phase-01-core-pos.md",
     "EXECUTION/phases/phase-02-backlog.md",
+    "EXECUTION/phases/phase-03-rust-migration.md",
     "EXECUTION/release-readiness.md",
     "PRD/PRD.md",
     "PRD/README.md",
@@ -68,6 +70,7 @@
     "PRD/fitur/keamanan-login.md",
     "PRD/fitur/landing-page-dan-reservasi.md",
     "PRD/fitur/manajemen-meja.md",
+    "PRD/fitur/migrasi-backend-rust.md",
     "PRD/fitur/otomasi-ai-whatsapp.md",
     "PRD/fitur/pos-kasir.md",
     "PRD/fitur/shift-kasir.md",

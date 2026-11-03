@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-10-30 07:58:45 WIB`
-> Total Berkas Terindeks: **692 berkas**
+> Terakhir diperbarui: `2026-11-03 23:32:06 WIB`
+> Total Berkas Terindeks: **683 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -17,17 +17,17 @@ python3 project/scripts/update_file_index.py
 | Kategori | Jumlah Berkas | Keterangan |
 | :--- | :---: | :--- |
 | **Cloud Run & Server Root** | `5` | Modul cloud run & server root sistem POS |
-| **Frontend — Halaman UI** | `47` | Modul frontend — halaman ui sistem POS |
-| **Frontend — Komponen UI** | `71` | Modul frontend — komponen ui sistem POS |
+| **Frontend — Halaman UI** | `48` | Modul frontend — halaman ui sistem POS |
+| **Frontend — Komponen UI** | `72` | Modul frontend — komponen ui sistem POS |
 | **Frontend — State & Context** | `2` | Modul frontend — state & context sistem POS |
 | **Frontend — Utility & Library** | `23` | Modul frontend — utility & library sistem POS |
-| **Mobile Android & Sunmi Hardware** | `52` | Modul mobile android & sunmi hardware sistem POS |
+| **Mobile Android & Sunmi Hardware** | `53` | Modul mobile android & sunmi hardware sistem POS |
 | **Integrasi Hermes Agent** | `2` | Modul integrasi hermes agent sistem POS |
-| **Planora Framework** | `48` | Modul planora framework sistem POS |
-| **Dokumentasi Teknis** | `16` | Modul dokumentasi teknis sistem POS |
-| **Deployment & DevOps** | `67` | Modul deployment & devops sistem POS |
+| **Planora Framework** | `51` | Modul planora framework sistem POS |
+| **Dokumentasi Teknis** | `17` | Modul dokumentasi teknis sistem POS |
+| **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `308` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `294` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -43,7 +43,7 @@ python3 project/scripts/update_file_index.py
 | `package.json` | Konfigurasi dependensi Node.js root server. |
 | `routes/allMissingRoutes.js` | Berkas konfigurasi/data: allMissingRoutes.js. |
 
-### 📁 Frontend — Halaman UI (47 berkas)
+### 📁 Frontend — Halaman UI (48 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -80,6 +80,7 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/src/pages/SettingsData.jsx` | Halaman antarmuka pengguna untuk modul SettingsData. |
 | `project/frontend/src/pages/SettingsInstaller.jsx` | Halaman antarmuka pengguna untuk modul SettingsInstaller. |
 | `project/frontend/src/pages/SettingsIntegrations.jsx` | Halaman antarmuka pengguna untuk modul SettingsIntegrations. |
+| `project/frontend/src/pages/SettingsLandingPage.jsx` | Halaman antarmuka pengguna untuk modul SettingsLandingPage. |
 | `project/frontend/src/pages/SettingsPlatform.jsx` | Halaman antarmuka pengguna untuk modul SettingsPlatform. |
 | `project/frontend/src/pages/SettingsReport.jsx` | Halaman antarmuka pengguna untuk modul SettingsReport. |
 | `project/frontend/src/pages/SettingsRoles.jsx` | Halaman antarmuka pengguna untuk modul SettingsRoles. |
@@ -95,7 +96,7 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/src/pages/WhatsApp.jsx` | Dasbor manajemen WhatsApp Gateway, status instance, dan riwayat pesan. |
 | `project/frontend/src/pages/WhatsAppReport.jsx` | Laporan pengiriman pesan otomatis dan log notifikasi WhatsApp. |
 
-### 📁 Frontend — Komponen UI (71 berkas)
+### 📁 Frontend — Komponen UI (72 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -104,6 +105,7 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/src/components/ForceChangePassword.jsx` | Komponen visual antarmuka pengguna: ForceChangePassword. |
 | `project/frontend/src/components/GDriveBackupManager.jsx` | Komponen visual antarmuka pengguna: GDriveBackupManager. |
 | `project/frontend/src/components/GlobalErrorDiagnosticPanel.jsx` | Komponen visual antarmuka pengguna: GlobalErrorDiagnosticPanel. |
+| `project/frontend/src/components/GoogleSearchPreview.jsx` | Komponen visual antarmuka pengguna: GoogleSearchPreview. |
 | `project/frontend/src/components/HybridSyncDiagnosticPanel.jsx` | Komponen visual antarmuka pengguna: HybridSyncDiagnosticPanel. |
 | `project/frontend/src/components/Layout.jsx` | Komponen visual antarmuka pengguna: Layout. |
 | `project/frontend/src/components/LazyProductImage.jsx` | Komponen visual antarmuka pengguna: LazyProductImage. |
@@ -206,11 +208,12 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/src/lib/utils.js` | Berkas konfigurasi/data: utils.js. |
 | `project/frontend/src/lib/versions.js` | Berkas konfigurasi/data: versions.js. |
 
-### 📁 Mobile Android & Sunmi Hardware (52 berkas)
+### 📁 Mobile Android & Sunmi Hardware (53 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
 | `apk/Grand-Aceh-Kuliner-POS-v2.10.apk` | Paket instalasi Android release untuk perangkat Sunmi T2 / tablet POS. |
+| `apk/Grand-Aceh-Kuliner-POS-v3.0.0.apk` | Berkas konfigurasi/data: Grand-Aceh-Kuliner-POS-v3.0.0.apk. |
 | `project/frontend/android/app/build.gradle` | Berkas konfigurasi/data: build.gradle. |
 | `project/frontend/android/app/capacitor.build.gradle` | Berkas konfigurasi/data: capacitor.build.gradle. |
 | `project/frontend/android/app/proguard-rules.pro` | Berkas konfigurasi/data: proguard-rules.pro. |
@@ -270,12 +273,13 @@ python3 project/scripts/update_file_index.py
 | `project/hermes-integration/grandpos-wa-inbound/__init__.py` | Plugin Hermes inbound hook pre_gateway_dispatch untuk meneruskan WA ke POS. |
 | `project/hermes-integration/grandpos-wa-inbound/plugin.yaml` | Manifes registrasi plugin Hermes grandpos-wa-inbound. |
 
-### 📁 Planora Framework (48 berkas)
+### 📁 Planora Framework (51 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
 | `.planora/DX/README.md` | Dokumen spesifikasi Planora (README.md). |
 | `.planora/DX/api-ergonomics.md` | Dokumen spesifikasi Planora (api-ergonomics.md). |
+| `.planora/DX/api-rust-ergonomics.md` | Dokumen spesifikasi Planora (api-rust-ergonomics.md). |
 | `.planora/DX/authentication-experience.md` | Dokumen spesifikasi Planora (authentication-experience.md). |
 | `.planora/DX/compatibility-and-versioning.md` | Dokumen spesifikasi Planora (compatibility-and-versioning.md). |
 | `.planora/DX/documentation-standards.md` | Dokumen spesifikasi Planora (documentation-standards.md). |
@@ -291,6 +295,7 @@ python3 project/scripts/update_file_index.py
 | `.planora/EXECUTION/phases/phase-00-decisions.md` | Dokumen spesifikasi Planora (phase-00-decisions.md). |
 | `.planora/EXECUTION/phases/phase-01-core-pos.md` | Dokumen spesifikasi Planora (phase-01-core-pos.md). |
 | `.planora/EXECUTION/phases/phase-02-backlog.md` | Dokumen spesifikasi Planora (phase-02-backlog.md). |
+| `.planora/EXECUTION/phases/phase-03-rust-migration.md` | Dokumen spesifikasi Planora (phase-03-rust-migration.md). |
 | `.planora/EXECUTION/release-readiness.md` | Dokumen spesifikasi Planora (release-readiness.md). |
 | `.planora/PRD/PRD.md` | Spesifikasi kebutuhan produk utama Grand Aceh Kuliner POS. |
 | `.planora/PRD/README.md` | Dokumen spesifikasi Planora (README.md). |
@@ -299,6 +304,7 @@ python3 project/scripts/update_file_index.py
 | `.planora/PRD/fitur/keamanan-login.md` | Dokumen spesifikasi Planora (keamanan-login.md). |
 | `.planora/PRD/fitur/landing-page-dan-reservasi.md` | Dokumen spesifikasi Planora (landing-page-dan-reservasi.md). |
 | `.planora/PRD/fitur/manajemen-meja.md` | Dokumen spesifikasi Planora (manajemen-meja.md). |
+| `.planora/PRD/fitur/migrasi-backend-rust.md` | Dokumen spesifikasi Planora (migrasi-backend-rust.md). |
 | `.planora/PRD/fitur/otomasi-ai-whatsapp.md` | Dokumen spesifikasi Planora (otomasi-ai-whatsapp.md). |
 | `.planora/PRD/fitur/pos-kasir.md` | Dokumen spesifikasi Planora (pos-kasir.md). |
 | `.planora/PRD/fitur/shift-kasir.md` | Dokumen spesifikasi Planora (shift-kasir.md). |
@@ -323,7 +329,7 @@ python3 project/scripts/update_file_index.py
 | `.planora/UI/screens/screen-inventory.md` | Dokumen spesifikasi Planora (screen-inventory.md). |
 | `.planora/manifest.json` | Manifes status dan daftar berkas paket Planora. |
 
-### 📁 Dokumentasi Teknis (16 berkas)
+### 📁 Dokumentasi Teknis (17 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -332,6 +338,7 @@ python3 project/scripts/update_file_index.py
 | `project/docs/CONTRACT-ALIGNMENT-FIX02.md` | Dokumen acuan teknis operasional: CONTRACT-ALIGNMENT-FIX02.md. |
 | `project/docs/INDEKS-DATABASE.md` | Dokumen acuan teknis operasional: INDEKS-DATABASE.md. |
 | `project/docs/INTEGRASI-NETZME.md` | Dokumen acuan teknis operasional: INTEGRASI-NETZME.md. |
+| `project/docs/LAPORAN-AUDIT-DAN-PERBAIKAN-20261101.md` | Dokumen acuan teknis operasional: LAPORAN-AUDIT-DAN-PERBAIKAN-20261101.md. |
 | `project/docs/LAPORAN-VERIFIKASI-VERIFY-01.md` | Dokumen acuan teknis operasional: LAPORAN-VERIFIKASI-VERIFY-01.md. |
 | `project/docs/PANDUAN-AKUN-CLI.md` | Dokumen acuan teknis operasional: PANDUAN-AKUN-CLI.md. |
 | `project/docs/PANDUAN-BUILD-PI.md` | Dokumen acuan teknis operasional: PANDUAN-BUILD-PI.md. |
@@ -344,7 +351,7 @@ python3 project/scripts/update_file_index.py
 | `project/docs/RANCANGAN-VOID-PESANAN.md` | Dokumen acuan teknis operasional: RANCANGAN-VOID-PESANAN.md. |
 | `project/docs/RANCANGAN-WINDOWS-UTAMA-PI-CADANGAN.md` | Dokumen acuan teknis operasional: RANCANGAN-WINDOWS-UTAMA-PI-CADANGAN.md. |
 
-### 📁 Deployment & DevOps (67 berkas)
+### 📁 Deployment & DevOps (65 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -359,8 +366,6 @@ python3 project/scripts/update_file_index.py
 | `check-integrity-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: check-integrity-pi.sh. |
 | `check-workers-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: check-workers-pi.sh. |
 | `collect-metrics-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: collect-metrics-pi.sh. |
-| `dist.bak.20261023-002949/bootstrap-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-pi.sh. |
-| `dist.bak.20261023-002949/bootstrap-vps.sh` | Skrip otomatisasi Linux/Raspberry Pi: bootstrap-vps.sh. |
 | `fix-permission-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: fix-permission-pi.sh. |
 | `install-pi.sh` | Skrip otomatisasi Linux/Raspberry Pi: install-pi.sh. |
 | `project/.emergent/cron/dispatch_webhook.sh` | Skrip otomatisasi Linux/Raspberry Pi: dispatch_webhook.sh. |
@@ -472,14 +477,14 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (308 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (294 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
-| `.env` | Berkas konfigurasi/data: .env. |
 | `.env.example` | Berkas konfigurasi/data: .env.example. |
 | `AGENTS.md` | Aturan emas agen, konvensi teknis arsitektur F&B/Retail, dan alur Planora. |
 | `CLAUDE.md` | Panduan instruksi agen berbasis Claude untuk repositori. |
+| `IDEA.md` | Berkas konfigurasi/data: IDEA.md. |
 | `INDEX-BERKAS.md` | Buku besar indeks katalog seluruh berkas dalam proyek. |
 | `PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md` | Berkas konfigurasi/data: PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md. |
 | `PANDUAN-HERMES-AGENT.md` | Panduan resmi integrasi Hermes Agent (Nous Research) untuk AI Brain & WA Gateway. |
@@ -487,38 +492,22 @@ python3 project/scripts/update_file_index.py
 | `README.md` | Berkas konfigurasi/data: README.md. |
 | `api-server.js` | Berkas konfigurasi/data: api-server.js. |
 | `capacitor.config.json` | Berkas konfigurasi/data: capacitor.config.json. |
-| `data/pos-db.json` | Berkas konfigurasi/data: pos-db.json. |
-| `dist.bak.20261023-002949/.well-known/assetlinks.json` | Berkas konfigurasi/data: assetlinks.json. |
-| `dist.bak.20261023-002949/PANDUAN_APK_SUNMI_T2.txt` | Berkas konfigurasi/data: PANDUAN_APK_SUNMI_T2.txt. |
-| `dist.bak.20261023-002949/PROMPT_AISTUDIO_SUNMI_NATIVE.txt` | Berkas konfigurasi/data: PROMPT_AISTUDIO_SUNMI_NATIVE.txt. |
-| `dist.bak.20261023-002949/SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt` | Berkas konfigurasi/data: SYSTEM_INSTRUCTION_SUNMI_NATIVE.txt. |
-| `dist.bak.20261023-002949/apple-touch-icon.png` | Berkas konfigurasi/data: apple-touch-icon.png. |
-| `dist.bak.20261023-002949/assets/index-CG8-c0E0.css` | Berkas konfigurasi/data: index-CG8-c0E0.css. |
-| `dist.bak.20261023-002949/assets/index-NwWhyWOA.js` | Berkas konfigurasi/data: index-NwWhyWOA.js. |
-| `dist.bak.20261023-002949/assets/web-D3yfarIJ.js` | Berkas konfigurasi/data: web-D3yfarIJ.js. |
-| `dist.bak.20261023-002949/icon-192.png` | Berkas konfigurasi/data: icon-192.png. |
-| `dist.bak.20261023-002949/icon-512.png` | Berkas konfigurasi/data: icon-512.png. |
-| `dist.bak.20261023-002949/icon-maskable-512.png` | Berkas konfigurasi/data: icon-maskable-512.png. |
-| `dist.bak.20261023-002949/icon.svg` | Berkas konfigurasi/data: icon.svg. |
-| `dist.bak.20261023-002949/index.html` | Berkas konfigurasi/data: index.html. |
-| `dist.bak.20261023-002949/manifest.json` | Berkas konfigurasi/data: manifest.json. |
-| `dist.bak.20261023-002949/ota/bundle.zip` | Berkas konfigurasi/data: bundle.zip. |
-| `dist.bak.20261023-002949/ota/version.json` | Berkas konfigurasi/data: version.json. |
-| `dist.bak.20261023-002949/polyfills.js` | Berkas konfigurasi/data: polyfills.js. |
-| `dist.bak.20261023-002949/screenshot-desktop.png` | Berkas konfigurasi/data: screenshot-desktop.png. |
-| `dist.bak.20261023-002949/sw.js` | Berkas konfigurasi/data: sw.js. |
 | `dokumentasi/01-PROMPT-HERMES-INSTALLER.md` | Berkas konfigurasi/data: 01-PROMPT-HERMES-INSTALLER.md. |
 | `dokumentasi/02-PANDUAN-FITUR-DAN-PENGGUNAAN.md` | Berkas konfigurasi/data: 02-PANDUAN-FITUR-DAN-PENGGUNAAN.md. |
 | `dokumentasi/03-FUNGSI-SELURUH-FILE.md` | Berkas konfigurasi/data: 03-FUNGSI-SELURUH-FILE.md. |
 | `dokumentasi/04-INDEX-NAVIGASI-KODE.md` | Berkas konfigurasi/data: 04-INDEX-NAVIGASI-KODE.md. |
+| `dokumentasi/05-PANDUAN-KODING-HERMES-AGENT.md` | Berkas konfigurasi/data: 05-PANDUAN-KODING-HERMES-AGENT.md. |
 | `dokumentasi/README.md` | Berkas konfigurasi/data: README.md. |
-| `enumerate_routes.js` | Berkas konfigurasi/data: enumerate_routes.js. |
 | `feature-requests.jsonl` | Berkas konfigurasi/data: feature-requests.jsonl. |
 | `firebase-applet-config.json` | Konfigurasi kredensial koneksi Firebase Applet. |
 | `firebase-blueprint.json` | Skema cetak biru Firestore dan konfigurasi database cloud. |
 | `firestore.rules` | Aturan keamanan Firestore Cloud Database. |
-| `lib/data/pos-db.json` | Berkas konfigurasi/data: pos-db.json. |
+| `lib/analytics-sync.js` | Berkas konfigurasi/data: analytics-sync.js. |
 | `lib/db-snapshot.js` | Berkas konfigurasi/data: db-snapshot.js. |
+| `lib/diag-orders.js` | Berkas konfigurasi/data: diag-orders.js. |
+| `lib/e2e-sync-test.js` | Berkas konfigurasi/data: e2e-sync-test.js. |
+| `lib/seed-products.js` | Berkas konfigurasi/data: seed-products.js. |
+| `lib/sync-to-analytics.js` | Berkas konfigurasi/data: sync-to-analytics.js. |
 | `postcss.config.js` | Berkas konfigurasi/data: postcss.config.js. |
 | `project/.emergent/cron/applied.hash` | Berkas konfigurasi/data: applied.hash. |
 | `project/.emergent/cron/webhook-crons` | Berkas konfigurasi/data: webhook-crons. |
@@ -577,12 +566,14 @@ python3 project/scripts/update_file_index.py
 | `project/frontend/scripts/make-ota.js` | Berkas konfigurasi/data: make-ota.js. |
 | `project/frontend/src/App.css` | Berkas konfigurasi/data: App.css. |
 | `project/frontend/src/App.js` | Komponen root routing aplikasi React 19. |
+| `project/frontend/src/config/landing-page.config.js` | Berkas konfigurasi/data: landing-page.config.js. |
 | `project/frontend/src/constants/testIds/auth.js` | Berkas konfigurasi/data: auth.js. |
 | `project/frontend/src/constants/testIds/home.js` | Berkas konfigurasi/data: home.js. |
 | `project/frontend/src/constants/testIds/index.js` | Berkas konfigurasi/data: index.js. |
 | `project/frontend/src/hooks/use-toast.js` | Berkas konfigurasi/data: use-toast.js. |
 | `project/frontend/src/index.css` | Berkas konfigurasi/data: index.css. |
 | `project/frontend/src/index.js` | Titik masuk render React DOM dengan polyfills. |
+| `project/frontend/src/services/landingService.js` | Berkas konfigurasi/data: landingService.js. |
 | `project/frontend/tailwind.config.js` | Berkas konfigurasi/data: tailwind.config.js. |
 | `project/memory/.gitkeep` | Berkas konfigurasi/data: .gitkeep. |
 | `project/memory/PRD.md` | Berkas konfigurasi/data: PRD.md. |
@@ -606,7 +597,6 @@ python3 project/scripts/update_file_index.py
 | `public/icon-512.png` | Berkas konfigurasi/data: icon-512.png. |
 | `public/icon-maskable-512.png` | Berkas konfigurasi/data: icon-maskable-512.png. |
 | `public/icon.svg` | Berkas konfigurasi/data: icon.svg. |
-| `public/index.html` | Berkas konfigurasi/data: index.html. |
 | `public/manifest.json` | Berkas konfigurasi/data: manifest.json. |
 | `public/ota/bundle.zip` | Berkas konfigurasi/data: bundle.zip. |
 | `public/ota/version.json` | Berkas konfigurasi/data: version.json. |
@@ -782,6 +772,7 @@ python3 project/scripts/update_file_index.py
 | `tests/fix01-regression.js` | Berkas konfigurasi/data: fix01-regression.js. |
 | `tests/fix02-contract.js` | Berkas konfigurasi/data: fix02-contract.js. |
 | `tests/fix02-negative-control.js` | Berkas konfigurasi/data: fix02-negative-control.js. |
+| `tests/fix05-server-authority.js` | Berkas konfigurasi/data: fix05-server-authority.js. |
 | `tsconfig.json` | Berkas konfigurasi/data: tsconfig.json. |
 | `vite.config.mjs` | Berkas konfigurasi/data: vite.config.mjs. |
 

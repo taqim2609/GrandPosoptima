@@ -195,10 +195,14 @@ export function installDiag() {
 
   window.addEventListener("error", (e) => {
     const errorObj = e.error || {};
+    const msg = e.message || String(e.error || "");
+    if (!msg || /WebSocket|closed without opened|HMR|vite|ws:|wss:|ResizeObserver|AbortError/i.test(msg)) {
+      return;
+    }
     push({
       t: new Date().toISOString(),
       type: "runtime_error",
-      msg: e.message || String(e.error || "Unknown uncaught error"),
+      msg,
       stack: errorObj.stack || "",
       file: e.filename || "",
       line: e.lineno || 0,

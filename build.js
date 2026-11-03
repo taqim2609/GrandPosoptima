@@ -190,8 +190,9 @@ if (cssFile && !cssFile.startsWith('/')) cssFile = '/' + cssFile;
 if (jsFile.startsWith('.')) jsFile = jsFile.slice(1);
 if (jsFile && !jsFile.startsWith('/')) jsFile = '/' + jsFile;
 
-// Clean up %PUBLIC_URL%
+// Clean up %PUBLIC_URL% and any stale CSS hashes
 htmlContent = htmlContent.replace(/%PUBLIC_URL%\/?/g, '/');
+htmlContent = htmlContent.replace(/<link rel="stylesheet" crossorigin href="\/assets\/index-CG8-c0E0\.css">\s*/g, '');
 
 // Inject CSS into <head> (only if not already bundled by Vite)
 if (!isViteBuilt && cssFile && !htmlContent.includes(cssFile)) {

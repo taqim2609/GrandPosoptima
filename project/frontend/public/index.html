@@ -50,77 +50,12 @@
         to { transform: rotate(360deg); }
       }
     </style>
-    <!-- Overlay error: kalau ada error saat app dimuat (mis. WebView terlalu tua),
-         tampilkan pesan di layar + tombol Salin & Kirim ke Google AI Studio (tanpa React).
-         ES5 murni (var/function/XMLHttpRequest) supaya jalan di WebView paling tua. -->
     <script>
       (function () {
-        var lastError = "";
-        function escHtml(s) {
-          return String(s || "").replace(/[&<>"']/g, function (c) {
-            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-          });
-        }
-        function setStatus(t) {
-          var s = document.getElementById("gak-err-status");
-          if (s) s.textContent = " " + t;
-        }
-        function copyText(t) {
-          try {
-            var ta = document.createElement("textarea");
-            ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
-            document.body.appendChild(ta); ta.select();
-            document.execCommand("copy");
-            document.body.removeChild(ta);
-          } catch (e) {}
-        }
-        function sendError() {
-          setStatus("Mengirim...");
-          var report = "=== ERROR OVERLAY Grand Aceh Kuliner POS ===\n"
-            + "Waktu: " + new Date().toLocaleString("id-ID") + "\n"
-            + "Pesan: " + lastError + "\n"
-            + "URL: " + window.location.href + "\n"
-            + "UA: " + navigator.userAgent;
-          var body = JSON.stringify({ ts: new Date().toISOString(), report: report });
-          var xhr = new XMLHttpRequest();
-          xhr.open("POST", (window.location && window.location.origin ? window.location.origin : "") + "/api/rpt", true);
-          xhr.setRequestHeader("Content-Type", "application/json");
-          xhr.setRequestHeader("X-Gak-Token", "gak_rpt_7f3c9e1b");
-          xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4) {
-              if (xhr.status === 200) setStatus("Terkirim ✓");
-              else setStatus("Gagal (HTTP " + xhr.status + ")");
-            }
-          };
-          xhr.onerror = function () { setStatus("Gagal (jaringan)"); };
-          xhr.send(body);
-        }
-        function show(msg, extra) {
-          lastError = msg + (extra ? "\n" + extra : "");
-          var d = document.getElementById("gak-error-overlay");
-          if (!d) {
-            d = document.createElement("div");
-            d.id = "gak-error-overlay";
-            d.style.cssText = "position:fixed;inset:0;z-index:99999;background:#FEF2F2;color:#B91C1C;font:14px/1.5 system-ui,sans-serif;padding:24px;overflow:auto;white-space:pre-wrap";
-            document.body.appendChild(d);
-          }
-          var btn = "padding:10px 16px;border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-right:8px";
-          d.innerHTML = "<div style='font-size:18px;font-weight:700;margin-bottom:10px'>Terjadi kesalahan saat memuat aplikasi</div>"
-            + "<div style='margin-bottom:14px'>" + escHtml(lastError) + "</div>"
-            + "<button id='gak-err-copy' style='" + btn + "background:#fff;color:#B91C1C;border:1px solid #B91C1C'>Salin Pesan</button>"
-            + "<button id='gak-err-send' style='" + btn + "background:#4F46E5;color:#fff'>Kirim ke Google AI Studio</button>"
-            + "<span id='gak-err-status' style='font-size:13px'></span>";
-          var copyBtn = document.getElementById("gak-err-copy");
-          if (copyBtn) copyBtn.onclick = function () {
-            copyText(lastError + "\n\nUA: " + navigator.userAgent + "\nURL: " + window.location.href);
-            setStatus("Disalin ✓ (tempel ke chat)");
-          };
-          var sendBtn = document.getElementById("gak-err-send");
-          if (sendBtn) sendBtn.onclick = sendError;
-        }
+        // Chunk reload recovery & graceful error logging (tanpa blocking UI overlay)
         window.addEventListener("error", function (e) {
           var msg = (e && e.message) || "";
-          if (!msg || /WebSocket|closed without opened|HMR|vite|ws:|wss:/i.test(msg)) {
+          if (!msg || /WebSocket|closed without opened|HMR|vite|ws:|wss:|ResizeObserver/i.test(msg)) {
             return;
           }
           if (/ChunkLoadError|Loading chunk/i.test(msg)) {
@@ -130,7 +65,7 @@
               return;
             }
           }
-          show(msg || "Unknown error", (e && e.filename) ? (e.filename + ":" + e.lineno) : "");
+          console.warn("[GAK Error Event]:", msg, (e && e.filename) ? (e.filename + ":" + e.lineno) : "");
         });
         window.addEventListener("unhandledrejection", function (e) {
           var r = e && e.reason; var m = "";
@@ -138,11 +73,10 @@
             if (typeof r === "string") {
               m = r;
             } else if (r && typeof r === "object") {
-              m = r.message || r.reason || r.type || String(r);
-            } else {
-              m = String(r);
+              m = r.message || r.reason || r.type || "";
             }
           } catch (x) {}
+          if (!m || m === "Error") return;
           if (/ChunkLoadError|Loading chunk/i.test(m)) {
             if (!sessionStorage.getItem("gak_chunk_reloaded")) {
               sessionStorage.setItem("gak_chunk_reloaded", "1");
@@ -150,12 +84,10 @@
               return;
             }
           }
-          // Kegagalan HTTP/jaringan & WebSocket (HMR disabled / sandbox) JANGAN
-          // menampilkan overlay penuh — halaman tetap bisa dipakai & request lain jalan.
-          if (!m || /Request failed with status code|Network Error|timeout of|Failed to fetch|Load failed|ERR_|WebSocket|closed without opened|ws:|wss:|vite|HMR|CloseEvent|Event|DOMException/i.test(m)) {
+          if (/Request failed|Network Error|timeout|Failed to fetch|Load failed|WebSocket|closed without opened|ws:|wss:|vite|HMR|CloseEvent|AbortError/i.test(m)) {
             return;
           }
-          show("Promise rejected: " + m, "");
+          console.warn("[GAK Unhandled Rejection]:", m);
         });
       })();
     </script>

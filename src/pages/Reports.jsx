@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { apiError } from "@/lib/api";
+import api, { apiError, getServerUrl } from "@/lib/api";
 import { rupiah, wibToday } from "@/lib/format";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { FileSpreadsheet, Loader2, Utensils, Coffee, Store, Handshake, HandCoins, FileDown, FileText, Send, TrendingUp, ChevronDown, ChevronRight } from "lucide-react";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
 function weekRange(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
@@ -87,8 +85,9 @@ export default function Reports() {
   const download = async (path, filename) => {
     const t = localStorage.getItem("gak_token");
     try {
-      const res = await fetch(`${BACKEND}/api${path}?start=${start}&end=${end}`, { headers: { Authorization: `Bearer ${t}` } });
-      if (!res.ok) throw new Error();
+      const base = getServerUrl();
+      const res = await fetch(`${base}/api${path}?start=${start}&end=${end}`, { headers: { Authorization: `Bearer ${t}` } });
+      if (!res.ok) throw new Error("Gagal mengunduh file dari server");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);

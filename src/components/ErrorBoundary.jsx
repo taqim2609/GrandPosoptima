@@ -55,7 +55,7 @@ export default class ErrorBoundary extends Component {
               : "Sisa aplikasi tetap bisa dipakai (kolom dan halaman lain tidak terpengaruh). Laporan error telah otomatis dicatat di panel diagnostik lokal."}
           </p>
           <pre className="mt-3 rounded-xl bg-white border border-amber-200/80 p-3 text-[11px] overflow-x-auto whitespace-pre-wrap font-mono text-amber-950">
-            {String(this.state.err?.message || this.state.err)}
+            {this.state.err?.message || this.state.err?.stack || "Komponen sementara tidak dapat dimuat"}
           </pre>
           <div className="flex items-center gap-2.5 mt-4 flex-wrap">
             <button

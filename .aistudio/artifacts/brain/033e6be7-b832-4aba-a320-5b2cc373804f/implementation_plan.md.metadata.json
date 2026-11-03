@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi paket dokumentasi komprehensif di folder `dokumentasi/` dan prompt instalasi terpadu untuk Agen AI Hermes (Server Gudang 644 & GrandPOS Raspberry Pi), dilengkapi penjelasan arsitektur eksisting, panduan seluruh fitur, fungsi tiap file, dan indeks navigasi kode.",
-  "updatedAt":  "2026-10-21T16:43:59.418202538Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Rencana implementasi revisi mencakup migrasi backend ke Rust (Axum/Tokio), pemisahan server frontend dan backend yang terisolasi, penyusunan paket PRD Planora baru, panduan komprehensif untuk Hermes Agent AI dalam memodifikasi kode Grand Aceh Kuliner POS, rilis pembaruan APK v3.0.0, audit pembersihan term vibecoder (0 temuan), dan konsistensi penulisan nama sistem.",
+  "updatedAt": "2026-11-03T15:56:34.698229322Z",
+  "requestFeedback": true,
+  "userFacing": true
 }

@@ -55,7 +55,9 @@ function RootRoute() {
   const hostname = typeof window !== "undefined" ? window.location.hostname : "";
   const search = typeof window !== "undefined" ? window.location.search : "";
   const isExplicitDisabled = typeof localStorage !== "undefined" && (localStorage.getItem("gak_disable_landing_page") === "true" || localStorage.getItem("gak_pos_mode") === "true");
-  const isEnvDisabled = process.env.REACT_APP_DISABLE_LANDING_PAGE === "true";
+  const isEnvDisabled =
+    (typeof process !== "undefined" && process?.env?.REACT_APP_DISABLE_LANDING_PAGE === "true") ||
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_DISABLE_LANDING_PAGE === "true");
   const isQueryPos = search.includes("pos=1") || search.includes("direct=1");
 
   if (isQueryPos && typeof localStorage !== "undefined") {
@@ -113,11 +115,11 @@ function App() {
     // Branding platform (nama/logo/warna tema) tanpa perlu deploy.
     loadPlatform().catch(() => {});
     // ota.autocheck bisa dimatikan dari Pengaturan → Fitur & Integrasi.
-    if (feat("ota.autocheck")) checkOtaUpdate();
+    if (feat("ota.autocheck")) checkOtaUpdate().catch(() => {});
     installDiag();
     // Cek ulang OTA setiap kali app kembali aktif (Android: kembali dari background),
     // supaya update terpasang tanpa perlu restart penuh.
-    const onVis = () => { if (document.visibilityState === "visible" && feat("ota.autocheck")) checkOtaUpdate(); };
+    const onVis = () => { if (document.visibilityState === "visible" && feat("ota.autocheck")) checkOtaUpdate().catch(() => {}); };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
@@ -127,48 +129,50 @@ function App() {
         <OfflineProvider>
           <Toaster position="top-center" richColors />
           <OtaIndicator />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/pos" element={wrap(<POS />, ["admin", "kasir"], "pos")} />
-              <Route path="/shift" element={wrap(<Shift />, ["admin", "kasir"], "shift")} />
-              <Route path="/cash" element={wrap(<Cash />, ["admin", "kasir"], "pengeluaran")} />
-              <Route path="/dashboard" element={wrap(<Dashboard />, ["admin", "kasir", "input"], "dashboard")} />
-              <Route path="/products" element={wrap(<Products />, ["admin", "input"], "produk")} />
-              <Route path="/inventory" element={wrap(<Inventory />, ["admin", "input"], "produk")} />
-              <Route path="/categories" element={wrap(<Categories />, ["admin", "input"], "produk")} />
-              <Route path="/catalog" element={wrap(<Catalog />, ["admin", "input"], "produk")} />
-              <Route path="/ingredients" element={wrap(<Ingredients />, ["admin", "input"], ["produk", "belanja_bahan", "opname_bahan"])} />
-              <Route path="/laporan" element={wrap(<Reports />, ["admin", "kasir"], "laporan")} />
-              <Route path="/members" element={wrap(<Members />, ["admin"], "member")} />
-              <Route path="/promos" element={<Navigate to="/promo-kupon" replace />} />
-              <Route path="/promo-kupon" element={wrap(<PromosCoupons />, ["admin"], "promo")} />
-              <Route path="/reservations" element={wrap(<Reservations />, ["admin", "kasir"], "reservasi")} />
-              <Route path="/settlement" element={wrap(<VendorSettlement />, ["admin", "kasir"], "settlement")} />
-              <Route path="/recipes" element={<Navigate to="/catalog?tab=resep" replace />} />
-              <Route path="/coupons" element={<Navigate to="/promo-kupon?tab=kupon" replace />} />
-              <Route path="/tanya-ai" element={<Navigate to="/asisten-ai" replace />} />
-              <Route path="/asisten-ai" element={wrap(<AssistantAI />, ["admin", "kasir"], "ai")} />
-              <Route path="/tables" element={wrap(<Tables />, ["admin"], "meja")} />
-              <Route path="/orders" element={wrap(<Orders />, ["admin"], "transaksi")} />
-              <Route path="/void" element={wrap(<VoidRefund />, ["admin", "kasir"], "void")} />
-              <Route path="/users" element={wrap(<UsersPage />, ["admin"], "pengguna")} />
-              <Route path="/settings-ai" element={wrap(<SettingsAI />, ["admin"], "pengaturan")} />
-              <Route path="/settings-data" element={wrap(<SettingsData />, ["admin"], "pengaturan")} />
-              <Route path="/settings-mcp" element={<Navigate to="/settings?tab=mcp" replace />} />
-              <Route path="/mcp" element={<Navigate to="/settings?tab=mcp" replace />} />
-              <Route path="/settings" element={wrap(<Settings />, ["admin", "superadmin", "kasir"])} />
-              <Route path="/whatsapp" element={wrap(<WhatsApp />, ["admin"], "whatsapp")} />
-              <Route path="/device" element={wrap(<DeviceSettings />)} />
-              <Route path="/articles" element={wrap(<ArticlesAdmin />, ["admin", "input"], "produk")} />
-              <Route path="/menu" element={<LandingPage defaultSection="menu" />} />
-              <Route path="/cerita" element={<LandingPage defaultSection="cerita" />} />
-              <Route path="/reservasi" element={<LandingPage defaultSection="reservasi" />} />
-              <Route path="/landing" element={<LandingPage />} />
-              <Route path="/" element={<RootRoute />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </BrowserRouter>
+          <ErrorBoundary>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<ErrorBoundary><Login /></ErrorBoundary>} />
+                <Route path="/pos" element={wrap(<POS />, ["admin", "kasir"], "pos")} />
+                <Route path="/shift" element={wrap(<Shift />, ["admin", "kasir"], "shift")} />
+                <Route path="/cash" element={wrap(<Cash />, ["admin", "kasir"], "pengeluaran")} />
+                <Route path="/dashboard" element={wrap(<Dashboard />, ["admin", "kasir", "input"], "dashboard")} />
+                <Route path="/products" element={wrap(<Products />, ["admin", "input"], "produk")} />
+                <Route path="/inventory" element={wrap(<Inventory />, ["admin", "input"], "produk")} />
+                <Route path="/categories" element={wrap(<Categories />, ["admin", "input"], "produk")} />
+                <Route path="/catalog" element={wrap(<Catalog />, ["admin", "input"], "produk")} />
+                <Route path="/ingredients" element={wrap(<Ingredients />, ["admin", "input"], ["produk", "belanja_bahan", "opname_bahan"])} />
+                <Route path="/laporan" element={wrap(<Reports />, ["admin", "kasir"], "laporan")} />
+                <Route path="/members" element={wrap(<Members />, ["admin"], "member")} />
+                <Route path="/promos" element={<Navigate to="/promo-kupon" replace />} />
+                <Route path="/promo-kupon" element={wrap(<PromosCoupons />, ["admin"], "promo")} />
+                <Route path="/reservations" element={wrap(<Reservations />, ["admin", "kasir"], "reservasi")} />
+                <Route path="/settlement" element={wrap(<VendorSettlement />, ["admin", "kasir"], "settlement")} />
+                <Route path="/recipes" element={<Navigate to="/catalog?tab=resep" replace />} />
+                <Route path="/coupons" element={<Navigate to="/promo-kupon?tab=kupon" replace />} />
+                <Route path="/tanya-ai" element={<Navigate to="/asisten-ai" replace />} />
+                <Route path="/asisten-ai" element={wrap(<AssistantAI />, ["admin", "kasir"], "ai")} />
+                <Route path="/tables" element={wrap(<Tables />, ["admin"], "meja")} />
+                <Route path="/orders" element={wrap(<Orders />, ["admin"], "transaksi")} />
+                <Route path="/void" element={wrap(<VoidRefund />, ["admin", "kasir"], "void")} />
+                <Route path="/users" element={wrap(<UsersPage />, ["admin"], "pengguna")} />
+                <Route path="/settings-ai" element={wrap(<SettingsAI />, ["admin"], "pengaturan")} />
+                <Route path="/settings-data" element={wrap(<SettingsData />, ["admin"], "pengaturan")} />
+                <Route path="/settings-mcp" element={<Navigate to="/settings?tab=mcp" replace />} />
+                <Route path="/mcp" element={<Navigate to="/settings?tab=mcp" replace />} />
+                <Route path="/settings" element={wrap(<Settings />, ["admin", "superadmin", "kasir"])} />
+                <Route path="/whatsapp" element={wrap(<WhatsApp />, ["admin"], "whatsapp")} />
+                <Route path="/device" element={wrap(<DeviceSettings />)} />
+                <Route path="/articles" element={wrap(<ArticlesAdmin />, ["admin", "input"], "produk")} />
+                <Route path="/menu" element={<ErrorBoundary><LandingPage defaultSection="menu" /></ErrorBoundary>} />
+                <Route path="/cerita" element={<ErrorBoundary><LandingPage defaultSection="cerita" /></ErrorBoundary>} />
+                <Route path="/reservasi" element={<ErrorBoundary><LandingPage defaultSection="reservasi" /></ErrorBoundary>} />
+                <Route path="/landing" element={<ErrorBoundary><LandingPage /></ErrorBoundary>} />
+                <Route path="/" element={<ErrorBoundary><RootRoute /></ErrorBoundary>} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </ErrorBoundary>
         </OfflineProvider>
       </AuthProvider>
     </div>

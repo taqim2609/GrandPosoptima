@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [
     react(),
   ],
+  define: {
+    'process.env': {},
+    global: 'window',
+  },
   resolve: {
     alias: {
       '@': path.resolve(process.cwd(), './src'),

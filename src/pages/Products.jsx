@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import api, { apiError } from "@/lib/api";
+import api, { apiError, getServerUrl } from "@/lib/api";
 import { rupiah, TYPE_LABEL } from "@/lib/format";
 import { toast } from "sonner";
 import {
@@ -12,7 +12,6 @@ import LazyProductImage from "@/components/LazyProductImage";
 import QuickStockManager from "@/components/QuickStockManager";
 
 const empty = { name: "", sku: "", category_id: "", type: "makanan", price: 0, cost: 0, vendor_id: "", vendor_share_percent: 0, description: "", image: "", active: true, sold_out: false, stock: 0, min_stock: 10, weight_sale: false, weight_unit: "ons" };
-const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
 export default function Products() {
   const [items, setItems] = useState([]);
@@ -102,11 +101,17 @@ export default function Products() {
   };
 
   const download = async (path, filename) => {
-    const t = localStorage.getItem("gak_token");
-    const res = await fetch(`${BACKEND}/api${path}`, { headers: { Authorization: `Bearer ${t}` } });
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+    try {
+      const t = localStorage.getItem("gak_token");
+      const base = getServerUrl();
+      const res = await fetch(`${base}/api${path}`, { headers: { Authorization: `Bearer ${t}` } });
+      if (!res.ok) throw new Error("Gagal mengunduh file dari server");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Gagal mengunduh file");
+    }
   };
 
   const q = search.trim().toLowerCase();

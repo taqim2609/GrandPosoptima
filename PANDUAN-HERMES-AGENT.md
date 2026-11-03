@@ -197,10 +197,17 @@ Untuk memverifikasi bahwa integrasi berjalan sempurna:
    - Status kartu menampilkan **Hermes Gateway (Baileys)**.
    - Indikator bridge & antrean outbox terpantau aktif tanpa error.
 2. Jalankan uji otomatis di terminal repo:
-   ```bash
-   python3 project/tests/test_hermes_bridge.py           # 22/22 lulus
-   python3 project/tests/test_wa_provider_migration.py   # 3/3 lulus
-   python3 project/tests/test_hermes_plugin_inbound.py   # 8/8 lulus
-   python3 project/tests/test_hermes_wa_e2e.py           # 5/5 lulus
-   ```
    *Total 38/38 pengujian otomatis terverifikasi lulus 100%.*
+
+---
+
+## 7. Panduan Koding & Pemeliharaan untuk Hermes Agent AI
+
+Untuk agen AI yang bertugas memodifikasi, mendebug, atau menambahkan fitur pada repositori ini:
+- Panduan koding lengkap tersedia di: [`dokumentasi/05-PANDUAN-KODING-HERMES-AGENT.md`](./dokumentasi/05-PANDUAN-KODING-HERMES-AGENT.md).
+- Patuhi seluruh **Golden Rules**: dilarang refactor `OfflineContext.jsx`, jangan aktifkan `sw.js`, jangan bocorkan kode teknis ke UI, dan pisahkan transaksi F&B vs Retail.
+- Setiap kali menambahkan berkas baru, selalu jalankan:
+  ```bash
+  python3 project/scripts/update_file_index.py
+  ```
+

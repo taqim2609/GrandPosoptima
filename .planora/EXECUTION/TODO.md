@@ -74,3 +74,40 @@ Buku besar pelacakan implementasi sistem.
   - Dependencies: TASK-001
   - Validation: Uji akses publik rute utama, filter menu, baca artikel, dan submit booking meja terhubung ke POS & WhatsApp
   - Evidence: LandingPage.jsx aktif di rute publik /, menu terbitan & artikel /api/public/* terverifikasi, formulir booking terhubung ke database reservasi POS dan WhatsApp, panel /articles aktif di admin
+
+- [ ] `TASK-009` — Scaffolding Cargo Workspace & Arsitektur Dual Server Terisolasi
+  - Status: `ready`
+  - Workflow: `chore`
+  - Phase: 03
+  - Requirements: RUST-FR-001, RUST-FR-002
+  - Dependencies: TASK-001
+  - Validation: Eksekusi backend Rust di port 8000 dan frontend di port 3000 dengan reverse proxy terpisah
+  - Evidence: Konfigurasi routing terisolasi dan spesifikasi DTO Serde selesai
+
+- [ ] `TASK-010` — Mesin Kalkulasi Keuangan Decimal & Tipe Pemisahan F&B/Retail
+  - Status: `pending`
+  - Workflow: `feature`
+  - Phase: 03
+  - Requirements: RUST-FR-003, RUST-FR-004
+  - Dependencies: TASK-009
+  - Validation: Uji unit test Rust untuk fixed-point decimal Rupiah dan isolasi tipe order
+  - Evidence: Menunggu implementasi domain logic Rust
+
+- [ ] `TASK-011` — Settlement Vendor Atomik & Sinkronisasi Idempoten Offline
+  - Status: `pending`
+  - Workflow: `feature`
+  - Phase: 03
+  - Requirements: RUST-FR-005, RUST-FR-006
+  - Dependencies: TASK-010
+  - Validation: Uji penutupan shift kasir dan batch sync pesanan offline ber-ID klien unik
+  - Evidence: Menunggu handler transaksi database
+
+- [ ] `TASK-012` — Integrasi Webhook Dua Arah Hermes Agent AI & Hardware Sunmi ESC/POS
+  - Status: `pending`
+  - Workflow: `feature`
+  - Phase: 03
+  - Requirements: RUST-FR-007, RUST-FR-008
+  - Dependencies: TASK-010
+  - Validation: Uji verifikasi signature HMAC SHA256 pada webhook dan byte stream ESC/POS
+  - Evidence: Menunggu modul webhook dan printer adapter
+
