@@ -3475,13 +3475,13 @@ app.get(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) =
   });
 });
 
-app.put(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) => {
+app.put(['/api/whatsapp/config', '/whatsapp/config', '/api/settings/whatsapp', '/settings/whatsapp'], requireAdmin, (req, res) => {
   db.settings.wa = { ...(db.settings.wa || {}), ...(req.body || {}) };
   console.info('[WA Config] Updated by admin:', req.user?.username);
   res.json({ ok: true, wa: db.settings.wa, message: 'Pengaturan WhatsApp berhasil disimpan' });
 });
 
-app.post(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) => {
+app.post(['/api/whatsapp/config', '/whatsapp/config', '/api/settings/whatsapp', '/settings/whatsapp'], requireAdmin, (req, res) => {
   db.settings.wa = { ...(db.settings.wa || {}), ...(req.body || {}) };
   console.info('[WA Config] Saved via POST by admin:', req.user?.username);
   res.json({ ok: true, wa: db.settings.wa, message: 'Pengaturan WhatsApp berhasil disimpan' });

@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-11-03 23:32:06 WIB`
-> Total Berkas Terindeks: **683 berkas**
+> Terakhir diperbarui: `2026-11-04 00:39:38 WIB`
+> Total Berkas Terindeks: **684 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -27,7 +27,7 @@ python3 project/scripts/update_file_index.py
 | **Dokumentasi Teknis** | `17` | Modul dokumentasi teknis sistem POS |
 | **Deployment & DevOps** | `65` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `294` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `295` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -477,7 +477,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (294 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (295 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -492,6 +492,7 @@ python3 project/scripts/update_file_index.py
 | `README.md` | Berkas konfigurasi/data: README.md. |
 | `api-server.js` | Berkas konfigurasi/data: api-server.js. |
 | `capacitor.config.json` | Berkas konfigurasi/data: capacitor.config.json. |
+| `data/pos-db.json` | Berkas konfigurasi/data: pos-db.json. |
 | `dokumentasi/01-PROMPT-HERMES-INSTALLER.md` | Berkas konfigurasi/data: 01-PROMPT-HERMES-INSTALLER.md. |
 | `dokumentasi/02-PANDUAN-FITUR-DAN-PENGGUNAAN.md` | Berkas konfigurasi/data: 02-PANDUAN-FITUR-DAN-PENGGUNAAN.md. |
 | `dokumentasi/03-FUNGSI-SELURUH-FILE.md` | Berkas konfigurasi/data: 03-FUNGSI-SELURUH-FILE.md. |

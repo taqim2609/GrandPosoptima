@@ -243,68 +243,68 @@ export default function LandingPage({ defaultSection = "hero" }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans selection:bg-amber-100 selection:text-amber-900">
+    <div className="min-h-screen bg-[#FAF9F6] text-stone-900 font-sans selection:bg-amber-100 selection:text-amber-900">
       {/* ==============================================================
           1. TOP BAR CONTRACT (Strict 3-zone layout)
-          [Brand Wordmark] — [Nav Links] — [Primary Action: Masuk POS]
+          [Brand Wordmark] — [Nav Links] — [Primary Action: Reservasi]
       ============================================================== */}
-      <header className="sticky top-0 z-40 bg-[#FAF8F5]/95 backdrop-blur-md border-b border-stone-200/80 transition-all">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-stone-200/70 transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between gap-8">
           {/* Zone 1: Single text element wordmark */}
           <button
             onClick={() => scrollTo("hero")}
-            className="flex items-center gap-2 text-xl font-bold tracking-tight text-stone-950 hover:text-amber-800 transition-colors whitespace-nowrap shrink-0"
+            className="flex items-center gap-2.5 text-lg font-extrabold tracking-tight text-stone-950 hover:text-amber-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-lg bg-amber-800 text-amber-50 flex items-center justify-center font-bold text-sm shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-800 to-stone-950 text-amber-100 flex items-center justify-center font-bold text-xs shadow-xs ring-1 ring-amber-700/30">
               GA
             </div>
             <span>Grand Aceh Kuliner</span>
           </button>
 
           {/* Zone 2: Clean single-line text navigation links */}
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-stone-600">
+          <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-stone-600">
             <button
               onClick={() => scrollTo("menu")}
-              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 ${
-                activeSection === "menu" ? "text-amber-800 font-semibold" : ""
+              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeSection === "menu" ? "text-amber-800 font-bold" : ""
               }`}
             >
               Menu Pilihan
             </button>
             <button
               onClick={() => scrollTo("cerita")}
-              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 ${
-                activeSection === "cerita" ? "text-amber-800 font-semibold" : ""
+              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeSection === "cerita" ? "text-amber-800 font-bold" : ""
               }`}
             >
               Cerita Rempah
             </button>
             <button
               onClick={() => scrollTo("reservasi")}
-              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 ${
-                activeSection === "reservasi" ? "text-amber-800 font-semibold" : ""
+              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeSection === "reservasi" ? "text-amber-800 font-bold" : ""
               }`}
             >
               Reservasi Meja
             </button>
             <button
               onClick={() => scrollTo("lokasi")}
-              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 ${
-                activeSection === "lokasi" ? "text-amber-800 font-semibold" : ""
+              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeSection === "lokasi" ? "text-amber-800 font-bold" : ""
               }`}
             >
               Lokasi & Jam
             </button>
           </nav>
 
-          {/* Zone 3: 1 primary action & Mobile Menu Toggle */}
+          {/* Zone 3: CTA Reservasi Meja & Mobile Menu Toggle */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
-              onClick={() => navigate("/login")}
-              className="px-3 sm:px-4 py-2 text-xs font-semibold text-white bg-amber-800 rounded-lg hover:bg-amber-900 active:scale-95 transition-all shadow-sm whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer"
+              onClick={() => scrollTo("reservasi")}
+              className="px-4 py-2 text-xs font-semibold text-amber-200 bg-stone-950 hover:bg-stone-900 active:scale-95 transition-all shadow-sm rounded-xl whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer border border-stone-800"
             >
-              <span>Masuk POS</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <CalendarCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span>Reservasi Meja</span>
             </button>
             <button
               type="button"
@@ -319,11 +319,11 @@ export default function LandingPage({ defaultSection = "hero" }) {
 
         {/* Mobile Navigation Drawer Dropdown */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-stone-200/80 bg-[#FAF8F5] px-4 py-3 space-y-1 animate-in slide-in-from-top-2 duration-200 shadow-lg">
+          <div className="md:hidden border-t border-stone-200/80 bg-white/95 backdrop-blur-md px-4 py-3 space-y-1 animate-in slide-in-from-top-2 duration-200 shadow-lg">
             <button
               onClick={() => { scrollTo("menu"); setMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-colors cursor-pointer ${
-                activeSection === "menu" ? "bg-amber-800 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
+                activeSection === "menu" ? "bg-stone-950 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
               }`}
             >
               <UtensilsCrossed className="w-4 h-4 text-amber-500" />
@@ -332,7 +332,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
             <button
               onClick={() => { scrollTo("cerita"); setMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-colors cursor-pointer ${
-                activeSection === "cerita" ? "bg-amber-800 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
+                activeSection === "cerita" ? "bg-stone-950 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
               }`}
             >
               <BookOpen className="w-4 h-4 text-amber-500" />
@@ -341,7 +341,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
             <button
               onClick={() => { scrollTo("reservasi"); setMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-colors cursor-pointer ${
-                activeSection === "reservasi" ? "bg-amber-800 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
+                activeSection === "reservasi" ? "bg-stone-950 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
               }`}
             >
               <CalendarCheck className="w-4 h-4 text-amber-500" />
@@ -350,7 +350,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
             <button
               onClick={() => { scrollTo("lokasi"); setMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-colors cursor-pointer ${
-                activeSection === "lokasi" ? "bg-amber-800 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
+                activeSection === "lokasi" ? "bg-stone-950 text-white shadow-xs" : "text-stone-700 hover:bg-stone-100"
               }`}
             >
               <MapPin className="w-4 h-4 text-amber-500" />
@@ -362,100 +362,104 @@ export default function LandingPage({ defaultSection = "hero" }) {
 
       {/* ==============================================================
           2. HERO SECTION
-          Cinematic Typography + Authentic Aceh Culinary Value Proposition
+          Cinematic Modern Typography + Authentic Culinary Value Proposition
       ============================================================== */}
-      <section id="hero" className="relative pt-12 pb-20 md:pt-20 md:pb-28 overflow-hidden">
-        {/* Subtle decorative background glow */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-amber-200/30 rounded-full blur-3xl pointer-events-none -z-10" />
+      <section id="hero" className="relative pt-16 pb-24 md:pt-24 md:pb-32 overflow-hidden bg-gradient-to-b from-[#FAF9F6] via-white to-[#FAF9F6]">
+        {/* Modern radial ambient gradients */}
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-400/10 rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="absolute bottom-10 left-10 w-80 h-80 bg-rose-400/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             {/* Left Column: Proposition */}
             <div className="lg:col-span-7 space-y-6">
-              <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-amber-900 uppercase">
-                <span className="w-2 h-2 rounded-full bg-amber-700" />
-                <span>{landingCfg.hero?.badge || "Otentik Serambi Mekkah"}</span>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100/70 border border-amber-200/90 text-amber-900 text-xs font-semibold tracking-wide shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-amber-700 animate-pulse" />
+                <span>{landingCfg.hero?.badge || "Warisan Kuliner Otentik Serambi Mekkah"}</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-stone-950 leading-[1.12]">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-stone-950 leading-[1.08] text-balance">
                 {landingCfg.hero?.title || "Cita Rasa Rempah Warisan Tanah Rencong."}
               </h1>
 
-              <p className="text-lg sm:text-xl text-stone-600 max-w-2xl leading-relaxed">
-                {landingCfg.hero?.subtitle || "Nikmati Kelezatan Mie Aceh Rempah, Nasi Gurih, dan Kopi Ulee Kareng Pilihan dengan Suasana Hangat dan Pelayanan Terbaik."}
+              <p className="text-base sm:text-lg text-stone-600 max-w-2xl leading-relaxed">
+                {landingCfg.hero?.subtitle || "Nikmati kelezatan Mie Aceh Rempah, Nasi Gurih, dan Kopi Ulee Kareng pilihan dengan suasana modern, hangat, dan pelayanan terbaik."}
               </p>
 
               <div className="pt-2 flex flex-wrap items-center gap-4">
                 <button
                   onClick={() => scrollTo("menu")}
-                  className="px-6 py-3.5 text-sm font-semibold text-white bg-amber-800 rounded-xl hover:bg-amber-900 active:scale-95 transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                  className="px-6 py-3.5 text-xs font-bold text-white bg-gradient-to-r from-amber-800 to-amber-900 rounded-xl hover:from-amber-900 hover:to-amber-950 active:scale-95 transition-all shadow-md hover:shadow-amber-950/20 flex items-center gap-2 cursor-pointer"
                 >
                   <UtensilsCrossed className="w-4 h-4" />
                   <span>{landingCfg.hero?.primary_cta?.text || "Jelajahi Menu Pilihan"}</span>
                 </button>
                 <button
                   onClick={() => scrollTo("reservasi")}
-                  className="px-6 py-3.5 text-sm font-semibold text-stone-800 bg-white border border-stone-300 rounded-xl hover:bg-stone-50 active:scale-95 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                  className="px-6 py-3.5 text-xs font-bold text-stone-800 bg-white border border-stone-300/80 rounded-xl hover:bg-stone-50 active:scale-95 transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                 >
                   <CalendarCheck className="w-4 h-4 text-amber-800" />
                   <span>{landingCfg.hero?.secondary_cta?.text || "Reservasi Meja Online"}</span>
                 </button>
               </div>
 
-              {/* Trust markers */}
-              <div className="pt-6 flex flex-wrap items-center gap-6 text-xs text-stone-500 border-t border-stone-200">
-                <div className="flex items-center gap-1.5 font-medium text-stone-700">
-                  <ShieldCheck className="w-4 h-4 text-amber-700" />
-                  <span>100% Halal & Tanpa Pengawet</span>
+              {/* Trust markers (Zero-pill discipline) */}
+              <div className="pt-6 flex flex-wrap items-center gap-4 sm:gap-6 text-xs text-stone-600 border-t border-stone-200/80">
+                <div className="flex items-center gap-1.5 font-medium text-stone-800">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>100% Halal & Bahan Segar</span>
                 </div>
-                <span aria-hidden="true">·</span>
-                <div className="flex items-center gap-1.5 font-medium text-stone-700">
+                <span aria-hidden="true" className="text-stone-300">·</span>
+                <div className="flex items-center gap-1.5 font-medium text-stone-800">
                   <Flame className="w-4 h-4 text-amber-700" />
-                  <span>Dimasak Tradisional Kayu Bakar</span>
+                  <span>16 Rempah Alami Pilihan</span>
                 </div>
-                <span aria-hidden="true">·</span>
-                <div className="flex items-center gap-1.5 font-medium text-stone-700">
-                  <Award className="w-4 h-4 text-amber-700" />
-                  <span>Racikan Rempah Asli Aceh</span>
+                <span aria-hidden="true" className="text-stone-300">·</span>
+                <div className="flex items-center gap-1.5 font-medium text-stone-800">
+                  <Coffee className="w-4 h-4 text-amber-800" />
+                  <span>Kopi Gayo Sangrai Asli</span>
                 </div>
               </div>
             </div>
 
             {/* Right Column: Visual Showcase Card */}
             <div className="lg:col-span-5">
-              <div className="relative rounded-3xl bg-gradient-to-br from-amber-900 via-stone-900 to-stone-950 p-8 text-white shadow-2xl overflow-hidden border border-stone-800">
-                <div className="absolute top-0 right-0 -translate-y-8 translate-x-8 w-48 h-48 bg-amber-600/20 rounded-full blur-2xl" />
+              <div className="relative rounded-3xl bg-stone-950 text-white p-7 sm:p-8 shadow-2xl overflow-hidden border border-stone-800/90">
+                <div className="absolute top-0 right-0 -translate-y-8 translate-x-8 w-56 h-56 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
 
                 <div className="relative z-10 space-y-6">
-                  <div className="flex items-center justify-between text-xs text-amber-200 tracking-wide font-medium">
-                    <span>HIDANGAN UTAMA HARI INI</span>
-                    <span>TERSEDIA FRESH</span>
+                  <div className="flex items-center justify-between text-[11px] text-amber-300 tracking-wider font-semibold uppercase">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      Sajian Favorit Tamu
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/20">Fresh Daily</span>
                   </div>
 
                   <div className="space-y-3">
-                    <h2 className="text-2xl font-bold tracking-tight text-white">
-                      Kuah Beulangong & Mie Aceh Spesial
+                    <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-tight">
+                      Kuah Beulangong &amp; Mie Aceh Spesial
                     </h2>
-                    <p className="text-sm text-stone-300 leading-relaxed">
-                      Daging kambing empuk berpadu nangka muda dalam kuah kari rempah merah beraroma kayu manis, cengkeh, dan kapulaga nusantara.
+                    <p className="text-xs sm:text-sm text-stone-300 leading-relaxed">
+                      Daging kambing empuk berpadu nangka muda dalam kuah kari rempah merah beraroma kayu manis, cengkeh, dan kapulaga nusantara dimasak dengan kuali tembaga tradisional.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10 text-xs">
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                      <div className="text-stone-400">Porsi Populer</div>
-                      <div className="font-semibold text-white mt-0.5 text-sm">Dine-in & Kenduri</div>
+                  <div className="grid grid-cols-2 gap-3 pt-4 border-t border-stone-800 text-xs">
+                    <div className="p-3.5 rounded-2xl bg-stone-900/80 border border-stone-800">
+                      <div className="text-[11px] text-stone-400">Pilihan Porsi</div>
+                      <div className="font-bold text-white mt-0.5 text-xs">Dine-in / Kenduri</div>
                     </div>
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                      <div className="text-stone-400">Tingkat Gurih</div>
-                      <div className="font-semibold text-amber-300 mt-0.5 text-sm">Kari Rempah 16</div>
+                    <div className="p-3.5 rounded-2xl bg-stone-900/80 border border-stone-800">
+                      <div className="text-[11px] text-stone-400">Tingkat Rempah</div>
+                      <div className="font-bold text-amber-300 mt-0.5 text-xs">16 Rempah Khas</div>
                     </div>
                   </div>
 
                   <div className="pt-2 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-stone-400">Mulai dari</span>
-                      <div className="text-xl font-extrabold text-amber-400 tabular-nums">Rp 28.000</div>
+                      <span className="text-[10px] text-stone-400 uppercase tracking-wider block">Harga Mulai</span>
+                      <div className="text-2xl font-black text-amber-400 tabular-nums font-mono">Rp 28.000</div>
                     </div>
                     <button
                       onClick={() => {
@@ -465,7 +469,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
                         }));
                         scrollTo("reservasi");
                       }}
-                      className="px-4 py-2 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg transition-colors shadow-sm"
+                      className="px-4 py-2.5 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
                     >
                       Pesan Meja Ini
                     </button>
@@ -481,13 +485,13 @@ export default function LandingPage({ defaultSection = "hero" }) {
           STATISTIK TOKO & KEUNGGULAN (Dinamis dari config/settings)
       ============================================================== */}
       {(landingCfg.stats?.show_section ?? true) && (
-        <section className="bg-stone-900 text-white py-10 border-y border-stone-800">
+        <section className="bg-stone-950 text-white py-12 border-y border-stone-800/90">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8 text-center">
               {(landingCfg.stats?.items || []).map((item, idx) => (
-                <div key={item.id || idx} className="p-4 rounded-2xl bg-stone-800/60 border border-stone-700/60 space-y-1">
-                  <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono">
-                    {item.value} <span className="text-xs text-stone-300 font-sans font-normal">{item.suffix}</span>
+                <div key={item.id || idx} className="p-5 rounded-2xl bg-stone-900/70 border border-stone-800/80 space-y-1.5 shadow-sm">
+                  <div className="text-3xl sm:text-4xl font-black text-amber-400 font-mono tracking-tight">
+                    {item.value} <span className="text-xs text-stone-400 font-sans font-normal">{item.suffix}</span>
                   </div>
                   <div className="text-xs text-stone-300 font-medium">{item.label}</div>
                 </div>
@@ -501,76 +505,77 @@ export default function LandingPage({ defaultSection = "hero" }) {
           3. MENU SECTION
           Published Menu from Live Database with Category Filters & Search
       ============================================================== */}
-      <section id="menu" className="py-20 bg-stone-100/70 border-y border-stone-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+      <section id="menu" className="py-20 md:py-28 bg-[#FAF9F6] border-y border-stone-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div className="space-y-2 max-w-2xl">
-              <span className="text-xs font-bold tracking-widest text-amber-800 uppercase">
-                Etalase Sajian Terbitan
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-stone-950">
-                Menu Otentik Grand Aceh Kuliner
+            <div className="space-y-3 max-w-2xl">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100/80 text-amber-900 text-xs font-semibold tracking-wide w-fit">
+                <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+                <span>Etalase Kuliner Otentik</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-stone-950">
+                Menu Pilihan Grand Aceh
               </h2>
-              <p className="text-stone-600 text-sm sm:text-base">
-                Setiap menu diracik segar dari rempah murni, daging pilihan, dan racikan kopi asli dataran tinggi Gayo serta Ulee Kareng.
+              <p className="text-stone-600 text-sm sm:text-base leading-relaxed">
+                Setiap menu diracik segar dari rempah murni pesisir, daging segar pilihan, dan biji kopi dataran tinggi Gayo sangrai tradisional.
               </p>
             </div>
 
             {/* Search Box */}
-            <div className="relative w-full md:w-72">
+            <div className="relative w-full md:w-80">
               <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Cari hidangan atau minuman..."
+                placeholder="Cari hidangan, kopi, atau camilan..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-xs bg-white rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-800/30 text-stone-900 placeholder:text-stone-400 shadow-sm"
+                className="w-full pl-10 pr-4 py-3 text-xs bg-white rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-800/30 text-stone-900 placeholder:text-stone-400 shadow-xs"
               />
             </div>
           </div>
 
-          {/* Category Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          {/* Segmented Category Filter Bar */}
+          <div className="inline-flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none p-1.5 bg-stone-200/60 rounded-2xl border border-stone-200 max-w-full">
             <button
               onClick={() => setSelectedCat("all")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCat === "all"
-                  ? "bg-amber-800 text-white shadow-sm"
-                  : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
+                  ? "bg-stone-950 text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-950 hover:bg-white/70"
               }`}
             >
               Semua Menu ({menuItems.length})
             </button>
             <button
               onClick={() => setSelectedCat("makanan")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCat === "makanan"
-                  ? "bg-amber-800 text-white shadow-sm"
-                  : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
+                  ? "bg-stone-950 text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-950 hover:bg-white/70"
               }`}
             >
               Makanan Khas Aceh
             </button>
             <button
               onClick={() => setSelectedCat("minuman")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCat === "minuman"
-                  ? "bg-amber-800 text-white shadow-sm"
-                  : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
+                  ? "bg-stone-950 text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-950 hover:bg-white/70"
               }`}
             >
-              Kopi Gayo & Minuman
+              Kopi Gayo &amp; Minuman
             </button>
             <button
               onClick={() => setSelectedCat("retail")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCat === "retail"
-                  ? "bg-amber-800 text-white shadow-sm"
-                  : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
+                  ? "bg-stone-950 text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-950 hover:bg-white/70"
               }`}
             >
-              Oleh-oleh & Retail
+              Oleh-oleh &amp; Retail
             </button>
             {categories
               .filter((c) => !["makanan", "minuman", "retail"].includes(c.id))
@@ -578,10 +583,10 @@ export default function LandingPage({ defaultSection = "hero" }) {
                 <button
                   key={c.id}
                   onClick={() => setSelectedCat(c.id)}
-                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                     selectedCat === c.id
-                      ? "bg-amber-800 text-white shadow-sm"
-                      : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
+                      ? "bg-stone-950 text-white shadow-xs"
+                      : "text-stone-700 hover:text-stone-950 hover:bg-white/70"
                   }`}
                 >
                   {c.name}
@@ -591,26 +596,26 @@ export default function LandingPage({ defaultSection = "hero" }) {
 
           {/* Menu Grid */}
           {loadingMenu ? (
-            <div className="py-20 text-center space-y-3">
+            <div className="py-24 text-center space-y-3">
               <div className="w-8 h-8 border-4 border-amber-800 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs text-stone-500">Memuat katalog menu terbitan...</p>
+              <p className="text-xs text-stone-500">Memuat katalog hidangan terbitan...</p>
             </div>
           ) : filteredMenu.length === 0 ? (
-            <div className="py-16 text-center bg-white rounded-2xl border border-stone-200 p-8">
+            <div className="py-16 text-center bg-white rounded-3xl border border-stone-200 p-8 shadow-xs">
               <UtensilsCrossed className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-              <p className="text-stone-700 font-semibold text-sm">Tidak ada menu yang sesuai pencarian</p>
+              <p className="text-stone-800 font-bold text-sm">Tidak ada menu yang sesuai pencarian</p>
               <p className="text-xs text-stone-500 mt-1">Coba kata kunci lain atau pilih kategori Semua Menu</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
               {filteredMenu.map((item) => (
                 <div
                   key={item.id}
-                  className="group bg-white rounded-2xl border border-stone-200/90 hover:border-amber-700/50 p-5 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl hover:shadow-amber-950/10 flex flex-col justify-between cursor-pointer will-change-transform motion-reduce:transition-none motion-reduce:transform-none"
+                  className="group bg-white rounded-3xl border border-stone-200/90 hover:border-amber-700/40 p-5 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl hover:shadow-amber-950/10 flex flex-col justify-between cursor-pointer will-change-transform motion-reduce:transition-none motion-reduce:transform-none"
                 >
-                  <div className="space-y-3">
-                    {/* Visual container with image support or styled gradient fallback */}
-                    <div className="w-full h-44 rounded-xl bg-gradient-to-tr from-stone-900 via-amber-950 to-stone-900 relative overflow-hidden flex items-center justify-center p-4 text-center">
+                  <div className="space-y-4">
+                    {/* Visual container with image or modern dark culinary motif */}
+                    <div className="w-full h-48 rounded-2xl bg-gradient-to-tr from-stone-950 via-stone-900 to-amber-950 relative overflow-hidden flex items-center justify-center p-4 text-center">
                       {item.image && (
                         <img
                           src={item.image}
@@ -620,43 +625,41 @@ export default function LandingPage({ defaultSection = "hero" }) {
                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-stone-950/70 via-transparent to-transparent pointer-events-none" />
                       <div className="relative z-10 space-y-1 transform group-hover:scale-105 transition-transform duration-300 ease-out">
                         {!item.image && (
                           <UtensilsCrossed className="w-8 h-8 text-amber-400 mx-auto opacity-75 group-hover:opacity-100 group-hover:scale-110 group-hover:text-amber-300 transition-all duration-300" />
                         )}
-                        <span className="block text-xs font-bold text-amber-200 tracking-wide drop-shadow-sm">
+                        <span className="block text-xs font-bold text-amber-200 tracking-wide drop-shadow-xs">
                           {item.category_name}
                         </span>
                       </div>
                       {item.is_best_seller && (
-                        <div className="absolute top-3 left-3 z-20 bg-amber-600 group-hover:bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wide uppercase shadow-sm transition-colors duration-200">
+                        <div className="absolute top-3 left-3 z-20 bg-amber-600/90 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full tracking-wider uppercase shadow-xs backdrop-blur-xs">
                           Favorit Tamu
                         </div>
                       )}
                       {item.sold_out && (
-                        <div className="absolute top-3 right-3 z-20 bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wide uppercase shadow-sm">
+                        <div className="absolute top-3 right-3 z-20 bg-rose-600/95 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full tracking-wider uppercase shadow-xs">
                           Habis Hari Ini
                         </div>
                       )}
                     </div>
 
                     <div className="space-y-1.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-bold text-stone-950 text-base group-hover:text-amber-800 transition-colors duration-200">
-                          {item.name}
-                        </h3>
-                      </div>
+                      <h3 className="font-bold text-stone-950 text-base group-hover:text-amber-900 transition-colors duration-200">
+                        {item.name}
+                      </h3>
                       <p className="text-xs text-stone-500 line-clamp-2 leading-relaxed group-hover:text-stone-600 transition-colors duration-200">
-                        {item.description || "Menu khas otentik disiapkan dengan bumbu dan bahan pilihan harian."}
+                        {item.description || "Menu otentik racikan rempah pilihan dan bahan segar harian."}
                       </p>
                     </div>
                   </div>
 
-                  <div className="pt-4 mt-3 border-t border-stone-100 flex items-center justify-between">
+                  <div className="pt-4 mt-4 border-t border-stone-100 flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] text-stone-400 uppercase tracking-wider block">Harga</span>
-                      <span className="text-base font-extrabold text-stone-900 tabular-nums group-hover:text-amber-900 transition-colors duration-200">
+                      <span className="text-[10px] text-stone-400 uppercase tracking-wider block font-medium">Harga</span>
+                      <span className="text-lg font-black text-stone-950 tabular-nums font-mono group-hover:text-amber-900 transition-colors duration-200">
                         {rupiah(item.price)}
                       </span>
                     </div>
@@ -675,13 +678,13 @@ export default function LandingPage({ defaultSection = "hero" }) {
                         toast.info(`Menu "${item.name}" ditambahkan ke catatan reservasi meja`);
                       }}
                       disabled={Boolean(item.sold_out)}
-                      className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 flex items-center gap-1 shadow-sm cursor-pointer ${
+                      className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all duration-200 flex items-center gap-1 shadow-xs cursor-pointer ${
                         item.sold_out
                           ? "bg-stone-100 text-stone-400 cursor-not-allowed"
-                          : "text-amber-800 bg-amber-50 group-hover:bg-amber-800 group-hover:text-white group-hover:shadow"
+                          : "text-amber-900 bg-amber-50 border border-amber-200/80 group-hover:bg-amber-800 group-hover:text-white group-hover:border-transparent group-hover:shadow-sm"
                       }`}
                     >
-                      <span>{item.sold_out ? "Habis" : "Booking Meja"}</span>
+                      <span>{item.sold_out ? "Habis" : "Reservasi Meja"}</span>
                       {!item.sold_out && <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-200" />}
                     </button>
                   </div>
@@ -696,25 +699,26 @@ export default function LandingPage({ defaultSection = "hero" }) {
           BANNER PROMO & PENGUMUMAN (Dinamis dari config/settings)
       ============================================================== */}
       {(landingCfg.promo_banner?.enabled ?? true) && (
-        <section className="bg-gradient-to-r from-amber-900 via-rose-950 to-stone-900 text-white py-12 border-y border-amber-800/40">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
+        <section className="relative overflow-hidden bg-stone-950 text-white py-14 border-y border-stone-800">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-900/30 via-stone-950 to-stone-950 pointer-events-none" />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-2 text-center md:text-left">
-              <span className="inline-block px-3 py-1 bg-amber-400 text-stone-950 text-[10px] font-black tracking-widest uppercase rounded-full">
-                {landingCfg.promo_banner?.badge || "PROMO BULAN INI"}
+              <span className="inline-block px-3 py-1 bg-amber-400 text-stone-950 text-[10px] font-black tracking-widest uppercase rounded-full shadow-xs">
+                {landingCfg.promo_banner?.badge || "PROMO SPESIAL BULAN INI"}
               </span>
               <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
                 {landingCfg.promo_banner?.title || "Diskon 15% Paket Mie Aceh Tumis + Es Kopi Sanger"}
               </h3>
-              <p className="text-xs sm:text-sm text-stone-300 max-w-2xl">
+              <p className="text-xs sm:text-sm text-stone-300 max-w-2xl leading-relaxed">
                 {landingCfg.promo_banner?.subtitle || "Berlaku untuk Dine-in & Takeaway setiap hari Senin - Kamis jam 14:00 - 17:00 WIB."}
               </p>
             </div>
 
             <button
               onClick={() => scrollTo("menu")}
-              className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-black rounded-xl transition-all shadow-md shrink-0 cursor-pointer"
+              className="px-6 py-3.5 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-black rounded-xl transition-all shadow-lg shadow-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
             >
-              {landingCfg.promo_banner?.cta_text || "Klaim Kupon Member"}
+              {landingCfg.promo_banner?.cta_text || "Lihat Menu Promo"}
             </button>
           </div>
         </section>
@@ -724,42 +728,43 @@ export default function LandingPage({ defaultSection = "hero" }) {
           4. ARTICLES & HERITAGE STORIES
           Cultural essays on Acehnese Spices, Coffee & Tradition
       ============================================================== */}
-      <section id="cerita" className="py-20 bg-[#FAF8F5]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+      <section id="cerita" className="py-20 md:py-28 bg-white border-b border-stone-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           {/* Header */}
-          <div className="space-y-2 max-w-2xl">
-            <span className="text-xs font-bold tracking-widest text-amber-800 uppercase">
-              {landingCfg.articles_header?.badge || "Kisah & Filosofi Kuliner"}
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-stone-950">
-              {landingCfg.articles_header?.title || "Cerita di Balik Rempah Tanah Rencong"}
+          <div className="space-y-3 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100/80 text-amber-900 text-xs font-semibold tracking-wide w-fit">
+              <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+              <span>{landingCfg.articles_header?.badge || "Kisah & Filosofi Kuliner"}</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-stone-950">
+              {landingCfg.articles_header?.title || "Cerita di Balik Rempah Aceh"}
             </h2>
-            <p className="text-stone-600 text-sm sm:text-base">
+            <p className="text-stone-600 text-sm sm:text-base leading-relaxed">
               {landingCfg.articles_header?.subtitle || "Setiap mangkuk masakan dan cangkir kopi menyimpan sejarah panjang persilangan budaya pesisir, tradisi kenduri, dan kearifan masyarakat Aceh."}
             </p>
           </div>
 
           {/* Articles Grid */}
           {loadingArticles ? (
-            <div className="py-12 text-center text-xs text-stone-500">Memuat artikel kuliner...</div>
+            <div className="py-16 text-center text-xs text-stone-500">Memuat artikel kuliner...</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {articles.map((art) => (
                 <div
                   key={art.id}
                   onClick={() => setSelectedArticle(art)}
-                  className="cursor-pointer group bg-white rounded-2xl border border-stone-200/90 hover:border-amber-700/50 p-6 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl hover:shadow-amber-950/10 space-y-4 will-change-transform motion-reduce:transition-none motion-reduce:transform-none"
+                  className="cursor-pointer group bg-[#FAF9F6] rounded-3xl border border-stone-200/90 hover:border-amber-700/40 p-7 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl hover:shadow-amber-950/10 space-y-4 will-change-transform motion-reduce:transition-none motion-reduce:transform-none"
                 >
                   {/* Clean unboxed metadata (Anti-slop zero pill rule) */}
                   <div className="flex items-center gap-2 text-xs text-stone-500 font-medium">
-                    <span className="text-amber-800 font-semibold">{art.category}</span>
+                    <span className="text-amber-900 font-bold">{art.category}</span>
                     <span aria-hidden="true">·</span>
                     <span>{art.read_time || "4 menit baca"}</span>
                     <span aria-hidden="true">·</span>
                     <span>{art.author || "Dapur Grand Aceh"}</span>
                   </div>
 
-                  <h3 className="text-xl font-bold text-stone-950 group-hover:text-amber-800 transition-colors leading-snug">
+                  <h3 className="text-xl font-bold text-stone-950 group-hover:text-amber-900 transition-colors leading-snug">
                     {art.title}
                   </h3>
 
@@ -767,7 +772,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
                     {art.excerpt}
                   </p>
 
-                  <div className="pt-2 flex items-center gap-1.5 text-xs font-semibold text-amber-800 group-hover:underline">
+                  <div className="pt-2 flex items-center gap-1.5 text-xs font-bold text-amber-900 group-hover:text-amber-700">
                     <span>Baca Selengkapnya</span>
                     <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                   </div>
@@ -782,51 +787,60 @@ export default function LandingPage({ defaultSection = "hero" }) {
           5. TABLE BOOKING & RESERVATION SECTION
           Online booking form directly integrated with POS & WhatsApp
       ============================================================== */}
-      <section id="reservasi" className="py-20 bg-stone-900 text-white relative overflow-hidden">
+      <section id="reservasi" className="py-20 md:py-28 bg-stone-950 text-white relative overflow-hidden">
         {/* Ambient background decoration */}
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-10 w-80 h-80 bg-rose-500/5 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
             {/* Left information */}
             <div className="lg:col-span-5 space-y-6">
-              <span className="text-xs font-bold tracking-widest text-amber-400 uppercase">
-                Pemesanan Meja Mandiri
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-300 text-xs font-semibold tracking-wide w-fit">
+                <CalendarCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>Pemesanan Meja Mandiri</span>
+              </div>
+
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-tight">
                 {landingCfg.reservation?.title || "Reservasi Meja Santap Keluarga & Kolega"}
               </h2>
               <p className="text-stone-300 text-sm sm:text-base leading-relaxed">
-                {landingCfg.reservation?.subtitle || "Amankan meja Anda sebelum tiba. Kami menyediakan area santap Indoor Ber-AC, ruang VIP, serta area Lesehan khas Aceh yang akrab."}
+                {landingCfg.reservation?.subtitle || "Amankan meja Anda sebelum tiba. Kami menyediakan area santap Indoor Ber-AC, ruang VIP, serta area Lesehan khas Aceh yang hangat."}
               </p>
 
               <div className="space-y-4 pt-4 border-t border-stone-800 text-sm text-stone-300">
                 <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-amber-400 shrink-0" />
+                  <div className="w-8 h-8 rounded-lg bg-stone-900 border border-stone-800 flex items-center justify-center shrink-0">
+                    <Clock className="w-4 h-4 text-amber-400" />
+                  </div>
                   <span>{landingCfg.contact_info?.opening_hours || "Buka Setiap Hari: 08:00 – 23:00 WIB"}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Phone className="w-5 h-5 text-amber-400 shrink-0" />
+                  <div className="w-8 h-8 rounded-lg bg-stone-900 border border-stone-800 flex items-center justify-center shrink-0">
+                    <Phone className="w-4 h-4 text-amber-400" />
+                  </div>
                   <span>WhatsApp Layanan Kasir: {landingCfg.contact_info?.phone || "0812-6900-1234"}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-amber-400 shrink-0" />
+                  <div className="w-8 h-8 rounded-lg bg-stone-900 border border-stone-800 flex items-center justify-center shrink-0">
+                    <MapPin className="w-4 h-4 text-amber-400" />
+                  </div>
                   <span>{landingCfg.contact_info?.address || "Jl. T. Nyak Arief No. 88, Syiah Kuala, Banda Aceh"}</span>
                 </div>
               </div>
 
               {/* Informative notification note */}
-              <div className="p-4 rounded-xl bg-stone-800/80 border border-stone-700 text-xs text-stone-300 space-y-1">
+              <div className="p-4 rounded-2xl bg-stone-900/90 border border-stone-800 text-xs text-stone-300 space-y-1">
                 <span className="font-semibold text-amber-300 block">Sistem Terintegrasi Kasir</span>
-                <span>
-                  Permintaan reservasi otomatis tercatat pada daftar antrean kasir POS dan dilengkapi konfirmasi WhatsApp instan.
+                <span className="leading-relaxed">
+                  Permintaan reservasi otomatis tercatat pada antrean kasir POS dan disertai notifikasi WhatsApp instan.
                 </span>
               </div>
             </div>
 
             {/* Right form card */}
             <div className="lg:col-span-7">
-              <div className="bg-white rounded-3xl p-6 sm:p-8 text-stone-900 shadow-2xl border border-stone-200">
+              <div className="bg-white rounded-3xl p-6 sm:p-8 text-stone-900 shadow-2xl border border-stone-200/90">
                 {bookingResult ? (
                   /* Booking Confirmation Card */
                   <div className="text-center py-8 space-y-6">
@@ -838,15 +852,15 @@ export default function LandingPage({ defaultSection = "hero" }) {
                       <span className="text-xs font-bold text-emerald-800 tracking-wider uppercase">
                         Reservasi Berhasil Dikirim
                       </span>
-                      <h3 className="text-2xl font-bold text-stone-950">
-                        Kode Booking: {bookingResult.booking_code}
+                      <h3 className="text-2xl font-bold text-stone-950 font-mono">
+                        Kode: {bookingResult.booking_code}
                       </h3>
                       <p className="text-stone-600 text-xs sm:text-sm max-w-md mx-auto">
                         Data pemesanan meja atas nama <b>{bookingForm.customer_name}</b> telah tercatat di sistem kasir kami.
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 text-left text-xs space-y-2 max-w-sm mx-auto">
+                    <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 text-left text-xs space-y-2.5 max-w-sm mx-auto">
                       <div className="flex justify-between">
                         <span className="text-stone-500">Tanggal:</span>
                         <span className="font-semibold text-stone-900">{bookingForm.date}</span>
@@ -871,7 +885,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
                           href={bookingResult.whatsapp_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full sm:w-auto px-6 py-3 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                          className="w-full sm:w-auto px-6 py-3.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <MessageCircle className="w-4 h-4" />
                           <span>Kirim ke WhatsApp Kasir</span>
@@ -891,7 +905,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
                             note: "",
                           });
                         }}
-                        className="w-full sm:w-auto px-5 py-3 text-xs font-semibold text-stone-700 hover:text-stone-950 bg-stone-100 hover:bg-stone-200 rounded-xl transition-all"
+                        className="w-full sm:w-auto px-5 py-3.5 text-xs font-semibold text-stone-700 hover:text-stone-950 bg-stone-100 hover:bg-stone-200 rounded-xl transition-all cursor-pointer"
                       >
                         Buat Reservasi Baru
                       </button>
@@ -901,8 +915,8 @@ export default function LandingPage({ defaultSection = "hero" }) {
                   /* Active Booking Form */
                   <form onSubmit={handleBookingSubmit} className="space-y-5">
                     <div className="space-y-1">
-                      <h3 className="text-xl font-bold text-stone-950">Formulir Reservasi Meja</h3>
-                      <p className="text-xs text-stone-500">Isi detail kedatangan Anda secara lengkap.</p>
+                      <h3 className="text-xl font-extrabold text-stone-950">Formulir Reservasi Meja</h3>
+                      <p className="text-xs text-stone-500">Isi detail kedatangan Anda untuk konfirmasi meja.</p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -979,11 +993,11 @@ export default function LandingPage({ defaultSection = "hero" }) {
                                 pax: Math.max(1, prev.pax - 1),
                               }))
                             }
-                            className="w-9 h-9 rounded-lg bg-stone-200 text-stone-700 font-bold hover:bg-stone-300"
+                            className="w-9 h-9 rounded-lg bg-stone-200 text-stone-700 font-bold hover:bg-stone-300 cursor-pointer"
                           >
                             -
                           </button>
-                          <span className="flex-1 text-center font-bold text-sm tabular-nums">
+                          <span className="flex-1 text-center font-bold text-sm tabular-nums font-mono">
                             {bookingForm.pax} Orang
                           </span>
                           <button
@@ -1011,9 +1025,9 @@ export default function LandingPage({ defaultSection = "hero" }) {
                             type="button"
                             key={area}
                             onClick={() => setBookingForm({ ...bookingForm, seating_area: area })}
-                            className={`py-2 px-3 text-xs font-semibold rounded-xl border text-center transition-all ${
+                            className={`py-2 px-3 text-xs font-semibold rounded-xl border text-center transition-all cursor-pointer ${
                               bookingForm.seating_area === area
-                                ? "bg-amber-800 text-white border-amber-800 shadow-sm"
+                                ? "bg-stone-950 text-white border-stone-950 shadow-xs"
                                 : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
                             }`}
                           >
@@ -1060,7 +1074,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
                     <button
                       type="submit"
                       disabled={submittingBooking}
-                      className="w-full py-3.5 text-xs font-bold text-white bg-amber-800 hover:bg-amber-900 active:scale-[0.99] rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full py-4 text-xs font-bold text-white bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 active:scale-[0.99] rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                     >
                       {submittingBooking ? (
                         <span>Mengirimkan Reservasi...</span>
@@ -1084,17 +1098,17 @@ export default function LandingPage({ defaultSection = "hero" }) {
       ============================================================== */}
       <footer id="lokasi" className="bg-stone-950 text-stone-400 text-xs py-16 border-t border-stone-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* Brand column */}
-            <div className="space-y-3 md:col-span-1">
+            <div className="space-y-3">
               <div className="flex items-center gap-2 text-white font-bold text-base">
-                <div className="w-7 h-7 rounded-lg bg-amber-700 text-white flex items-center justify-center font-bold text-xs">
+                <div className="w-8 h-8 rounded-xl bg-amber-700 text-white flex items-center justify-center font-bold text-xs shadow-xs">
                   GA
                 </div>
                 <span>Grand Aceh Kuliner</span>
               </div>
-              <p className="text-stone-400 text-xs leading-relaxed">
-                Menghidangkan kelezatan rempah khas Serambi Mekkah dengan tradisi dan dedikasi otentik.
+              <p className="text-stone-400 text-xs leading-relaxed max-w-sm">
+                Menghidangkan kelezatan rempah khas Serambi Mekkah dengan dedikasi cita rasa otentik, higienis, dan keramahan khas Aceh.
               </p>
             </div>
 
@@ -1104,8 +1118,8 @@ export default function LandingPage({ defaultSection = "hero" }) {
                 Jam Operasional
               </span>
               <p className="text-stone-300">Setiap Hari (Senin – Minggu)</p>
-              <p className="text-stone-400">{landingCfg.contact_info?.opening_hours || "08:00 – 23:00 WIB"}</p>
-              <p className="text-amber-400 pt-1 text-[11px]">Dine-in, Takeaway &amp; Reservasi</p>
+              <p className="text-stone-400 font-mono">{landingCfg.contact_info?.opening_hours || "08:00 – 23:00 WIB"}</p>
+              <p className="text-amber-400 pt-1 text-[11px]">Dine-in, Takeaway &amp; Reservasi Meja</p>
             </div>
 
             {/* Kontak & Lokasi */}
@@ -1129,23 +1143,6 @@ export default function LandingPage({ defaultSection = "hero" }) {
                 </a>
               )}
             </div>
-
-            {/* Akses Cepat Kasir */}
-            <div className="space-y-3">
-              <span className="font-semibold text-stone-200 block uppercase tracking-wider text-[11px]">
-                Akses Internal Staf
-              </span>
-              <p className="text-stone-400 text-xs leading-relaxed">
-                Khusus kasir, koki, dan manajer operasional Grand Aceh Kuliner:
-              </p>
-              <button
-                onClick={() => navigate("/login")}
-                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-amber-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>Masuk ke Sistem POS Kasir</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
           </div>
 
           <div className="pt-8 border-t border-stone-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-stone-500">
@@ -1157,7 +1154,7 @@ export default function LandingPage({ defaultSection = "hero" }) {
               <span aria-hidden="true">·</span>
               <span>Kopi Gayo Asli</span>
               <span aria-hidden="true">·</span>
-              <span>Halal &amp; Alami</span>
+              <span>100% Halal &amp; Alami</span>
             </div>
           </div>
         </div>
