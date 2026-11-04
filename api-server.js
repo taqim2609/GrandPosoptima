@@ -509,7 +509,6 @@ const AUTH_PUBLIC_PATHS = new Set([
   '/api/apk/info',
   '/api/apk/version',
   '/api/app-info',
-  '/api/settings/landing-page',
   '/api/public/landing-config',
   '/api/system/sync/stream',
 ]);
@@ -4273,11 +4272,13 @@ app.post('/api/public/booking', async (req, res) => {
 });
 
 // Landing Page Configuration API
+// GET stays readable for any authenticated user (the public mirror is
+// /api/public/landing-config); only admins may overwrite the landing content.
 app.get(['/api/public/landing-config', '/api/settings/landing-page'], (req, res) => {
   res.json(db.settings.landing_page || {});
 });
 
-app.post('/api/settings/landing-page', (req, res) => {
+app.post('/api/settings/landing-page', requireAdmin, (req, res) => {
   if (req.body && typeof req.body === 'object') {
     db.settings.landing_page = {
       ...db.settings.landing_page,
