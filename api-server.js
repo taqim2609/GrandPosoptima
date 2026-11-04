@@ -263,7 +263,7 @@ if (CORS_ALLOWED_ORIGINS.length === 0 && process.env.NODE_ENV === 'production') 
 app.use(cors({
   origin: CORS_ALLOWED_ORIGINS.length > 0 ? CORS_ALLOWED_ORIGINS : true,
   credentials: true,
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Gak-Token'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
 }));
 // Review-04 R-DOS-01: 25 MB JSON bodies on every route (including the unauthenticated
 // login and public booking endpoints) allowed a trivially cheap memory DoS. 2 MB is well
@@ -476,8 +476,7 @@ app.use((req, res, next) => {
   const isApiCandidate = apiCandidates.some((p) => req.path === p || req.path.startsWith(p + '/'));
   const isJsonClient = req.xhr ||
     (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html')) ||
-    req.headers['authorization'] ||
-    req.headers['x-gak-token'];
+    req.headers['authorization'];
 
   if (isApiCandidate && isJsonClient && !req.url.startsWith('/api/')) {
     req.url = '/api' + req.url;
@@ -526,7 +525,7 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     const cleanPath = req.path.replace(/\/$/, ''); // Remove trailing slash
 
-    const authHeader = req.headers.authorization || req.headers['x-gak-token'];
+    const authHeader = req.headers.authorization;
     let tokenStr = '';
     if (authHeader) {
       tokenStr = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
@@ -1418,7 +1417,7 @@ app.post('/api/system/health/ping-google', (req, res) => {
   });
 });
 
-app.post('/api/system/health/sync-now', (req, res) => {
+app.post('/api/system/health/sync-now', createRateLimiter('sync-now'), requireAuth, (req, res) => {
   broadcastRealtimeSync('manual_sync');
   res.json({
     ok: true,
@@ -1443,7 +1442,7 @@ app.get('/api/system/sync/stream', (req, res) => {
 });
 
 // Uji Kecepatan Respon Server (Benchmark: Node Lokal vs Google Cloud)
-app.post(['/api/system/health/speed-test', '/api/system/speed-test'], async (req, res) => {
+app.post(['/api/system/health/speed-test', '/api/system/speed-test'], createRateLimiter('speed-test'), requireAuth, async (req, res) => {
   const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app';
   const env = detectHostEnvironment();
 
@@ -2043,7 +2042,7 @@ app.get('/api/auth/me', (req, res) => {
   if (req.user) {
     return res.json(req.user);
   }
-  const authHeader = req.headers.authorization || req.headers['x-gak-token'];
+  const authHeader = req.headers.authorization;
   if (authHeader) {
     const payload = verifyToken(authHeader);
     if (payload && (payload.id || payload.username)) {
@@ -5897,12 +5896,10 @@ app.post('/api/admin/update', requireSuperAdmin, (req, res) => {
   res.json({ ok: true, message: 'Update berhasil dipicu dari Server VPS Mandiri.' });
 });
 
-app.post(['/api/rpt', '/pos-grand-update/rpt.php'], (req, res, next) => {
-  if (req.user || req.headers['x-gak-token'] === 'gak_rpt_7f3c9e1b') {
-    return next();
-  }
-  return requireAuth(req, res, next);
-}, (req, res) => {
+// Diagnostic report intake. Requires a real session: the previous hardcoded-header
+// bypass shipped in the public repo and in the client bundle, so anyone could post
+// reports anonymously and overwrite the single in-memory `latestDiagnosticReport` slot.
+app.post('/api/rpt', createRateLimiter('rpt'), requireAuth, (req, res) => {
   const ts = req.body?.ts || new Date().toISOString();
   const rawReport = req.body?.report || 'Laporan kosong';
   

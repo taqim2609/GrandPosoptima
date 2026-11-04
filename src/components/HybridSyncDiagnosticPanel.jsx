@@ -68,10 +68,7 @@ export default function HybridSyncDiagnosticPanel() {
       const token = localStorage.getItem("gak_token") || "";
       const res = await fetch("/api/system/health/sync-now", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "X-Gak-Token": "gak_rpt_7f3c9e1b"
-        }
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
@@ -96,10 +93,7 @@ export default function HybridSyncDiagnosticPanel() {
       const token = localStorage.getItem("gak_token") || "";
       const res = await fetch("/api/system/health/speed-test", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "X-Gak-Token": "gak_rpt_7f3c9e1b"
-        }
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();

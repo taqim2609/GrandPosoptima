@@ -193,6 +193,18 @@ api.interceptors.response.use(
   }
 );
 
+// Auth header for raw `fetch()` calls that bypass the axios instance above.
+// Reuse the same JWT the axios interceptor sends so raw fetches stay authenticated
+// without hard-coding any credential into the bundle.
+export function authHeaders(extra = {}) {
+  const headers = { ...extra };
+  try {
+    const t = localStorage.getItem("gak_token");
+    if (t) headers.Authorization = `Bearer ${t}`;
+  } catch (_) {}
+  return headers;
+}
+
 export function apiError(detail, err) {
   if (!detail && err && err.response && err.response.data) {
     const d = err.response.data;

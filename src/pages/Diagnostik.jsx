@@ -700,7 +700,10 @@ export default function Diagnostik() {
         : "/api/rpt";
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Gak-Token": "gak_rpt_7f3c9e1b" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("gak_token") || ""}`,
+        },
         body: JSON.stringify({ ts: new Date().toISOString(), report }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
