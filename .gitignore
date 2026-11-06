@@ -23,3 +23,6 @@ package-lock.json
 .env
 dist.bak.*/
 data/
+
+# APK build artifacts: distributed via GitHub Releases, served from disk by /api/apk
+apk/*.apk
