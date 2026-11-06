@@ -36,7 +36,9 @@ function trackedFilesWithLiteral() {
       ['grep', '-l', LEGACY_LITERAL, '--', '.', ':!node_modules', ':!dist', ':!project/frontend/build'],
       { cwd: REPO, encoding: 'utf8' }
     );
-    return out.trim().split('\n').filter(Boolean);
+    // This file must name the literal to assert on it; it is not a source file.
+    const selfPath = path.relative(REPO, __filename).split(path.sep).join('/');
+    return out.trim().split('\n').filter(Boolean).filter((f) => f !== selfPath);
   } catch (err) {
     // git grep exits 1 when nothing matches, which is the pass case.
     return [];
