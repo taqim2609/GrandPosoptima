@@ -18,8 +18,8 @@
     "allowJs": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["project/frontend/src/*"]
     }
   },
-  "include": ["src", "server.ts", "vite.config.js"]
+  "include": ["project/frontend/src", "server.ts"]
 }
