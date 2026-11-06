@@ -119,6 +119,26 @@ landing wajib menyalin ulang isi `dist/` ke `/var/www/landing`, lalu
 `nginx -s reload` (bukan `restart`, agar tidak downtime). Verifikasi dengan
 membandingkan nama bundle di `dist/index.html` vs `/var/www/landing/index.html`.
 
+### Sync harus BERSIH, bukan `cp` menumpuk
+
+`cp -a dist/. /var/www/landing/` **tidak menghapus** bundle lama: setiap build
+meninggalkan `main.<hash>.js` yatim yang tidak lagi dirujuk `index.html`. Pernah
+menumpuk 6 bundle mati (~10 MB) di sana.
+
+Aturan: setelah menyalin, hapus file yang tidak dirujuk `index.html`.
+
+```bash
+grep -oE 'static/js/main\.[a-z0-9]+\.js' /var/www/landing/index.html   # yang dipakai
+```
+
+### Kiosk kasir (`kasir-pi`) juga menyajikan build ini
+
+Kiosk Raspberry Pi (`100.109.98.56` → `kasir-pi.tailf3a839.ts.net`) menjalankan
+`project-frontend-1` (nginx :80). Web root-nya ada **di dalam image**, tanpa bind
+mount, jadi frontend di sana **tidak** ikut deploy repo. Setiap kali UI berubah,
+bundle harus disalin manual dari `dist/` ke container kiosk, kalau tidak kasir
+tetap menjalankan build lama.
+
 ---
 
 ## 7. Testing & Validasi
