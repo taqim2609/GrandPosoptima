@@ -75,7 +75,53 @@ Browser / APK Android (React 19) ──► Nginx ──► FastAPI (Python/Motor
 
 ---
 
-## 6. Testing & Validasi
+## 6. Lokasi Frontend — Baca Sebelum Menyentuh UI
+
+Repo ini punya **dua pohon source frontend**. Keduanya ter-commit, tetapi hanya
+SATU yang menghasilkan UI yang dilihat pengguna. Salah edit = perubahan tidak
+pernah sampai ke produksi walau build "sukses".
+
+| Path | Toolchain | Dipakai produksi? |
+| :--- | :--- | :--- |
+| `project/frontend/src/` | CRACO/CRA | **YA** — satu-satunya sumber UI produksi |
+| `src/` | Vite | **TIDAK** — output `vite build` ditimpa `build.js` |
+
+### Aturan
+
+1. **Semua perubahan UI dikerjakan di `project/frontend/src/`.** Menyentuh `src/` untuk perbaikan UI adalah kesalahan: hasilnya dibuang.
+2. `src/` hanya boleh diubah bila tujuannya memang memigrasikan/mengkonsolidasikan frontend. Untuk itu buka keputusan dengan pemilik repo lebih dulu.
+3. **JANGAN hapus `project/frontend/node_modules`** — container produksi `grandpos_web_app` mem-bind-mount repo ini ke `/app`.
+4. **JANGAN commit `project/frontend/build/` maupun `dist/`.** Keduanya artefak build lokal dan tidak ada di git.
+5. Helper auth untuk `fetch()` mentah ada di `project/frontend/src/lib/api.js` (`authHeaders()`). **JANGAN pernah menaruh kredensial literal** di komponen: bundle dikirim ke browser dan repo ini publik.
+
+### Alur build & penyajian
+
+```
+project/frontend/src/          (sumber, ter-commit)
+  -> npm run build (CRACO)     -> project/frontend/build/   (artefak, tidak di-commit)
+  -> node build.js             -> dist/                     (artefak, tidak di-commit)
+  -> Express/P1A :3000         -> penyajian ke browser
+```
+
+Catatan `build.js`: bila `project/frontend/build/` sudah ada dan lebih baru dari
+`project/frontend/src/`, CRACO **tidak** dijalankan ulang. Setelah mengubah source,
+paksa rebuild dengan `npm run build -- --rebuild` atau `REBUILD_FRONTEND=true`.
+
+### Lokasi penyajian di server
+
+| Lokasi | Disajikan oleh | Isi |
+| :--- | :--- | :--- |
+| `dist/` (di repo P1A) | Express P1A `:3000` | build terkini; ini yang dipakai aplikasi & landing di `:3000` |
+| `/var/www/landing` | nginx (server block subdomain landing) | salinan statis landing; **harus di-sync manual** setiap build |
+
+`/var/www/landing` **tidak** ikut ter-update otomatis. Setiap build yang mengubah
+landing wajib menyalin ulang isi `dist/` ke `/var/www/landing`, lalu
+`nginx -s reload` (bukan `restart`, agar tidak downtime). Verifikasi dengan
+membandingkan nama bundle di `dist/index.html` vs `/var/www/landing/index.html`.
+
+---
+
+## 7. Testing & Validasi
 
 Setiap penambahan atau perubahan fitur/perbaikan bug wajib diverifikasi:
 - **Unit & Logika**: Pastikan fungsi perhitungan harga, bobot, diskon, dan sanitasi input lolos uji batas.
@@ -84,7 +130,7 @@ Setiap penambahan atau perubahan fitur/perbaikan bug wajib diverifikasi:
 
 ---
 
-## 7. Planora Documentation Structure
+## 8. Planora Documentation Structure
 
 Dokumentasi dan perencanaan proyek berada di `.planora/`:
 - `.planora/PRD/`: Spesifikasi kebutuhan produk dan modul fitur terstandarisasi.
@@ -94,7 +140,7 @@ Dokumentasi dan perencanaan proyek berada di `.planora/`:
 
 ---
 
-## 8. Pemeliharaan Indeks Berkas (INDEX-BERKAS.md)
+## 9. Pemeliharaan Indeks Berkas (INDEX-BERKAS.md)
 
 - Setiap kali ada penambahan berkas baru (file baru di backend, frontend, dokumen, skrip, atau pengujian), agen **wajib** memperbarui katalog berkas `INDEX-BERKAS.md`.
 - Pembaruan dapat dijalankan secara instan dengan mengeksekusi:
