@@ -1,6 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
+const vendorLedger = require('../lib/vendor-settlement');
+const journalCorrection = require('../lib/journal-correction');
+
+/**
+ * Tanggal bisnis WIB (UTC+7) dari sebuah timestamp. Dipakai agar settlement
+ * dan board memakai hari yang sama dengan laporan kasir (bukan UTC).
+ */
+function wibDateOnly(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return String(ts).slice(0, 10);
+  return new Date(d.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow = () => {}) {
   // Helper: Get or Init collections
@@ -1173,34 +1186,28 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
   // ==========================================
 
   // GET /api/vendor-settlements/board
+  // Audit 7 Nov 2026: board ini dulu menghitung sendiri omzet vendor dengan
+  // `Number(v.share_percent || 80)` — default 80% yang tidak ada di data, dan
+  // master vendor Grand Aceh tidak menyimpan persentase sama sekali. Akibatnya
+  // angka board berbeda dari angka settlement. Sekarang hak vendor diambil dari
+  // angka yang benar-benar dibekukan saat order dibuat (`order.vendor_share`)
+  // dan saldo memakai rantai carry settlement yang sama dengan saat membayar.
   app.get(['/api/vendor-settlements/board', '/vendor-settlements/board'], (req, res) => {
     const d = req.query.date || new Date().toISOString().slice(0, 10);
-    const rows = db.vendors.map((v) => {
-      const sales = db.orders.filter((o) => o.created_at && o.created_at.startsWith(d) && o.status === 'completed');
-      let total_sales = 0;
-      sales.forEach((order) => {
-        (order.items || []).forEach((item) => {
-          if (item.vendor_id === v.id || v.name.toLowerCase().includes(item.name.toLowerCase())) {
-            total_sales += (Number(item.price || 0) * Number(item.qty || 1));
-          }
-        });
-      });
-      const share = Math.round((total_sales * Number(v.share_percent || 80)) / 100);
-      const paid = db.vendorSettlements
-        .filter((s) => s.vendor_id === v.id && s.date === d && s.status !== 'voided')
-        .reduce((sum, s) => sum + Number(s.paid || 0), 0);
-      const unpaid = Math.max(0, share - paid);
-
-      return {
-        vendor_id: v.id,
-        vendor_name: v.name,
-        share_percent: v.share_percent,
-        total_sales,
-        total_share: share,
-        total_paid: paid,
-        total_unpaid: unpaid,
-      };
-    });
+    const rows = vendorLedger.buildVendorBoard({
+      vendors: db.vendors || [],
+      orders: db.orders || [],
+      settlements: db.vendorSettlements || [],
+      date: d,
+      wibDate: (o) => (o && o.created_at ? wibDateOnly(o.created_at) : ''),
+    }).map((r) => ({
+      ...r,
+      // Alias lama dipertahankan agar UI yang sudah memakainya tidak rusak.
+      total_sales: r.gross,
+      total_share: r.share,
+      total_paid: r.paid_settled,
+      total_unpaid: Math.max(0, r.remaining),
+    }));
 
     const summary = {
       total_sales: rows.reduce((s, r) => s + r.total_sales, 0),
@@ -1209,42 +1216,94 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       total_unpaid: rows.reduce((s, r) => s + r.total_unpaid, 0),
     };
 
-    res.json({ date: d, rows, summary });
+    return res.json({ date: d, rows, summary });
   });
 
   // POST /api/vendor-settlements
+  // Audit 7 Nov 2026 — dua bug uang yang ditutup di sini:
+  //  1. `carry_in` dulu tidak pernah dibawa, jadi settlement susulan untuk
+  //     vendor yang sama menganggap hak vendor belum timbul (Bakso 13 Sep:
+  //     hak Rp 988.200 dihitung dua kali).
+  //  2. `paid` yang melebihi total tagihan diterima apa adanya, menghasilkan
+  //     carry_out negatif (STL-20260829-0001: bayar 5.377.200 atas tagihan 804.300).
+  // Sekarang saldo masuk diambil dari ledger oleh server dan kelebihan bayar
+  // ditolak dengan 409.
   app.post(['/api/vendor-settlements', '/vendor-settlements'], (req, res) => {
-    const { date, vendor_id, paid, payment_method, note, create_cash_out } = req.body;
-    const vendor = db.vendors.find((v) => v.id === vendor_id);
-    const seq = String(db.vendorSettlements.length + 1).padStart(4, '0');
-    const settlement_no = `STL-${(date || '').replace(/-/g, '') || '20260918'}-${seq}`;
+    const { date, vendor_id, paid, payment_method, note, create_cash_out } = req.body || {};
+    const vendor = (db.vendors || []).find((v) => v.id === vendor_id);
+    if (!vendor) return res.status(404).json({ detail: 'Vendor tidak ditemukan' });
+
+    const settlementDate = date || new Date().toISOString().slice(0, 10);
+
+    // Hak vendor untuk tanggal itu: pakai angka yang dibekukan saat order dibuat.
+    const ledger = vendorLedger.buildVendorBoard({
+      vendors: [vendor],
+      orders: db.orders || [],
+      settlements: db.vendorSettlements || [],
+      date: settlementDate,
+      wibDate: (o) => (o && o.created_at ? wibDateOnly(o.created_at) : ''),
+    })[0];
+
+    const check = vendorLedger.computeSettlement({
+      vendorId: vendor_id,
+      vendorShare: ledger ? ledger.share : 0,
+      paid,
+      settlements: db.vendorSettlements || [],
+    });
+    if (!check.ok) {
+      const overpay = check.errors.find((e) => e.code === 'overpayment');
+      if (overpay) {
+        return res.status(409).json({
+          detail: overpay.detail,
+          code: overpay.code,
+          carry_in: check.carry_in,
+          vendor_share: check.vendor_share,
+          total_due: check.total_due,
+        });
+      }
+      return res.status(400).json({ detail: check.errors[0].detail, code: check.errors[0].code });
+    }
+
+    const seq = String((db.vendorSettlements || []).length + 1).padStart(4, '0');
+    const settlement_no = `STL-${settlementDate.replace(/-/g, '')}-${seq}`;
 
     const record = {
       id: 'stl-' + Date.now(),
       settlement_no,
-      date: date || new Date().toISOString().slice(0, 10),
+      date: settlementDate,
       vendor_id,
-      vendor_name: vendor?.name || 'Vendor',
-      paid: Number(paid || 0),
-      payment_method: payment_method || 'cash',
+      vendor_name: vendor.name,
+      // Hak vendor dibekukan di record supaya angka historis tidak berubah
+      // ketika harga produk atau persentase diubah belakangan.
+      gross: ledger ? ledger.gross : 0,
+      vendor_share: check.vendor_share,
+      carry_in: check.carry_in,
+      total_due: check.total_due,
+      paid: check.paid,
+      carry_out: check.carry_out,
+      outlet_share: vendorLedger.round2((ledger ? ledger.gross : 0) - check.vendor_share),
+      payment_method: payment_method || 'Tunai',
       note: note || '',
       created_at: new Date().toISOString(),
       status: 'completed',
+      voided: false,
     };
 
     if (create_cash_out && record.paid > 0) {
+      const movementId = 'c-stl-' + Date.now();
       db.cashTransactions.unshift({
-        id: 'c-stl-' + Date.now(),
+        id: movementId,
         type: 'out',
-        category: 'Bayar Supplier',
+        category: 'Bagi Hasil Vendor',
         amount: record.paid,
-        note: `Bagi hasil vendor ${record.vendor_name} (${record.settlement_no})`,
+        note: `Settlement ${record.settlement_no} — ${record.vendor_name} (${record.date})`,
         created_at: new Date().toISOString(),
       });
+      record.cash_movement_id = movementId;
     }
 
     db.vendorSettlements.unshift(record);
-    res.json(record);
+    return res.json(record);
   });
 
   // GET /api/vendor-settlements/:id/print
@@ -1258,14 +1317,158 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
     });
   });
 
+  // ── Koreksi jurnal (admin) ────────────────────────────────────────────────
+  // Audit 7 Nov 2026: mengedit `data/pos-db.json` saat server hidup SELALU hilang,
+  // karena server memuat snapshot ke memori sekali saat start lalu menulis ulang
+  // seluruh berkas dari memori pada setiap request yang mengubah data. Endpoint
+  // ini mengoreksi objek `db` di memori lalu `persistNow()`, sehingga koreksi
+  // benar-benar menjadi bagian dari keadaan aplikasi tanpa perlu restart.
+  //
+  // Aman secara default: tanpa `apply: true` endpoint hanya melaporkan rencana
+  // (dry-run) dan tidak mengubah apa pun.
+  const requireCorrectionAdmin = (req, res, next) => {
+    if (!req.user) return res.status(401).json({ detail: 'Harap login terlebih dahulu' });
+    const isSuper = Boolean(req.user.is_superadmin);
+    const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ detail: 'Akses Ditolak: koreksi jurnal memerlukan hak Administrator atau Super Admin' });
+    }
+    return next();
+  };
+
+  const handleCorrection = (req, res) => {
+    const body = req.body || {};
+    const apply = body.apply === true;
+    const limit = Number(body.limit) > 0 ? Number(body.limit) : 0;
+
+    const plan = journalCorrection.planCorrections(db, { collection: body.collection });
+    let operations = plan.operations;
+    if (limit > 0) operations = operations.slice(0, limit);
+
+    const before = journalCorrection.summarize(db, plan.collectionKey);
+
+    if (!apply) {
+      return res.json({
+        mode: 'dry-run',
+        collection: plan.collectionKey,
+        planned: operations.length,
+        skipped_by_limit: plan.operations.length - operations.length,
+        operations: operations.map((op) => ({
+          op: op.op,
+          settlement_no: op.settlement_no || undefined,
+          id: op.id,
+          when: op.when || undefined,
+          reason: op.reason,
+          before: op.before,
+          after: op.after,
+        })),
+        before,
+        history: journalCorrection.correctionHistory(db, plan.collectionKey),
+        note: 'Tidak ada perubahan. Kirim {"apply": true} untuk menerapkan.',
+      });
+    }
+
+    if (operations.length === 0) {
+      return res.json({
+        mode: 'apply',
+        applied: 0,
+        persisted: false,
+        history: journalCorrection.correctionHistory(db, plan.collectionKey),
+        collection: plan.collectionKey,
+        before,
+        after: before,
+        note: 'Tidak ada yang perlu dikoreksi. `persisted: false` karena tidak ada perubahan untuk ditulis.',
+      });
+    }
+
+    const batchId = `koreksi-${Date.now()}`;
+    const result = journalCorrection.applyCorrections(db, operations, {
+      batchId,
+      stamp: body.stamp || undefined,
+    });
+
+    // Persist ke disk dari memori. Bila gagal, koreksi di memori sudah terlanjur
+    // terjadi tetapi disk tetap lama; laporkan supaya operator tahu.
+    let persisted = false;
+    let persistError = null;
+    try {
+      persistNow();
+      persisted = true;
+    } catch (err) {
+      persistError = err.message;
+    }
+
+    const after = journalCorrection.summarize(db, plan.collectionKey);
+    try {
+      if (typeof broadcastRealtimeSync === 'function') {
+        broadcastRealtimeSync({ type: 'journal_corrected', batch_id: batchId, applied: result.applied });
+      }
+    } catch (_) { /* realtime bersifat opsional */ }
+
+    return res.json({
+      mode: 'apply',
+      batch_id: batchId,
+      collection: plan.collectionKey,
+      applied: result.applied,
+      persisted,
+      persist_error: persistError,
+      operations: operations.map((op) => ({ op: op.op, settlement_no: op.settlement_no || undefined, id: op.id })),
+      before,
+      after,
+      history: journalCorrection.correctionHistory(db, plan.collectionKey),
+    });
+  };
+
+  app.get(['/api/admin/journal-corrections', '/admin/journal-corrections'], requireCorrectionAdmin, handleCorrection);
+  app.post(['/api/admin/journal-corrections', '/admin/journal-corrections'], requireCorrectionAdmin, handleCorrection);
+
   // POST /api/vendor-settlements/:id/void
+  // Audit 7 Nov 2026: void dulu hanya menandai status sehingga baris kas keluar
+  // tetap hidup. Bukti nyatanya STL-20260914-0001 (Rp 70.000) sudah dibatalkan
+  // pukul 14:25 dan diganti STL-20260914-0002 (Rp 56.000), tetapi total kas
+  // keluar shift 14 September masih memasukkan Rp 70.000 itu. Sekarang void
+  // ikut menutup baris kas keluarnya sehingga total kas keluar shift benar.
   app.post(['/api/vendor-settlements/:id/void', '/vendor-settlements/:id/void'], (req, res) => {
-    const stl = db.vendorSettlements.find((s) => s.id === req.params.id);
+    const stl = (db.vendorSettlements || []).find((s) => s.id === req.params.id);
     if (!stl) return res.status(404).json({ detail: 'Settlement tidak ditemukan' });
+    if (vendorLedger.isVoided(stl)) {
+      return res.status(409).json({ detail: `Settlement ${stl.settlement_no} sudah dibatalkan.` });
+    }
+
+    const voidedAt = new Date().toISOString();
     stl.status = 'voided';
+    stl.voided = true;
     stl.void_reason = req.body.reason || 'Dibatalkan oleh admin';
-    stl.voided_at = new Date().toISOString();
-    res.json({ status: 'ok', detail: 'Settlement dibatalkan' });
+    stl.voided_at = voidedAt;
+
+    // Tarik kas keluar yang dibuat oleh settlement ini. Dua bentuk data didukung:
+    // `cash_transactions` (id dirujuk langsung) dan `cash_movements` (ledger kas
+    // yang dipakai laporan shift).
+    let reversed = 0;
+    const movedId = stl.cash_movement_id;
+    if (movedId) {
+      const before = (db.cashTransactions || []).length;
+      db.cashTransactions = db.cashTransactions.filter((t) => t.id !== movedId);
+      reversed += before - db.cashTransactions.length;
+
+      const beforeMv = (db.cash_movements || []).length;
+      if (beforeMv) {
+        db.cash_movements = db.cash_movements.filter((m) => m.id !== movedId);
+        reversed += beforeMv - db.cash_movements.length;
+      }
+      stl.cash_movement_id = null;
+    }
+    // Jejak audit: nominal yang ditarik kembali supaya laporan bisa menjelaskan
+    // kenapa total kas keluar turun.
+    stl.cash_reversed = { amount: Number(stl.paid) || 0, rows: reversed, at: voidedAt };
+
+    if (typeof persistNow === 'function') persistNow();
+    return res.json({
+      status: 'ok',
+      detail: `Settlement ${stl.settlement_no} dibatalkan`,
+      cash_rows_reversed: reversed,
+      carry_in_after_void: vendorLedger.currentVendorBalance(stl.vendor_id, db.vendorSettlements || []),
+    });
   });
 
   // POST /api/vendor-settlements/:id/send-wa
