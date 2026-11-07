@@ -1201,6 +1201,10 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       // Snapshot produksi tidak selalu menyimpan order per tanggal, tetapi shift
       // menyimpan rekap hak vendor. Tanpa ini board menampilkan Rp 0.
       shifts: db.shifts || [],
+      // Order yang dibuat sebelum perbaikan 8 Nov tidak membawa vendor_id di baris
+      // item; katalog produk dipakai sebagai cadangan agar omzet vendor lama tetap
+      // terbaca, bukan hilang jadi Rp 0.
+      products: db.products || [],
       date: d,
       wibDate: (o) => (o && o.created_at ? wibDateOnly(o.created_at) : ''),
     }).map((r) => ({
@@ -1244,6 +1248,7 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       orders: db.orders || [],
       settlements: db.vendorSettlements || [],
       shifts: db.shifts || [],
+      products: db.products || [],
       date: settlementDate,
       wibDate: (o) => (o && o.created_at ? wibDateOnly(o.created_at) : ''),
     })[0];

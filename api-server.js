@@ -14,6 +14,7 @@ const {
   saveSnapshot,
   resolveSnapshotPath,
 } = require('./lib/db-snapshot');
+const vendorLedger = require('./lib/vendor-settlement');
 
 // Secret Key for JWT Signing & Verification
 // Review-04 R-AUTH-01: a hard-coded fallback secret means every deployment that forgot
@@ -2312,6 +2313,15 @@ app.patch(['/api/orders/:id/items', '/orders/:id/items'], (req, res) => {
       price = Math.round((Number(prod.price || price) || 0) * weight * 100) / 100;
     }
     const qty = Number(it.qty || 1) || 1;
+    const vendor_id = prod.vendor_id || it.vendor_id || null;
+    const vendor_share_percent = prod.vendor_id || it.vendor_id
+      ? Number(prod.vendor_share_percent ?? it.vendor_share_percent ?? 0) || 0
+      : null;
+    const lineGross = Math.round(price * qty * 100) / 100;
+    const vendor_share = vendor_id && vendor_share_percent > 0
+      ? Math.round(lineGross * (vendor_share_percent / 100) * 100) / 100
+      : null;
+
     return {
       product_id: prod.id || it.product_id || ('p-' + Date.now()),
       name: prod.name || it.name || 'Produk',
@@ -2322,17 +2332,53 @@ app.patch(['/api/orders/:id/items', '/orders/:id/items'], (req, res) => {
       weight,
       weight_unit: prod.weight_unit || it.weight_unit || null,
       notes: it.notes || null,
-      subtotal: Math.round(price * qty * 100) / 100,
+      subtotal: lineGross,
+      vendor_id,
+      vendor_share_percent,
+      vendor_share,
     };
   });
   const subtotal = Math.round(items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0), 0) * 100) / 100;
   const discount = Math.min(Number(order.discount) || 0, subtotal);
   const serviceTax = Math.min(Number(order.service_tax) || 0, Math.max(0, subtotal - discount));
+
+  // Rekap ulang bagi hasil per vendor
+  const orderVendorShare = [];
+  items.forEach((item) => {
+    if (!item.vendor_id) return;
+    const vendor = (db.vendors || []).find((v) => v.id === item.vendor_id);
+    let row = orderVendorShare.find((r) => r.vendor_id === item.vendor_id);
+    if (!row) {
+      row = {
+        vendor_id: item.vendor_id,
+        vendor_name: vendor ? vendor.name : '',
+        gross: 0,
+        share: 0,
+        share_percent: Number(item.vendor_share_percent) || 0,
+        items: [],
+      };
+      orderVendorShare.push(row);
+    }
+    const lineGross = Math.round((Number(item.price) || 0) * (Number(item.qty) || 0) * 100) / 100;
+    const lineShare = Math.round((Number(item.vendor_share) || 0) * 100) / 100;
+    row.gross = Math.round((row.gross + lineGross) * 100) / 100;
+    row.share = Math.round((row.share + lineShare) * 100) / 100;
+    row.items.push({
+      product_id: item.product_id,
+      name: item.name,
+      qty: item.qty,
+      gross: lineGross,
+      vendor_share: lineShare,
+    });
+  });
+
   order.items = items;
   order.subtotal = subtotal;
   order.discount = discount;
   order.service_tax = serviceTax;
   order.total = Math.round((subtotal - discount + serviceTax) * 100) / 100;
+  order.vendor_share = orderVendorShare;
+  order.vendor_total_share = Math.round(orderVendorShare.reduce((s, r) => s + r.share, 0) * 100) / 100;
   res.json(order);
 });
 
@@ -2450,6 +2496,18 @@ app.post(['/api/orders', '/orders'], (req, res) => {
       weight_unit,
       notes: it.notes || null,
       subtotal: Math.round(price * qty * 100) / 100,
+      // Produk titipan vendor: identitas vendor dan persentase bagi hasil
+      // dibekukan di baris order saat transaksi dibuat. Tanpa ini laporan bagi
+      // hasil membaca baris yang tidak punya `vendor_id` dan menampilkan Rp 0
+      // walaupun produknya sudah diatur (keluhan 8 Nov 2026).
+      vendor_id: prod.vendor_id || it.vendor_id || null,
+      vendor_share_percent: prod.vendor_id || it.vendor_id
+        ? Number(prod.vendor_share_percent ?? it.vendor_share_percent ?? 0) || 0
+        : null,
+      // Diskon ditanggung outlet: hak vendor tetap persen × harga jual penuh.
+      vendor_share: prod.vendor_id || it.vendor_id
+        ? Math.round(price * qty * ((Number(prod.vendor_share_percent ?? it.vendor_share_percent ?? 0) || 0) / 100) * 100) / 100
+        : null,
     };
   });
 
@@ -2503,6 +2561,38 @@ app.post(['/api/orders', '/orders'], (req, res) => {
   const amountPaid = Number(req.body.amount_paid !== undefined && req.body.amount_paid !== null ? req.body.amount_paid : total);
   const change = Number(req.body.change !== undefined ? req.body.change : Math.max(0, amountPaid - total));
 
+  // Rekap bagi hasil per vendor dibekukan di order (sumber utama board
+  // settlement). Diskon TIDAK memotong hak vendor — diskon ditanggung outlet —
+  // jadi angkanya dihitung dari harga jual penuh baris.
+  const orderVendorShare = [];
+  resolvedItems.forEach((item) => {
+    if (!item.vendor_id) return;
+    const vendor = (db.vendors || []).find((v) => v.id === item.vendor_id);
+    let row = orderVendorShare.find((r) => r.vendor_id === item.vendor_id);
+    if (!row) {
+      row = {
+        vendor_id: item.vendor_id,
+        vendor_name: vendor ? vendor.name : '',
+        gross: 0,
+        share: 0,
+        share_percent: Number(item.vendor_share_percent) || 0,
+        items: [],
+      };
+      orderVendorShare.push(row);
+    }
+    const lineGross = Math.round((Number(item.price) || 0) * (Number(item.qty) || 0) * 100) / 100;
+    const lineShare = Math.round((Number(item.vendor_share) || 0) * 100) / 100;
+    row.gross = Math.round((row.gross + lineGross) * 100) / 100;
+    row.share = Math.round((row.share + lineShare) * 100) / 100;
+    row.items.push({
+      product_id: item.product_id,
+      name: item.name,
+      qty: item.qty,
+      gross: lineGross,
+      vendor_share: lineShare,
+    });
+  });
+
   const order = {
     id: 'ord-' + Date.now(),
     order_number: orderNumber,
@@ -2514,6 +2604,10 @@ app.post(['/api/orders', '/orders'], (req, res) => {
     discount,
     service_tax: serviceTax,
     total,
+    // Array kosong berarti order tanpa produk vendor; jangan biarkan nilai dari
+    // body klien menimpa hasil hitungan server.
+    vendor_share: orderVendorShare,
+    vendor_total_share: Math.round(orderVendorShare.reduce((s, r) => s + r.share, 0) * 100) / 100,
     cashier_name: cashierName,
     cashier_id: cashierId,
     payment_method: pmId || 'cash',
@@ -2598,15 +2692,23 @@ app.get(['/api/shifts/current', '/shifts/current'], (req, res) => {
 });
 
 app.get(['/api/shifts/current/vendor', '/shifts/current/vendor'], (req, res) => {
-  const vendors = (db.vendors || []).map((v) => ({
-    vendor_id: v.id,
-    vendor_name: v.name,
-    gross: 0,
-    share: 0,
-    paid: 0,
-    remaining: 0,
-  }));
-  res.json({ vendors });
+  const vendors = db.vendors || [];
+  const settlements = db.vendorSettlements || [];
+  const shifts = db.shifts || [];
+  const today = wibTodayStr();
+
+  // Hitung hak vendor yang timbul hari ini dari order nyata + saldo carry_in
+  // (menggunakan engine yang sama dengan board settlement agar angkanya konsisten).
+  const rows = vendorLedger.buildVendorBoard({
+    vendors,
+    orders: db.orders || [],
+    settlements,
+    shifts,
+    products: db.products || [],
+    date: today,
+    wibDate: (o) => (o && o.created_at ? orderDateStr(o) : ''),
+  });
+  res.json({ vendors: rows });
 });
 
 app.get(['/api/shifts/history', '/shifts/history'], (req, res) => {
@@ -2703,6 +2805,87 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
       });
     }
   });
+
+  // --- Bagi hasil vendor dibekukan di laporan shift & buat settlement otomatis
+  // Setiap pembayaran vendor saat tutup shift otomatis mencatat baris
+  // `vendorSettlements` (source="shift_close") dan `cashTransactions` (kategori
+  // "Bagi Hasil Vendor"), sehingga memotong kas shift tanpa double-deduction.
+  const closeDate = wibTodayStr();
+  const vendorRows = vendorLedger.buildVendorBoard({
+    vendors: db.vendors || [],
+    orders: db.orders || [],
+    settlements: db.vendorSettlements || [],
+    shifts: db.shifts || [],
+    products: db.products || [],
+    date: closeDate,
+    wibDate: (o) => (o && o.created_at ? orderDateStr(o) : ''),
+  });
+  const paidByVendor = {};
+  vendorPayments.forEach((p) => {
+    if (!p || !p.vendor_id) return;
+    paidByVendor[p.vendor_id] = Number(p.paid) || 0;
+  });
+
+  const vendorReport = vendorRows.map((r) => {
+    const paid = Number(paidByVendor[r.vendor_id] || 0);
+
+    if (paid > 0) {
+      const seq = String((db.vendorSettlements || []).length + 1).padStart(4, '0');
+      const settlement_no = `STL-${closeDate.replace(/-/g, '')}-${seq}`;
+      const movementId = 'c-stl-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5);
+
+      db.vendorSettlements = db.vendorSettlements || [];
+      db.vendorSettlements.unshift({
+        id: 'stl-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+        settlement_no,
+        date: closeDate,
+        vendor_id: r.vendor_id,
+        vendor_name: r.vendor_name,
+        gross: r.gross,
+        vendor_share: r.share,
+        carry_in: r.carry_in || 0,
+        total_due: r.total_due || r.share,
+        paid,
+        carry_out: Math.round(((r.total_due || r.share) - paid) * 100) / 100,
+        outlet_share: Math.round((r.gross - r.share) * 100) / 100,
+        payment_method: 'Tunai',
+        note: `Bagi hasil tutup shift (${shift.user_name || 'Kasir'})`,
+        source: 'shift_close',
+        shift_id: shift.id,
+        created_at: new Date().toISOString(),
+        status: 'completed',
+        voided: false,
+        cash_movement_id: movementId,
+      });
+
+      db.cashTransactions = db.cashTransactions || [];
+      db.cashTransactions.unshift({
+        id: movementId,
+        type: 'out',
+        scope: 'fnb',
+        category: 'Bagi Hasil Vendor',
+        amount: paid,
+        note: `Bagi Hasil ${r.vendor_name} (${settlement_no})`,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    return {
+      vendor_id: r.vendor_id,
+      vendor_name: r.vendor_name,
+      gross: r.gross,
+      share: r.share,
+      paid,
+      difference: Math.round((paid - r.remaining) * 100) / 100,
+      carry_in: r.carry_in,
+      total_due: r.total_due,
+      remaining: r.remaining,
+      items: r.items || [],
+    };
+  });
+  const vendor_total_share = Math.round(vendorReport.reduce((s, v) => s + v.share, 0) * 100) / 100;
+  const vendor_total_gross = Math.round(vendorReport.reduce((s, v) => s + v.gross, 0) * 100) / 100;
+  const vendor_total_paid = Math.round(vendorReport.reduce((s, v) => s + v.paid, 0) * 100) / 100;
 
   // Calculate Cash In & Out per scope
   const cashTxs = db.cashTransactions || [];
@@ -2817,6 +3000,13 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
     // and Rp 43.000 QRIS that no cashier ever rang up.
     by_type: summary.by_type || { dine_in: { count: 0, total: 0 }, take_away: { count: 0, total: 0 }, retail: { count: 0, total: 0 } },
     by_payment: summary.by_payment || {},
+    // Bagi hasil vendor: dibaca panel tutup shift, cetak thermal, dan board
+    // settlement (fallback shift_report). Tanpa field ini semuanya tampil Rp 0.
+    vendor_share: vendorReport,
+    vendor_total_share,
+    vendor_total_gross,
+    vendor_total_paid,
+    vendor_total_outlet: Math.round((vendor_total_gross - vendor_total_share) * 100) / 100,
   };
 
   db.shiftHistory.unshift(closed);
@@ -2828,6 +3018,11 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
       ...closed,
       dibuka_oleh: closed.opened_by || closed.user_name || 'Kasir 1',
       ditutup_oleh: closed.closed_by || 'Kasir 1',
+      vendor_share: vendorReport,
+      vendor_total_share,
+      vendor_total_gross,
+      vendor_total_paid,
+      vendor_total_outlet: closed.vendor_total_outlet,
     },
     reports: {
       fnb: {
@@ -4007,7 +4202,138 @@ app.get('/api/reports/range', (req, res) => {
 });
 
 app.get('/api/reports/period', (req, res) => {
-  res.json({ sales: db.orders, summary: { total: db.orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0) } });
+  const start = req.query.start || wibTodayStr();
+  const end = req.query.end || req.query.start || wibTodayStr();
+
+  const paidOrders = (db.orders || []).filter((o) => {
+    if (o.status !== 'completed' && o.status !== 'paid') return false;
+    const od = orderDateStr(o);
+    if (!od) return false;
+    return od >= start && od <= end;
+  });
+
+  const by_type = {
+    dine_in: { count: 0, total: 0 },
+    take_away: { count: 0, total: 0 },
+    retail: { count: 0, total: 0 },
+  };
+
+  let total_sales = 0;
+  let total_cost = 0;
+  let fnb_total = 0;
+  let retail_total = 0;
+  let cost_fnb = 0;
+  let cost_retail = 0;
+  const product_sales = {};
+  const by_pm = {};
+
+  paidOrders.forEach((o) => {
+    const rawType = o.type || o.order_type || 'dine_in';
+    const oType = rawType === 'retail' ? 'retail' : rawType === 'take_away' ? 'take_away' : 'dine_in';
+    const oTotal = Number(o.total) || 0;
+    by_type[oType].count += 1;
+    by_type[oType].total += oTotal;
+    total_sales += oTotal;
+
+    const pm = o.payment_method || 'cash';
+    by_pm[pm] = (by_pm[pm] || 0) + oTotal;
+
+    if (oType === 'retail') {
+      retail_total += oTotal;
+    } else {
+      fnb_total += oTotal;
+    }
+
+    if (Array.isArray(o.items)) {
+      o.items.forEach((it) => {
+        const line = (Number(it.price) || 0) * (Number(it.qty) || 1);
+        const prod = (db.products || []).find((p) => p.id === it.product_id || p.id === it.id || p.name === it.name) || {};
+        const unitCost = Number(prod.cost_price ?? prod.cost ?? it.cost ?? 0) || 0;
+        const cost = unitCost * (Number(it.qty) || 1);
+        total_cost += cost;
+        if (oType === 'retail') cost_retail += cost;
+        else cost_fnb += cost;
+
+        const itType = prod.type || (oType === 'retail' ? 'retail' : 'makanan');
+        if (!product_sales[it.name]) {
+          product_sales[it.name] = { qty: 0, total: 0, cost: 0, type: itType, category_id: prod.category_id || null };
+        }
+        product_sales[it.name].qty += Number(it.qty) || 1;
+        product_sales[it.name].total += line;
+        product_sales[it.name].cost += cost;
+      });
+    }
+  });
+
+  const gross_profit_fnb = Math.max(0, fnb_total - cost_fnb);
+  const gross_profit_retail = Math.max(0, retail_total - cost_retail);
+  const gross_profit = Math.max(0, total_sales - total_cost);
+
+  // Vendor report across the period
+  const vendorMap = {};
+  paidOrders.forEach((o) => {
+    (o.items || []).forEach((it) => {
+      const prod = (db.products || []).find((p) => p.id === it.product_id || p.id === it.id) || {};
+      const vId = it.vendor_id || prod.vendor_id;
+      if (!vId) return;
+      if (!vendorMap[vId]) {
+        const vendor = (db.vendors || []).find((v) => v.id === vId) || {};
+        vendorMap[vId] = {
+          vendor_id: vId,
+          vendor_name: vendor.name || it.name || 'Vendor',
+          scope: prod.type === 'retail' ? 'retail' : 'fnb',
+          qty: 0,
+          gross: 0,
+          vendor_share: 0,
+          outlet_share: 0,
+          items: [],
+        };
+      }
+      const qty = Number(it.qty) || 1;
+      const lineGross = Number(it.gross) || Number(it.subtotal) || ((Number(it.price) || 0) * qty);
+      const rate = vendorLedger.rateForItem(it, vendorMap[vId]) ?? vendorLedger.rateForItem(prod, vendorMap[vId]);
+      const lineShare = it.vendor_share !== undefined && it.vendor_share !== null
+        ? Number(it.vendor_share)
+        : (rate !== null ? Math.round(lineGross * rate * 100) / 100 : 0);
+      vendorMap[vId].qty += qty;
+      vendorMap[vId].gross = Math.round((vendorMap[vId].gross + lineGross) * 100) / 100;
+      vendorMap[vId].vendor_share = Math.round((vendorMap[vId].vendor_share + lineShare) * 100) / 100;
+      vendorMap[vId].outlet_share = Math.round((vendorMap[vId].gross - vendorMap[vId].vendor_share) * 100) / 100;
+      vendorMap[vId].items.push({
+        product_id: it.product_id,
+        name: it.name,
+        qty,
+        gross: lineGross,
+        vendor_share: lineShare,
+      });
+    });
+  });
+  const vendorRows = Object.values(vendorMap);
+  const fnb_vendor_share = vendorRows.filter((r) => r.scope !== 'retail').reduce((s, r) => s + r.vendor_share, 0);
+  const retail_vendor_share = vendorRows.filter((r) => r.scope === 'retail').reduce((s, r) => s + r.vendor_share, 0);
+  const vendorData = {
+    rows: vendorRows,
+    fnb_vendor_share,
+    retail_vendor_share,
+    total_vendor_share: fnb_vendor_share + retail_vendor_share,
+  };
+
+  res.json({
+    start,
+    end,
+    total_sales,
+    order_count: paidOrders.length,
+    fnb_total,
+    retail_total,
+    total_cost,
+    gross_profit,
+    gross_profit_fnb,
+    gross_profit_retail,
+    by_type,
+    by_payment: by_pm,
+    vendor: vendorData,
+    sales: paidOrders,
+  });
 });
 
 app.get('/api/reports/profit', (req, res) => {
