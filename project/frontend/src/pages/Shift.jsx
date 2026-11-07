@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import {
   Clock, Play, Square, Loader2, Wallet, Users, MessageCircle, ChevronDown, ChevronRight,
   Printer, Ban, Plus, Trash2, Utensils, Store, UserCheck, Info, AlertTriangle,
-  Coins, Calculator, CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, AlertCircle,
-  Scale, ShieldAlert, Sparkles, Check, FileText,
+  Calculator, CheckCircle2, RotateCcw, AlertCircle,
+  Scale, ShieldAlert, Sparkles, FileText,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { bizCache, loadBusiness, labelsOf } from "@/lib/business";
@@ -15,20 +15,6 @@ import { printText as printText_, printShiftClosingReport } from "@/lib/print";
 import ShiftClosingReportView from "@/components/ShiftClosingReportView";
 
 const DEF_CATS = ["Bahan Baku", "Belanja Operasional", "Bayar Supplier", "Kasbon", "Lainnya"];
-
-// Pecahan uang Rupiah untuk hitung fisik kas
-export const INDO_DENOMINATIONS = [
-  { value: 100000, label: "Rp 100.000", type: "bill", badge: "bg-red-50 text-red-700 border-red-200", color: "#DC2626" },
-  { value: 50000, label: "Rp 50.000", type: "bill", badge: "bg-blue-50 text-blue-700 border-blue-200", color: "#2563EB" },
-  { value: 20000, label: "Rp 20.000", type: "bill", badge: "bg-emerald-50 text-emerald-700 border-emerald-200", color: "#059669" },
-  { value: 10000, label: "Rp 10.000", type: "bill", badge: "bg-purple-50 text-purple-700 border-purple-200", color: "#7C3AED" },
-  { value: 5000, label: "Rp 5.000", type: "bill", badge: "bg-amber-50 text-amber-700 border-amber-200", color: "#D97706" },
-  { value: 2000, label: "Rp 2.000", type: "bill", badge: "bg-zinc-100 text-zinc-700 border-zinc-300", color: "#71717A" },
-  { value: 1000, label: "Rp 1.000", type: "bill", badge: "bg-teal-50 text-teal-700 border-teal-200", color: "#0D9488" },
-  { value: 500, label: "Rp 500 (Koin)", type: "coin", badge: "bg-orange-50 text-orange-700 border-orange-200", color: "#EA580C" },
-  { value: 200, label: "Rp 200 (Koin)", type: "coin", badge: "bg-yellow-50 text-yellow-700 border-yellow-200", color: "#CA8A04" },
-  { value: 100, label: "Rp 100 (Koin)", type: "coin", badge: "bg-stone-100 text-stone-700 border-stone-300", color: "#78716C" },
-];
 
 const QUICK_VARIANCE_REASONS = [
   "Selisih pembulatan uang receh/koin transaksi tunai",
@@ -62,12 +48,7 @@ export default function Shift() {
   const [closeRetail, setCloseRetail] = useState("");
 
   // State Hitung Fisik Kas & Laporan Selisih
-  const [denomCounts, setDenomCounts] = useState({});
   const [varianceReason, setVarianceReason] = useState("");
-  const [guidedStep, setGuidedStep] = useState(1); // 1: Hitung Fisik, 2: Rekonsiliasi, 3: Pengeluaran & Tutup
-  const [closingMode, setClosingMode] = useState("guided"); // "guided" or "manual"
-  const [allocationMode, setAllocationMode] = useState("split_equal"); // "split_equal", "fnb_only", "retail_only", "proportional"
-  const [showDenomBreakdown, setShowDenomBreakdown] = useState(true);
 
   // Uang transport: pengeluaran WAJIB saat tutup shift (tidak boleh 0), dibebankan ke F&B.
   // Nilai bawaan diambil dari Pengaturan → Aplikasi; kasir boleh mengubahnya.
@@ -162,12 +143,6 @@ export default function Shift() {
   const delExp = (i) => setExpRows((rows) => rows.filter((_, j) => j !== i));
   const expTotal = expRows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
-  // Perhitungan Fisik dari Pecahan Uang
-  const totalPhysicalCash = INDO_DENOMINATIONS.reduce((sum, d) => {
-    const qty = Number(denomCounts[d.value] || 0);
-    return sum + (qty * d.value);
-  }, 0);
-
   // Perhitungan Nilai Ekspektasi Kas Sistem
   const expOpeningFnb = Number(session?.fnb?.opening_cash ?? (session?.start_cash ? session.start_cash / 2 : 100000));
   const expOpeningRetail = Number(session?.retail?.opening_cash ?? (session?.start_cash ? session.start_cash / 2 : 100000));
@@ -203,72 +178,6 @@ export default function Shift() {
   const isShortage = varianceTotal < 0;
   const progressPercent = expectedCashTotal > 0 ? Math.min(200, Math.round((actualCashTotal / expectedCashTotal) * 100)) : (actualCashTotal > 0 ? 100 : 0);
 
-  const updateDenom = (val, deltaOrVal) => {
-    setDenomCounts((prev) => {
-      const cur = Number(prev[val] || 0);
-      const next = typeof deltaOrVal === "function" ? deltaOrVal(cur) : deltaOrVal;
-      const safe = Math.max(0, Math.floor(Number(next) || 0));
-      const nextObj = { ...prev, [val]: safe };
-      const newTotal = INDO_DENOMINATIONS.reduce((sum, d) => {
-        const q = Number(nextObj[d.value] || 0);
-        return sum + (q * d.value);
-      }, 0);
-
-      // Auto-sinkron ke input kas akhir sesuai mode alokasi
-      if (allocationMode === "split_equal") {
-        const half = Math.floor(newTotal / 2);
-        setCloseFnb(String(half));
-        setCloseRetail(String(newTotal - half));
-      } else if (allocationMode === "retail_only") {
-        setCloseFnb("0");
-        setCloseRetail(String(newTotal));
-      } else if (allocationMode === "proportional") {
-        const base = expectedCashTotal > 0 ? expectedCashTotal : 1;
-        const ratio = Math.max(0, expectedCashFnb) / base;
-        const fnbPart = Math.round(newTotal * ratio);
-        setCloseFnb(String(fnbPart));
-        setCloseRetail(String(newTotal - fnbPart));
-      } else {
-        setCloseFnb(String(newTotal));
-        if (!closeRetail) setCloseRetail("0");
-      }
-      return nextObj;
-    });
-  };
-
-  const applyAllocation = (mode) => {
-    setAllocationMode(mode);
-    if (totalPhysicalCash <= 0) return;
-    if (mode === "split_equal") {
-      const half = Math.floor(totalPhysicalCash / 2);
-      setCloseFnb(String(half));
-      setCloseRetail(String(totalPhysicalCash - half));
-      toast.success(`Uang fisik ${rupiah(totalPhysicalCash)} dibagi 50:50 (${rupiah(half)} & ${rupiah(totalPhysicalCash - half)})`);
-    } else if (mode === "retail_only") {
-      setCloseFnb("0");
-      setCloseRetail(String(totalPhysicalCash));
-      toast.success(`Seluruh uang fisik ${rupiah(totalPhysicalCash)} dialokasikan ke ${lb.retail}`);
-    } else if (mode === "proportional") {
-      const base = expectedCashTotal > 0 ? expectedCashTotal : 1;
-      const ratio = Math.max(0, expectedCashFnb) / base;
-      const fnbPart = Math.round(totalPhysicalCash * ratio);
-      setCloseFnb(String(fnbPart));
-      setCloseRetail(String(totalPhysicalCash - fnbPart));
-      toast.success(`Uang fisik dialokasikan proporsional: ${lb.fnb} ${rupiah(fnbPart)} & ${lb.retail} ${rupiah(totalPhysicalCash - fnbPart)}`);
-    } else {
-      setCloseFnb(String(totalPhysicalCash));
-      setCloseRetail("0");
-      toast.success(`Seluruh uang fisik ${rupiah(totalPhysicalCash)} dialokasikan ke ${lb.fnb}`);
-    }
-  };
-
-  const resetPhysicalCount = () => {
-    setDenomCounts({});
-    setCloseFnb("");
-    setCloseRetail("");
-    toast.info("Hitungan fisik kas telah di-reset");
-  };
-
   const close = async () => {
     const tr = Number(transport || 0);
     if (!(tr > 0)) {
@@ -290,7 +199,6 @@ export default function Shift() {
         `Terdapat selisih kas ${varianceTotal > 0 ? "LEBIH" : "KURANG"} (${rupiah(Math.abs(varianceTotal))}). Kasir wajib mengisi catatan / alasan selisih sebelum shift dapat ditutup.`,
         { duration: 12000 }
       );
-      setGuidedStep(2); // Alihkan ke step rekonsiliasi selisih
       return;
     }
 
@@ -306,7 +214,6 @@ export default function Shift() {
         ack_no_expense: needAck && ackNoExp,
         expenses,
         vendor_payments,
-        denominations: denomCounts,
         variance_reason: varianceReason,
       });
       setReport(data.report);
@@ -317,9 +224,7 @@ export default function Shift() {
       setCash(null);
       setTransportTouched(false);
       setAckNoExp(false);
-      setDenomCounts({});
       setVarianceReason("");
-      setGuidedStep(1);
 
       // Kabar hasil auto-kirim WA laporan shift (setelan di Pengaturan → WhatsApp & Laporan)
       const wa = data.wa_auto || {};
@@ -528,84 +433,19 @@ export default function Shift() {
             </div>
           )}
 
-          {/* Tutup shift: Mode Terpandu (Hitung Fisik & Rekonsiliasi) atau Input Manual */}
+          {/* Tutup shift: satu formulir input langsung (tanpa mode terpandu / tab) */}
           <div className="bg-white rounded-2xl border p-6" data-testid="guided-shift-closing-container">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div>
-                <h3 className="font-extrabold text-base flex items-center gap-2">
-                  <Calculator size={18} className="text-[#E63946]" />
-                  Tutup Shift &amp; Rekonsiliasi Kas Fisik
-                </h3>
-                <p className="text-[11px] text-[#52525B] mt-0.5">
-                  Hitung fisik uang tunai, bandingkan otomatis dengan sistem, dan hasilkan laporan selisih kas.
-                </p>
-              </div>
-              <div className="flex items-center gap-1 bg-[#F4F5F7] p-1 rounded-xl">
-                <button
-                  type="button"
-                  data-testid="mode-guided-btn"
-                  onClick={() => setClosingMode("guided")}
-                  className={`tap px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-                    closingMode === "guided" ? "bg-white text-[#0A0A0A] shadow-sm" : "text-[#71717A] hover:text-[#0A0A0A]"
-                  }`}
-                >
-                  <Coins size={13} /> Mode Terpandu
-                </button>
-                <button
-                  type="button"
-                  data-testid="mode-manual-btn"
-                  onClick={() => setClosingMode("manual")}
-                  className={`tap px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-                    closingMode === "manual" ? "bg-white text-[#0A0A0A] shadow-sm" : "text-[#71717A] hover:text-[#0A0A0A]"
-                  }`}
-                >
-                  Input Langsung
-                </button>
-              </div>
+            <div className="mb-4">
+              <h3 className="font-extrabold text-base flex items-center gap-2">
+                <Calculator size={18} className="text-[#E63946]" />
+                Tutup Shift &amp; Rekonsiliasi Kas Fisik
+              </h3>
+              <p className="text-[11px] text-[#52525B] mt-0.5">
+                Hitung fisik uang tunai, bandingkan otomatis dengan sistem, dan hasilkan laporan selisih kas.
+              </p>
             </div>
 
-            {/* Stepper indikator jika mode terpandu */}
-            {closingMode === "guided" && (
-              <div className="grid grid-cols-3 gap-2 p-1.5 bg-[#FAFAFB] border rounded-xl mb-5 text-xs font-bold" data-testid="guided-stepper">
-                <button
-                  type="button"
-                  onClick={() => setGuidedStep(1)}
-                  data-testid="step-btn-1"
-                  className={`tap py-2 rounded-lg text-center flex items-center justify-center gap-1.5 transition-all ${
-                    guidedStep === 1 ? "bg-white border shadow-sm text-[#0A0A0A]" : "text-[#71717A]"
-                  }`}
-                >
-                  <span className="w-5 h-5 rounded-full bg-[#E4E4E7] text-[10px] grid place-items-center">1</span>
-                  <span>1. Hitung Fisik</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGuidedStep(2)}
-                  data-testid="step-btn-2"
-                  className={`tap py-2 rounded-lg text-center flex items-center justify-center gap-1.5 transition-all ${
-                    guidedStep === 2 ? "bg-white border shadow-sm text-[#0A0A0A]" : "text-[#71717A]"
-                  }`}
-                >
-                  <span className="w-5 h-5 rounded-full bg-[#E4E4E7] text-[10px] grid place-items-center">2</span>
-                  <span>2. Rekonsiliasi &amp; Selisih</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGuidedStep(3)}
-                  data-testid="step-btn-3"
-                  className={`tap py-2 rounded-lg text-center flex items-center justify-center gap-1.5 transition-all ${
-                    guidedStep === 3 ? "bg-white border shadow-sm text-[#0A0A0A]" : "text-[#71717A]"
-                  }`}
-                >
-                  <span className="w-5 h-5 rounded-full bg-[#E4E4E7] text-[10px] grid place-items-center">3</span>
-                  <span>3. Pengeluaran &amp; Tutup</span>
-                </button>
-              </div>
-            )}
-
-            {/* KONTEN STEP 1 ATAU MODE MANUAL: HITUNG FISIK KAS & KOMPONEN VISUAL REKONSILIASI */}
-            {(closingMode === "manual" || guidedStep === 1) && (
-              <div className="space-y-4" data-testid="step-physical-count">
+            <div className="space-y-4" data-testid="step-physical-count">
                 {/* Visual Summary Component: Real-time progress hitung fisik kas vs target sistem */}
                 <div className="border rounded-2xl p-4 bg-gradient-to-br from-white to-[#FAFAFB] shadow-xs space-y-3" data-testid="cash-count-progress-summary">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -747,24 +587,9 @@ export default function Shift() {
                     />
                   </div>
                 </div>
-
-                {closingMode === "guided" && (
-                  <button
-                    type="button"
-                    data-testid="step-1-next-btn"
-                    onClick={() => setGuidedStep(2)}
-                    className="tap w-full h-12 mt-2 rounded-xl bg-[#0A0A0A] text-white font-bold flex items-center justify-center gap-2"
-                  >
-                    <span>Lanjut ke Rekonsiliasi &amp; Analisis Selisih</span>
-                    <ArrowRight size={16} />
-                  </button>
-                )}
               </div>
-            )}
 
-            {/* KONTEN STEP 2 ATAU MODE MANUAL: REKONSILIASI OTOMATIS & ANALISIS SELISIH */}
-            {(closingMode === "manual" || guidedStep === 2) && (
-              <div className="space-y-4 pt-2" data-testid="step-reconciliation">
+            <div className="space-y-4 pt-2" data-testid="step-reconciliation">
                 <div className="border rounded-2xl p-4 bg-white shadow-xs" data-testid="reconciliation-card">
                   <div className="flex justify-between items-center border-b pb-2 mb-3">
                     <span className="text-xs font-extrabold uppercase tracking-wider text-[#52525B] flex items-center gap-1.5">
@@ -913,33 +738,10 @@ export default function Shift() {
                     </div>
                   </div>
                 </div>
-
-                {closingMode === "guided" && (
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="button"
-                      data-testid="step-2-back-btn"
-                      onClick={() => setGuidedStep(1)}
-                      className="tap flex-1 h-12 rounded-xl bg-white border font-bold text-xs flex items-center justify-center gap-1.5"
-                    >
-                      <ArrowLeft size={16} /> Kembali ke Hitung Fisik
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="step-2-next-btn"
-                      onClick={() => setGuidedStep(3)}
-                      className="tap flex-2 h-12 rounded-xl bg-[#0A0A0A] text-white font-bold text-xs flex items-center justify-center gap-1.5"
-                    >
-                      Lanjut ke Pengeluaran &amp; Tutup <ArrowRight size={16} />
-                    </button>
-                  </div>
-                )}
               </div>
-            )}
 
-            {/* KONTEN STEP 3 ATAU MODE MANUAL: PENGELUARAN & KONFIRMASI TUTUP */}
-            {(closingMode === "manual" || guidedStep === 3) && (
-              <div className="space-y-4 pt-2" data-testid="step-final-close">
+
+            <div className="space-y-4 pt-2" data-testid="step-final-close">
                 {/* PERINGATAN pengeluaran harian belum diisi (uang transport tidak dihitung) */}
                 {dayExp && (
                   <div
@@ -1139,7 +941,6 @@ export default function Shift() {
                   </div>
                 </div>
               </div>
-            )}
           </div>
         </div>
       ) : (
