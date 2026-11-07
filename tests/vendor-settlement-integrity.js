@@ -160,5 +160,48 @@ eq(totalAfter, 56000, 'kas keluar setelah void = 56.000 (Rp 70.000 ditarik)');
 eq(totalBefore - totalAfter, 70000, 'selisih yang ditarik tepat Rp 70.000');
 eq(db.cash_movements.length, 0, 'cash_movements ikut bersih');
 
+console.log('\n[9] Board jatuh ke laporan tutup shift bila tidak ada order');
+{
+  // Kasus nyata produksi: snapshot hanya punya order November, sedangkan
+  // penjualan September tercatat di shift.report.vendor_share. Board lama
+  // menampilkan hak Rp 0 karena hanya membaca order.
+  const vendors = [{ id: BAKSO, name: 'BAKSO SARI RASA' }];
+  const shifts = [{
+    id: 'sh-13', date: '2026-09-13',
+    report: {
+      vendor_share: [{
+        vendor_id: BAKSO, vendor_name: 'BAKSO SARI RASA',
+        gross: 1098000, share: 988200, paid: 961200, difference: 27000,
+        items: [{ product_id: 'p1', name: 'Bakso', qty: 31, gross: 930000, vendor_share: 837000 }],
+      }],
+    },
+  }];
+  const settlements = [
+    { id: 's1', settlement_no: 'STL-20260913-0002', date: '2026-09-13', vendor_id: BAKSO,
+      vendor_share: 988200, carry_in: 0, total_due: 988200, paid: 961200, carry_out: 27000,
+      created_at: '2026-09-13T16:03:04.957Z' },
+  ];
+
+  const withShift = ledger.buildVendorBoard({ vendors, orders: [], settlements, shifts, date: '2026-09-13' })[0];
+  eq(withShift.share, 988200, 'hak vendor terbaca dari shift.report (bukan 0)');
+  eq(withShift.gross, 1098000, 'omzet vendor ikut terbaca dari shift');
+  eq(withShift.source, 'shift_report', 'sumber ditandai shift_report');
+  eq(withShift.items.length, 1, 'rincian item ikut dibawa');
+  eq(withShift.paid_settled, 961200, 'pembayaran tetap terbaca dari settlement');
+
+  const withoutShift = ledger.buildVendorBoard({ vendors, orders: [], settlements, shifts: [], date: '2026-09-13' })[0];
+  eq(withoutShift.share, 0, 'tanpa order & tanpa shift memang 0 (tidak mengarang angka)');
+  eq(withoutShift.source, 'orders', 'sumber default tetap orders');
+
+  // Order yang tersedia harus tetap menang atas laporan shift.
+  const orders = [{
+    status: 'completed', created_at: '2026-09-13T10:00:00+07:00',
+    items: [{ product_id: 'p1', vendor_id: BAKSO, name: 'Bakso', qty: 1, price: 100000, gross: 100000, vendor_share: 90000 }],
+  }];
+  const withOrders = ledger.buildVendorBoard({ vendors, orders, settlements: [], shifts, date: '2026-09-13' })[0];
+  eq(withOrders.share, 90000, 'order tetap jadi sumber utama saat tersedia');
+  eq(withOrders.source, 'orders', 'sumber = orders');
+}
+
 console.log(`\n=== ${passed} lulus, ${failed} gagal ===\n`);
 process.exit(failed === 0 ? 0 : 1);

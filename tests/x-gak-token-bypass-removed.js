@@ -147,7 +147,7 @@ function call(port, method, p, { body, headers = {} } = {}) {
 
   // A real session must still work on both endpoints.
   const session = `Bearer ${jwt.sign(
-    { id: 'u-gakuliner', username: 'gakuliner', role: 'admin', role_base: 'admin' },
+    { id: '5f1f7334-f23e-489d-996c-56429416e7fe', username: 'taqim2609', role: 'superadmin', role_base: 'superadmin', is_superadmin: true },
     process.env.JWT_SECRET,
     { expiresIn: '10m' }
   )}`;

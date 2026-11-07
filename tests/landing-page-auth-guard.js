@@ -104,7 +104,7 @@ function tokenFor(claims) {
   });
 
   // 5. Admin write still succeeds and persists.
-  const admin = tokenFor({ id: 'u-gakuliner', username: 'gakuliner', role: 'admin', role_base: 'admin' });
+  const admin = tokenFor({ id: '5f1f7334-f23e-489d-996c-56429416e7fe', username: 'taqim2609', role: 'superadmin', role_base: 'superadmin', is_superadmin: true });
   const adminWrite = await call(port, 'POST', '/api/settings/landing-page', {
     body: { hero_title: marker },
     headers: { Authorization: admin },

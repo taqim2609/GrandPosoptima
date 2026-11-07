@@ -5033,8 +5033,28 @@ app.post('/api/vendors', (req, res) => {
   res.json(v);
 });
 
-app.get('/api/vendor-settlements', (req, res) => {
-  res.json([]);
+// Daftar settlement vendor.
+// Audit 7 Nov 2026: handler ini dulu `res.json([])` — stub yang terdaftar LEBIH
+// DULU daripada rute nyata di routes/allMissingRoutes.js, sehingga seluruh
+// laporan bagi hasil vendor selalu kosong meski data ada di `db.vendorSettlements`.
+// Kini meneruskan data sungguhan dan menghormati filter dasar.
+app.get(['/api/vendor-settlements', '/vendor-settlements'], (req, res) => {
+  const rows = Array.isArray(db.vendorSettlements) ? db.vendorSettlements : [];
+  const includeVoided = String(req.query.include_voided || '') === '1'
+    || String(req.query.include_voided || '').toLowerCase() === 'true';
+  let out = rows.filter((s) => s && (includeVoided || !(s.voided === true || s.status === 'voided' || s.status === 'void')));
+  if (req.query.vendor_id) out = out.filter((s) => s.vendor_id === req.query.vendor_id);
+  if (req.query.date) out = out.filter((s) => s.date === req.query.date);
+  if (req.query.date_from) out = out.filter((s) => String(s.date || '') >= String(req.query.date_from));
+  if (req.query.date_to) out = out.filter((s) => String(s.date || '') <= String(req.query.date_to));
+  out = out.slice().sort((a, b) => {
+    const ta = Date.parse(a.created_at || '') || 0;
+    const tb = Date.parse(b.created_at || '') || 0;
+    return tb - ta;
+  });
+  const limit = Number(req.query.limit);
+  if (Number.isFinite(limit) && limit > 0) out = out.slice(0, limit);
+  return res.json(out);
 });
 
 app.get('/api/voids', (req, res) => {

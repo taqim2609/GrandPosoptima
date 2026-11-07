@@ -1198,6 +1198,9 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       vendors: db.vendors || [],
       orders: db.orders || [],
       settlements: db.vendorSettlements || [],
+      // Snapshot produksi tidak selalu menyimpan order per tanggal, tetapi shift
+      // menyimpan rekap hak vendor. Tanpa ini board menampilkan Rp 0.
+      shifts: db.shifts || [],
       date: d,
       wibDate: (o) => (o && o.created_at ? wibDateOnly(o.created_at) : ''),
     }).map((r) => ({
@@ -1240,6 +1243,7 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       vendors: [vendor],
       orders: db.orders || [],
       settlements: db.vendorSettlements || [],
+      shifts: db.shifts || [],
       date: settlementDate,
       wibDate: (o) => (o && o.created_at ? wibDateOnly(o.created_at) : ''),
     })[0];
@@ -1314,6 +1318,96 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       ...stl,
       outlet_name: 'Grand Aceh Kuliner POS',
       printed_at: new Date().toISOString(),
+    });
+  });
+
+  // ── Kas keluar/masuk & laporan kas ───────────────────────────────────────
+  // Audit 7 Nov 2026: rute `/api/cash-movements` dan `/api/reports/cash` TIDAK
+  // PERNAH ADA, sehingga halaman laporan kas selalu kosong meskipun 27 baris
+  // kas keluar tersimpan di `db.cash_movements`. Endpoint di bawah membaca
+  // koleksi itu (dan `db.cashTransactions` sebagai pelengkap) apa adanya.
+  const readCashRows = () => {
+    const rows = [];
+    (db.cash_movements || []).forEach((m) => {
+      if (!m) return;
+      rows.push({
+        id: m.id,
+        type: m.type || 'out',
+        scope: m.scope || 'fnb',
+        amount: Number(m.amount) || 0,
+        category: m.category || '(tanpa kategori)',
+        note: m.note || '',
+        cashier_id: m.cashier_id || null,
+        cashier_name: m.cashier_name || null,
+        shift_id: m.shift_id || null,
+        created_at: m.created_at || null,
+        source: 'cash_movements',
+        koreksi_audit: m.koreksi_audit || null,
+      });
+    });
+    (db.cashTransactions || []).forEach((m) => {
+      if (!m) return;
+      rows.push({
+        id: m.id,
+        type: m.type || 'out',
+        scope: m.scope || 'fnb',
+        amount: Number(m.amount) || 0,
+        category: m.category || '(tanpa kategori)',
+        note: m.note || '',
+        cashier_id: m.cashier_id || null,
+        cashier_name: m.cashier_name || null,
+        shift_id: m.shift_id || null,
+        created_at: m.created_at || null,
+        source: 'cashTransactions',
+        koreksi_audit: m.koreksi_audit || null,
+      });
+    });
+    return rows.sort((a, b) => (Date.parse(b.created_at || '') || 0) - (Date.parse(a.created_at || '') || 0));
+  };
+
+  app.get(['/api/cash-movements', '/cash-movements'], (req, res) => {
+    let rows = readCashRows();
+    if (req.query.type) rows = rows.filter((m) => m.type === req.query.type);
+    if (req.query.category) rows = rows.filter((m) => m.category === req.query.category);
+    if (req.query.date) rows = rows.filter((m) => String(m.created_at || '').slice(0, 10) === req.query.date);
+    if (req.query.date_from) rows = rows.filter((m) => String(m.created_at || '').slice(0, 10) >= req.query.date_from);
+    if (req.query.date_to) rows = rows.filter((m) => String(m.created_at || '').slice(0, 10) <= req.query.date_to);
+    const limit = Number(req.query.limit);
+    if (Number.isFinite(limit) && limit > 0) rows = rows.slice(0, limit);
+    return res.json(rows);
+  });
+
+  app.get(['/api/reports/cash', '/reports/cash'], (req, res) => {
+    const from = req.query.date_from || req.query.from || '';
+    const to = req.query.date_to || req.query.to || '';
+    let rows = readCashRows();
+    const day = (m) => String(m.created_at || '').slice(0, 10);
+    if (from) rows = rows.filter((m) => day(m) >= from);
+    if (to) rows = rows.filter((m) => day(m) <= to);
+
+    const byCategory = {};
+    const byType = { in: 0, out: 0 };
+    const byDate = {};
+    rows.forEach((m) => {
+      byCategory[m.category] = (byCategory[m.category] || 0) + m.amount;
+      if (m.type === 'in') byType.in += m.amount;
+      else byType.out += m.amount;
+      const d = day(m);
+      if (!byDate[d]) byDate[d] = { in: 0, out: 0 };
+      if (m.type === 'in') byDate[d].in += m.amount;
+      else byDate[d].out += m.amount;
+    });
+
+    return res.json({
+      date_from: from || null,
+      date_to: to || null,
+      rows_count: rows.length,
+      total_in: byType.in,
+      total_out: byType.out,
+      net: byType.in - byType.out,
+      by_category: byCategory,
+      by_date: byDate,
+      rows,
     });
   });
 
