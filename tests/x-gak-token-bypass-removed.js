@@ -36,9 +36,15 @@ function trackedFilesWithLiteral() {
       ['grep', '-l', LEGACY_LITERAL, '--', '.', ':!node_modules', ':!dist', ':!project/frontend/build'],
       { cwd: REPO, encoding: 'utf8' }
     );
-    // This file must name the literal to assert on it; it is not a source file.
+    // Berkas uji boleh menyebut literal ini untuk menguji ketiadaannya; yang dilarang adalah
+    // literal itu muncul di kode produksi. Kecualikan SEMUA file di tests/, bukan hanya
+    // __filename, karena menambah test baru yang ikut memeriksa literal ini tidak boleh
+    // membuat test ini gagal.
     const selfPath = path.relative(REPO, __filename).split(path.sep).join('/');
-    return out.trim().split('\n').filter(Boolean).filter((f) => f !== selfPath);
+    return out.trim().split('\n').filter(Boolean).filter((f) => {
+      if (f === selfPath) return false;
+      return !f.startsWith('tests/');
+    });
   } catch (err) {
     // git grep exits 1 when nothing matches, which is the pass case.
     return [];

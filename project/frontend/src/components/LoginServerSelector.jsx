@@ -10,17 +10,19 @@ export default function LoginServerSelector({ loginFailedServer, onServerChanged
   const [probeStatus, setProbeStatus] = useState({ state: "idle", latency: null, text: "" });
   const [probing, setProbing] = useState(false);
 
-  // Deteksi otomatis URL server kasir jika sedang dibuka lewat IP lokal / Tailscale
+  // Deteksi otomatis URL server kasir jika sedang dibuka lewat IP lokal / Tailscale.
+  // Alamat resmi kasir = IP LAN statis Pi (192.168.8.254). Nama *.local sengaja tidak dipakai:
+  // mDNS tidak resolve di Android dan entri lama menunjuk IP bridge Docker, bukan LAN toko.
   const detectedPiUrl = typeof window !== "undefined" && !window.location.hostname.includes("run.app") && !window.location.hostname.includes("google")
     ? window.location.origin
-    : "http://pos.local:3000";
+    : "http://192.168.8.254";
 
   // Daftar Node Standar Dual-Node (Pi LAN & VPS Tailscale)
   const NODE_OPTIONS = [
     {
       id: "pi_lan",
       url: detectedPiUrl,
-      altUrl: "http://pos.local:3000",
+      altUrl: "http://192.168.8.254",
       title: "Kasir Toko (Pi LAN)",
       subtitle: "Offline-First di Outlet",
       badge: "Lokal Toko",

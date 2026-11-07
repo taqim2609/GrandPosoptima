@@ -139,6 +139,30 @@ mount, jadi frontend di sana **tidak** ikut deploy repo. Setiap kali UI berubah,
 bundle harus disalin manual dari `dist/` ke container kiosk, kalau tidak kasir
 tetap menjalankan build lama.
 
+### Alamat resmi: POS hanya di node kasir
+
+POS dibatasi ke node kasir oleh `isPosAllowedHost()` di `project/frontend/src/App.js`.
+Aturan ini dipakai dua kali: `RootRoute` (rute `/`) dan `PosGate` (rute `/pos`).
+Host publik (`100.117.186.13`, `*.gudang-644.tailf3a839.ts.net`) hanya menyajikan
+landing page.
+
+| Kebutuhan | Alamat |
+| :--- | :--- |
+| **Kasir (tablet/HP di WiFi toko)** | **`http://192.168.8.254`** ← alamat resmi |
+| Kiosk Chromium di Pi | `http://localhost` |
+| Dari luar toko | `http://100.109.98.56` · `http://kasir-pi.tailf3a839.ts.net` |
+| APK Sunmi | tidak perlu alamat (native) |
+| **Landing page publik** | `http://100.117.186.13` · `http://gudang-644.tailf3a839.ts.net` |
+
+**JANGAN pakai `*.local`** (`grandpos.local`, `pos.local`) sebagai alamat kasir:
+mDNS tidak resolve di Android, dan entri lama `grandpos.local` menunjuk IP bridge
+Docker (`172.19.0.1`) di dalam Pi, bukan LAN toko.
+
+Menambah host baru yang boleh membuka POS = menambah satu baris di
+`isPosAllowedHost()`, lalu build + deploy ke kiosk **dan** gudang-644.
+Verifikasi dengan `node tests/pos-host-gate.js <bundle.js>` — test ini menjalankan
+gerbang terhadap hostname nyata, bukan grep string.
+
 ---
 
 ## 7. Testing & Validasi

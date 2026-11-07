@@ -121,9 +121,19 @@ if (fs.existsSync(srcDir)) {
     console.log(`[Build] Sanitasi import() WebView lama: ${patched} file dipatch`);
   }
 
-  // 2. Salin seluruh isi build ke dist
+  // 2. Salin seluruh isi build ke dist.
+  //    dist/ DIBERSIHKAN dulu: copyRecursiveSync tidak menghapus file lama, sehingga setiap
+  //    build meninggalkan main.<hash>.js yatim. Bundle yatim itu lalu ikut tersalin ke
+  //    /var/www/landing dan kiosk, dan membuat "bundle mana yang live" tidak jelas.
+  //    Yang dipertahankan hanya folder ota/ (dibuat ulang di langkah berikutnya) dan
+  //    berkas runtime seperti /apk bila ada di dalam dist.
+  const keepOnClean = new Set(['ota', 'apk']);
+  for (const entry of fs.readdirSync(destDir)) {
+    if (keepOnClean.has(entry)) continue;
+    fs.rmSync(path.join(destDir, entry), { recursive: true, force: true });
+  }
   copyRecursiveSync(srcDir, destDir);
-  console.log('[Build] Successfully copied assets from project/frontend/build to dist/');
+  console.log('[Build] Successfully copied assets from project/frontend/build to dist/ (dist dibersihkan dulu)');
 } else if (fs.existsSync(destDir)) {
   console.log('[Build] Using pre-built static assets in dist/');
 }
