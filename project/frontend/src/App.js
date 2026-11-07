@@ -50,31 +50,46 @@ const LoadingFallback = () => (
 // Penentu halaman muka: Di server Raspberry Pi, server lokal LAN toko, atau aplikasi Android APK Sunmi,
 // rute utama (/) langsung membuka POS Kasir (/pos) tanpa landing page.
 // Landing page publik hanya tampil saat dibuka di server Cloud online.
+//
+// Aturan pemisahan (disengaja): gudang-644 (IP Tailscale 100.x / domain *.ts.net) adalah host
+// PUBLIK — di sana hanya landing page yang boleh tampil dan POS ditutup. POS hanya dibuka di
+// node kasir (Pi/LAN/localhost) atau aplikasi APK. Kalau POS tetap bisa dibuka di host publik,
+// siapa pun yang tahu URL-nya akan melihat layar login kasir.
+function isPosAllowedHost(hostname) {
+  if (typeof window !== "undefined" && (window.Capacitor?.isNativePlatform?.() || window.isNativeApp)) return true;
+  if (typeof localStorage !== "undefined" && localStorage.getItem("gak_disable_landing_page") === "true") return true;
+  if (process.env.REACT_APP_DISABLE_LANDING_PAGE === "true") return true;
+  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+  if (hostname.includes("raspberrypi") || hostname.includes("kasir-pi")) return true;
+  if (hostname.endsWith(".local")) return true;
+  if (/^192\.168\./.test(hostname)) return true;
+  if (/^10\./.test(hostname)) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)) return true;
+  // Alamat tailnet khusus node kasir. Host publik (gudang-644) sengaja TIDAK masuk daftar.
+  if (hostname === "100.109.98.56") return true;
+  if (hostname === "kasir-pi.tailf3a839.ts.net") return true;
+  return false;
+}
+
 function RootRoute() {
-  const isCapacitor = typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.() || window.isNativeApp);
   const hostname = typeof window !== "undefined" ? window.location.hostname : "";
-  const isExplicitDisabled = typeof localStorage !== "undefined" && localStorage.getItem("gak_disable_landing_page") === "true";
-  const isEnvDisabled = process.env.REACT_APP_DISABLE_LANDING_PAGE === "true";
 
-  // Deteksi lingkungan Raspberry Pi / Server Lokal Kasir / LAN toko:
-  // IP 192.168.x.x, 10.x.x.x, 172.16-31.x.x, localhost, 127.0.0.1, *.local, raspberrypi
-  const isLocalOrPi =
-    isCapacitor ||
-    isExplicitDisabled ||
-    isEnvDisabled ||
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname.includes("raspberrypi") ||
-    hostname.endsWith(".local") ||
-    /^192\.168\./.test(hostname) ||
-    /^10\./.test(hostname) ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
-
-  if (isLocalOrPi) {
+  if (isPosAllowedHost(hostname)) {
     return <Navigate to="/pos" replace />;
   }
 
   return <LandingPage />;
+}
+
+// Gerbang rute POS: menolak akses POS dari host publik, termasuk bila URL /pos diketik langsung
+// atau dibuka dari bookmark lama. Tanpa ini, RootRoute saja tidak cukup karena /pos adalah rute
+// terpisah yang tidak melewati RootRoute.
+function PosGate({ children }) {
+  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+  if (!isPosAllowedHost(hostname)) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
 }
 
 // roles = role dasar yang boleh; mod = modul izin dinamis (RBAC) bila role dasar belum cukup.
@@ -124,7 +139,7 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/pos" element={wrap(<POS />, ["admin", "kasir"], "pos", "pos")} />
+              <Route path="/pos" element={<PosGate>{wrap(<POS />, ["admin", "kasir"], "pos", "pos")}</PosGate>} />
               <Route path="/shift" element={wrap(<Shift />, ["admin", "kasir"], "shift", "shift")} />
               <Route path="/cash" element={wrap(<Cash />, ["admin", "kasir"], "pengeluaran", "cash")} />
               <Route path="/dashboard" element={wrap(<Dashboard />, ["admin", "kasir", "input"], "dashboard", "dashboard")} />
