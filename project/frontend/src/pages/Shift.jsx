@@ -330,36 +330,6 @@ export default function Shift() {
 
       {session ? (
         <div className="space-y-5 max-w-3xl">
-          <div className="bg-white rounded-2xl border p-6" data-testid="shift-active-card">
-            <div className="inline-flex items-center gap-2 bg-[#D1FAE5] text-[#047857] font-bold px-3 py-1 rounded-full text-sm">
-              <span className="h-2 w-2 rounded-full bg-[#047857] animate-pulse" /> Shift Hari Ini Aktif
-            </div>
-            <div className="text-sm text-[#52525B] mt-3">
-              Dibuka oleh <b data-testid="shift-opened-by">{session.opened_by || "-"}</b>
-              <br />Waktu buka: <b>{session.opened_at ? formatWib(session.opened_at) : "-"}</b>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]" data-testid="shift-accounts">
-              <span className="font-extrabold uppercase tracking-wider text-[#52525B] flex items-center gap-1">
-                <UserCheck size={13} /> Dipakai oleh
-              </span>
-              {(session.accounts || []).map((a) => (
-                <span key={a.name} className={`px-2 py-0.5 rounded-full font-bold border ${a.opened ? "bg-[#EEF2FF] border-[#C7D2FE] text-[#3730A3]" : "bg-[#F4F5F7] border-[#E4E4E7] text-[#52525B]"}`}>
-                  {a.name}{a.orders ? ` · ${a.orders} order` : ""}{a.opened ? " · pembuka" : ""}
-                </span>
-              ))}
-            </div>
-            <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] px-3 py-2 text-[11px] text-[#1E40AF]">
-              <Info size={14} className="shrink-0 mt-0.5" />
-              <span>Akun lain <b>tidak perlu membuka shift baru</b> — tinggal memakai shift ini.
-                Yang tercatat hanya kasir yang membuka &amp; yang menutup.</span>
-            </div>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-2" data-testid="shift-scope-cards">
-            {scopeCard("fnb", Utensils)}
-            {scopeCard("retail", Store)}
-          </div>
-
           {/* Bagi hasil vendor (preview) */}
           {vendorPreview.length > 0 && (
             <div className="bg-white rounded-2xl border p-6">
@@ -432,6 +402,36 @@ export default function Shift() {
               ))}
             </div>
           )}
+
+          <div className="bg-white rounded-2xl border p-6" data-testid="shift-active-card">
+            <div className="inline-flex items-center gap-2 bg-[#D1FAE5] text-[#047857] font-bold px-3 py-1 rounded-full text-sm">
+              <span className="h-2 w-2 rounded-full bg-[#047857] animate-pulse" /> Shift Hari Ini Aktif
+            </div>
+            <div className="text-sm text-[#52525B] mt-3">
+              Dibuka oleh <b data-testid="shift-opened-by">{session.opened_by || "-"}</b>
+              <br />Waktu buka: <b>{session.opened_at ? formatWib(session.opened_at) : "-"}</b>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]" data-testid="shift-accounts">
+              <span className="font-extrabold uppercase tracking-wider text-[#52525B] flex items-center gap-1">
+                <UserCheck size={13} /> Dipakai oleh
+              </span>
+              {(session.accounts || []).map((a) => (
+                <span key={a.name} className={`px-2 py-0.5 rounded-full font-bold border ${a.opened ? "bg-[#EEF2FF] border-[#C7D2FE] text-[#3730A3]" : "bg-[#F4F5F7] border-[#E4E4E7] text-[#52525B]"}`}>
+                  {a.name}{a.orders ? ` · ${a.orders} order` : ""}{a.opened ? " · pembuka" : ""}
+                </span>
+              ))}
+            </div>
+            <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] px-3 py-2 text-[11px] text-[#1E40AF]">
+              <Info size={14} className="shrink-0 mt-0.5" />
+              <span>Akun lain <b>tidak perlu membuka shift baru</b> — tinggal memakai shift ini.
+                Yang tercatat hanya kasir yang membuka &amp; yang menutup.</span>
+            </div>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2" data-testid="shift-scope-cards">
+            {scopeCard("fnb", Utensils)}
+            {scopeCard("retail", Store)}
+          </div>
 
           {/* Tutup shift: satu formulir input langsung (tanpa mode terpandu / tab) */}
           <div className="bg-white rounded-2xl border p-6" data-testid="guided-shift-closing-container">
