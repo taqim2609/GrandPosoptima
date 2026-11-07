@@ -1,11 +1,11 @@
 {
-  "version": "3.0.0.20261103080000",
+  "version": "2.10.20261107183124",
   "url": "/ota/bundle.zip",
   "apiUrl": "/api/ota/bundle.zip",
-  "bundle_size": 648245,
-  "bundle_size_kb": 633,
-  "checksum": "sha256:c09a6c28889ab775a6702212baed60caa1942f5e45f2194f0c8d8ab632fb95da",
-  "built_at": "2026-11-03T08:00:00.000Z",
+  "bundle_size": 651706,
+  "bundle_size_kb": 636,
+  "checksum": "sha256:cff375cbb06a114c74c4a1335b9c38d94200de795190dd820a86f8183b9526da",
+  "built_at": "2026-11-07T18:31:24.669Z",
   "nodes": {
     "primary_pi": {
       "name": "Raspberry Pi Kasir (LAN Toko)",
