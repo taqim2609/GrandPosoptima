@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 
 /**
  * Model Context Protocol (MCP) Server for Grand Aceh Kuliner POS
@@ -10,7 +11,7 @@ const crypto = require('crypto');
  *  - REST helper endpoints for UI testing and status (/api/mcp/tools, /api/mcp/execute, /api/mcp/status)
  */
 
-function registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin) {
+function registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin, JWT_SECRET) {
   // Activity log for MCP invocations
   if (!db.mcpInvocationLogs) {
     db.mcpInvocationLogs = [];
@@ -53,6 +54,19 @@ function registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin) {
       db.agentAuditLogs = db.agentAuditLogs.slice(0, 200);
     }
     return entry;
+  }
+
+  // Verify JWT token for STDIO transport auth
+  function verifyToken(tokenStr) {
+    if (!tokenStr || typeof tokenStr !== 'string') return null;
+    let raw = tokenStr.trim();
+    if (raw.startsWith('Bearer ')) raw = raw.slice(7).trim();
+    if (raw.startsWith('gak_jwt_')) raw = raw.slice(8).trim();
+    try {
+      return jwt.verify(raw, JWT_SECRET);
+    } catch (err) {
+      return null;
+    }
   }
 
   // Tool Definitions according to MCP Specification
@@ -1322,6 +1336,30 @@ function registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin) {
               id,
               error: { code: -32602, message: 'Missing tool name in params' },
             };
+          }
+
+          // STDIO transport identity check for mutating tools
+          const mutatingTools = new Set([
+            'pos_update_product_stock',
+            'manage_articles_and_stories',
+            'pos_manage_whatsapp_config',
+            'pos_manage_server_cluster',
+            'pos_manage_promos_and_coupons'
+          ]);
+          
+          if (mutatingTools.has(params.name)) {
+            // Check for token in params (STDIO transport) or fall back to Authorization-like field
+            const token = params._authToken || params.token || params.authorization || params.bearer;
+            const verified = verifyToken(token);
+            if (!verified) {
+              return {
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32001, message: 'Autentikasi diperlukan untuk tool yang mengubah data. Sertakan token JWT yang valid.' },
+              };
+            }
+            // Attach user info to clientInfo for audit
+            clientInfo = `MCP-${verified.role || 'user'}-${verified.userId || verified.id || 'unknown'}`;
           }
 
           const toolResult = await executeTool(params.name, params.arguments || {}, clientInfo);

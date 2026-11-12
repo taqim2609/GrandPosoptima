@@ -480,7 +480,12 @@ app.use((req, res, next) => {
     '/categories', '/tables', '/cash', '/shifts', '/members',
     '/promos', '/coupons', '/ingredients', '/recipes', '/rbac',
     '/auth', '/ingredient-categories', '/payment-methods', '/custom-widgets',
-    '/whatsapp', '/webhook'
+    '/whatsapp', '/webhook',
+    '/admin', '/ai', '/feature-requests', '/feature-request', '/shopping-list', '/reservations',
+    '/vendor-settlements', '/backup', '/ingredient-purchases', '/cash-movements',
+    '/voids', '/inventory', '/vendors', '/purchases', '/stock-opname',
+    '/ingredient-opname',
+    '/mcp', '/sse', '/messages'
   ];
   const isApiCandidate = apiCandidates.some((p) => req.path === p || req.path.startsWith(p + '/'));
 
@@ -6898,7 +6903,7 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
 
 // Register MCP (Model Context Protocol) Server
 const { registerMcpServer } = require('./routes/mcpServer');
-const mcpInstance = registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin);
+const mcpInstance = registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin, JWT_SECRET);
 
 // Register all audited missing business endpoints
 const { registerAllMissingRoutes } = require('./routes/allMissingRoutes');
