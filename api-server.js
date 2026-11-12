@@ -530,7 +530,7 @@ const AUTH_PUBLIC_PREFIXES = ['/api/public'];
 // identity: the handler-level RBAC (requireAdmin / per-route permission checks) is the
 // only thing standing between an anonymous caller and a mutation. With an explicit token
 // the caller keeps its own identity, which is what the RBAC checks expect.
-const AUTH_AGENT_PREFIXES = ['/api/agent', '/api/hermes', '/api/mcp', '/mcp'];
+const AUTH_AGENT_PREFIXES = ['/api/agent', '/api/hermes', '/api/mcp', '/mcp', '/api/sse', '/api/messages'];
 
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {

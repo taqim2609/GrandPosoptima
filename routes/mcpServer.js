@@ -1525,7 +1525,7 @@ function registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin, JWT_SEC
   });
 
   // 2. Server-Sent Events (SSE) Endpoint for Claude Desktop, Cursor, and Agents
-  app.get(['/api/mcp/sse', '/sse'], requireAdmin, (req, res) => {
+  app.get(['/api/mcp/sse', '/sse', '/api/sse'], requireAdmin, (req, res) => {
     const sessionId = 'mcp_sess_' + crypto.randomUUID();
 
     res.writeHead(200, {
@@ -1558,7 +1558,7 @@ function registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin, JWT_SEC
   });
 
   // 3. SSE Inbound Messages POST
-  app.post(['/api/mcp/messages', '/messages'], requireAdmin, async (req, res) => {
+  app.post(['/api/mcp/messages', '/messages', '/api/messages'], requireAdmin, async (req, res) => {
     const sessionId = req.query.sessionId || req.headers['x-mcp-session-id'];
     const clientInfo = req.headers['user-agent'] || `SSE-Client (${sessionId || 'anon'})`;
 
