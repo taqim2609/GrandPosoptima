@@ -252,17 +252,25 @@ const CORS_ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '')
 
 // Review-04 R-CFG-02: when CORS_ORIGINS is unset, the `cors` package reflects every origin
 // while credentials:true is still set, which is effectively "any site may read responses
-// of an authenticated call". This is acceptable for local development only; warn loudly in
-// production so operators set the allow-list during deployment.
-if (CORS_ALLOWED_ORIGINS.length === 0 && process.env.NODE_ENV === 'production') {
+// of an authenticated call". In production the allow-list is therefore required: requests
+// without an Origin header (same-origin POS, curl, health probes) still work, but any
+// cross-origin browser request is refused until CORS_ORIGINS is configured.
+const CORS_STRICT = CORS_ALLOWED_ORIGINS.length === 0 && process.env.NODE_ENV === 'production';
+if (CORS_STRICT) {
   console.warn(
-    '[WARN] CORS_ORIGINS is not set: every origin is allowed with credentials enabled. ' +
+    '[WARN] CORS_ORIGINS is not set: cross-origin browser requests are refused. ' +
     'Set CORS_ORIGINS to the comma-separated list of POS origins before going live.'
   );
 }
 
 app.use(cors({
-  origin: CORS_ALLOWED_ORIGINS.length > 0 ? CORS_ALLOWED_ORIGINS : true,
+  origin: CORS_ALLOWED_ORIGINS.length > 0
+    ? CORS_ALLOWED_ORIGINS
+    : (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (CORS_STRICT) return callback(null, false);
+        return callback(null, true);
+      },
   credentials: true,
   allowedHeaders: ['Authorization', 'Content-Type'],
 }));
@@ -475,11 +483,8 @@ app.use((req, res, next) => {
     '/whatsapp', '/webhook'
   ];
   const isApiCandidate = apiCandidates.some((p) => req.path === p || req.path.startsWith(p + '/'));
-  const isJsonClient = req.xhr ||
-    (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html')) ||
-    req.headers['authorization'];
 
-  if (isApiCandidate && isJsonClient && !req.url.startsWith('/api/')) {
+  if (isApiCandidate && !req.url.startsWith('/api/')) {
     req.url = '/api' + req.url;
   }
   next();
@@ -1404,17 +1409,35 @@ app.get(['/api/system/health', '/api/system-health'], (req, res) => {
   });
 });
 
-app.post('/api/system/health/ping-google', (req, res) => {
-  const startTime = Date.now();
+app.post('/api/system/health/ping-google', async (req, res) => {
   const googleUrl = process.env.AISTUDIO_URL || 'https://ais-dev-nqjmalpyxo6lgj3y3eagbr-754954417035.asia-southeast1.run.app';
-  const latency = Math.floor(Math.random() * 20) + 15;
-  res.json({
-    ok: true,
-    connected: true,
+  const startTime = Date.now();
+  let latency = null;
+  let connected = false;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1800);
+    const response = await fetch(`${googleUrl}/api/system/health`, {
+      method: 'GET',
+      signal: controller.signal,
+    }).catch(() => null);
+    clearTimeout(timeoutId);
+    if (response && response.ok) {
+      latency = Math.max(1, Date.now() - startTime);
+      connected = true;
+    }
+  } catch (_) {
+    connected = false;
+  }
+  res.status(connected ? 200 : 503).json({
+    ok: connected,
+    connected,
     url: googleUrl,
     latency_ms: latency,
     checked_at: new Date().toISOString(),
-    message: 'Koneksi ke Server VPS Mandiri sangat lancar (' + latency + ' ms)',
+    message: connected
+      ? `Koneksi ke Server VPS Mandiri terukur ${latency} ms`
+      : 'Server VPS Mandiri tidak dapat dihubungi',
   });
 });
 
@@ -1452,12 +1475,12 @@ app.post(['/api/system/health/speed-test', '/api/system/speed-test'], createRate
   const cpus = os.cpus();
   const piDiff = process.hrtime(piStart);
   const localLatency = Math.max(1, Math.round((piDiff[0] * 1000 + piDiff[1] / 1e6) * 10) / 10 || 1.8);
-  const localJitter = Math.round((Math.random() * 0.4 + 0.1) * 10) / 10;
+  const localJitter = null;
 
   // 2. Latensi jaringan ke server Google Cloud / AI Studio
-  let googleLatency = Math.floor(Math.random() * 12) + 21; // 21 - 33 ms
-  let googleConnected = true;
-  const googleJitter = Math.round((Math.random() * 2.5 + 0.8) * 10) / 10;
+  let googleLatency = null;
+  let googleConnected = false;
+  let googleJitter = null;
 
   try {
     const fetchStart = Date.now();
@@ -1466,14 +1489,17 @@ app.post(['/api/system/health/speed-test', '/api/system/speed-test'], createRate
     const resp = await fetch(`${googleUrl}/api/system/health`, { signal: controller.signal, method: 'GET' }).catch(() => null);
     clearTimeout(timeoutId);
     if (resp && resp.ok) {
-      googleLatency = Math.max(15, Date.now() - fetchStart);
+      googleLatency = Math.max(1, Date.now() - fetchStart);
+      googleConnected = true;
     }
   } catch (e) {
-    // fallback latency
+    googleConnected = false;
   }
 
   const isNodeInstalled = env.isRaspberry || env.isLocalPc;
-  const speedRatio = Math.max(1, Math.round((googleLatency / localLatency) * 10) / 10);
+  const speedRatio = googleLatency == null
+    ? null
+    : Math.max(1, Math.round((googleLatency / localLatency) * 10) / 10);
 
   res.json({
     ok: true,
@@ -1499,8 +1525,8 @@ app.post(['/api/system/health/speed-test', '/api/system/speed-test'], createRate
       latency_ms: googleLatency,
       jitter_ms: googleJitter,
       status: googleConnected ? 'online' : 'offline',
-      http_status: 200,
-      rating: googleLatency < 50 ? 'Sangat Cepat (< 50 ms)' : 'Stabil',
+      http_status: googleConnected ? 200 : 503,
+      rating: googleConnected ? (googleLatency < 50 ? 'Sangat Cepat (< 50 ms)' : 'Stabil') : 'Tidak terhubung',
       description: 'Server utama VPS aktif melayani seluruh transaksi POS dan sinkronisasi real-time.',
       color: '#2563EB',
       is_faster: !isNodeInstalled,
@@ -1530,18 +1556,19 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
 
   // 1. Uji Server 1: Server VPS Mandiri Utama
   const cloudStart = Date.now();
-  let cloudLatency = 22;
-  let cloudOnline = true;
+  let cloudLatency = null;
+  let cloudOnline = false;
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 1200);
     const cRes = await fetch(`${googleUrl}/api/health`, { signal: ctrl.signal }).catch(() => null);
     clearTimeout(t);
     if (cRes && cRes.ok) {
-      cloudLatency = Math.max(10, Date.now() - cloudStart);
+      cloudLatency = Math.max(1, Date.now() - cloudStart);
+      cloudOnline = true;
     }
   } catch (_) {
-    cloudLatency = 24;
+    cloudOnline = false;
   }
 
   // 2. Uji Server 2: Node Kasir Fisik Toko (Raspberry Pi 4 / PC Master)
@@ -1603,9 +1630,9 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
         category: 'cloud',
         badge: 'VPS Master (Aktif 24/7)',
         badge_color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        status: cloudOnline ? 'online' : 'degraded',
+        status: cloudOnline ? 'online' : 'offline',
         latency_ms: cloudLatency,
-        rating: cloudLatency < 50 ? 'Sangat Cepat' : 'Normal',
+        rating: cloudOnline ? (cloudLatency < 50 ? 'Sangat Cepat' : 'Normal') : 'Tidak terhubung',
         endpoint: googleUrl,
         database: 'PostgreSQL 16 / MongoDB (Server VPS Mandiri)',
         features: [
@@ -1625,9 +1652,9 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
         category: 'raspberry',
         badge: isPiInstalled ? 'Frontend Pi Aktif' : 'Standby / Frontend Only',
         badge_color: isPiInstalled ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-purple-50 text-purple-700 border-purple-200',
-        status: isPiInstalled ? 'online' : 'online',
-        latency_ms: isPiInstalled ? piLatency : 1,
-        rating: 'Instan (Lokal)',
+        status: isPiInstalled ? 'online' : 'offline',
+        latency_ms: piLatency,
+        rating: isPiInstalled ? 'Instan (Lokal)' : 'Belum terpasang',
         endpoint: 'http://pos.local:3000',
         database: 'IndexedDB Browser (Offline-First Cache)',
         hardware: isPiInstalled ? `Raspberry Pi 4 (${piInfo.cpu_temperature?.temp_c || 44.2}°C)` : 'Raspberry Pi / Kiosk Kasir',
@@ -2382,6 +2409,35 @@ app.patch(['/api/orders/:id/items', '/orders/:id/items'], (req, res) => {
   res.json(order);
 });
 
+function resolvePaymentMethodName(methodId) {
+  const pmObj = (db.paymentMethods || []).find((p) => p.id === methodId || p.type === methodId);
+  if (pmObj) return pmObj.name;
+  if (methodId === 'cash' || methodId === 'tunai') return 'Tunai';
+  if (methodId === 'qris') return 'QRIS';
+  if (methodId === 'card') return 'Kartu Debit/Kredit';
+  return String(methodId || 'Tunai');
+}
+
+function normalizePaymentSplits(rawSplits, totalAmount) {
+  if (!Array.isArray(rawSplits) || rawSplits.length < 2) return null;
+  const splits = rawSplits.map((split) => {
+    const payment_method = String(split?.payment_method || '').trim();
+    const amount = Number(split?.amount);
+    if (!payment_method || !Number.isFinite(amount) || amount <= 0) {
+      return null;
+    }
+    return {
+      payment_method,
+      payment_method_name: resolvePaymentMethodName(payment_method),
+      amount: Math.round(amount * 100) / 100,
+    };
+  });
+  if (splits.some((split) => !split)) return null;
+  const splitTotal = Math.round(splits.reduce((sum, split) => sum + split.amount, 0) * 100) / 100;
+  if (Math.abs(splitTotal - totalAmount) > 0.01) return null;
+  return splits;
+}
+
 app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
   if (!db.currentShift || db.currentShift.status !== 'open') {
     return res.status(400).json({ detail: 'POS Kasir terkunci: Shift belum dibuka. Buka shift terlebih dahulu sebelum melayani transaksi.' });
@@ -2405,7 +2461,11 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
   const serviceTax = Number(req.body.service_tax || order.service_tax || 0) || 0;
   const totalAmount = Math.max(0, itemsSubtotal - discount + serviceTax);
 
-  const paymentMethod = req.body.payment_method || order.payment_method || 'cash';
+  const paymentSplits = normalizePaymentSplits(req.body.splits, totalAmount);
+  if (Array.isArray(req.body.splits) && req.body.splits.length > 0 && !paymentSplits) {
+    return res.status(400).json({ detail: 'Pembagian pembayaran tidak valid atau jumlahnya tidak sama dengan total tagihan' });
+  }
+  const paymentMethod = paymentSplits ? paymentSplits[0].payment_method : (req.body.payment_method || order.payment_method || 'cash');
   const amountPaid = Number(req.body.amount_paid !== undefined && req.body.amount_paid !== null ? req.body.amount_paid : totalAmount);
 
   // Validasi kecukupan pembayaran (kecuali metode kasbon / piutang)
@@ -2419,8 +2479,9 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
 
   order.status = 'completed';
   order.payment_method = paymentMethod;
-  order.amount_paid = amountPaid;
-  order.change = change;
+  order.payment_splits = paymentSplits;
+  order.amount_paid = paymentSplits ? totalAmount : amountPaid;
+  order.change = paymentSplits ? 0 : change;
   order.discount_type = discountType;
   order.discount_value = discountValue;
   order.service_tax = serviceTax;
@@ -2437,7 +2498,15 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
 
   // Update current shift sales tepat 1 kali
   if (db.currentShift) {
-    if (order.payment_method === 'cash' || order.payment_method_type === 'cash') {
+    if (paymentSplits) {
+      for (const split of paymentSplits) {
+        const methodIsCash = split.payment_method === 'cash' || split.payment_method === 'tunai';
+        const key = methodIsCash ? 'cash_sales' : 'non_cash_sales';
+        db.currentShift[key] = (db.currentShift[key] || 0) + split.amount;
+      }
+    } else if (String(order.payment_method || '').toLowerCase() === 'cash'
+      || String(order.payment_method || '').toLowerCase() === 'tunai'
+      || order.payment_method_type === 'cash') {
       db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + totalAmount;
     } else {
       db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + totalAmount;
@@ -2458,6 +2527,14 @@ app.post(['/api/orders', '/orders'], (req, res) => {
     return res.status(400).json({
       detail: 'POS Kasir terkunci: Shift belum dibuka. Harap buka shift terlebih dahulu di menu Shift atau gerbang POS.',
     });
+  }
+
+  const clientRef = typeof req.body.client_ref === 'string' ? req.body.client_ref.trim() : '';
+  if (clientRef) {
+    const existing = db.orders.find((candidate) => candidate.client_ref === clientRef);
+    if (existing) {
+      return res.json(existing);
+    }
   }
 
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -2560,6 +2637,12 @@ app.post(['/api/orders', '/orders'], (req, res) => {
 
   const amountPaid = Number(req.body.amount_paid !== undefined && req.body.amount_paid !== null ? req.body.amount_paid : total);
   const change = Number(req.body.change !== undefined ? req.body.change : Math.max(0, amountPaid - total));
+  const paymentSplits = normalizePaymentSplits(req.body.splits, total);
+  if (Array.isArray(req.body.splits) && req.body.splits.length > 0 && !paymentSplits) {
+    return res.status(400).json({ detail: 'Pembagian pembayaran tidak valid atau jumlahnya tidak sama dengan total tagihan' });
+  }
+  const effectiveAmountPaid = paymentSplits ? total : amountPaid;
+  const effectiveChange = paymentSplits ? 0 : change;
 
   // Rekap bagi hasil per vendor dibekukan di order (sumber utama board
   // settlement). Diskon TIDAK memotong hak vendor — diskon ditanggung outlet —
@@ -2594,6 +2677,7 @@ app.post(['/api/orders', '/orders'], (req, res) => {
   });
 
   const order = {
+    client_ref: clientRef || null,
     id: 'ord-' + Date.now(),
     order_number: orderNumber,
     created_at: new Date().toISOString(),
@@ -2612,8 +2696,9 @@ app.post(['/api/orders', '/orders'], (req, res) => {
     cashier_id: cashierId,
     payment_method: pmId || 'cash',
     payment_method_name: paymentMethodName,
-    amount_paid: amountPaid,
-    change,
+    payment_splits: paymentSplits,
+    amount_paid: effectiveAmountPaid,
+    change: effectiveChange,
     paid_at: req.body.pay_now ? new Date().toISOString() : null,
   };
 
@@ -2638,7 +2723,8 @@ app.post(['/api/orders', '/orders'], (req, res) => {
   // Update current shift sales
   if (db.currentShift && order.status === 'completed') {
     const orderTot = Number(order.total) || 0;
-    if (order.payment_method === 'cash' || order.payment_method_type === 'cash') {
+    const pmLower = String(order.payment_method || '').toLowerCase();
+    if (pmLower === 'cash' || pmLower === 'tunai' || order.payment_method_type === 'cash') {
       db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + orderTot;
     } else {
       db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + orderTot;
@@ -2786,6 +2872,7 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
       scope: 'fnb',
       category: 'Operasional',
       amount: transport,
+      shift_id: shift.id,
       note: 'Uang Transport Tutup Shift',
       created_at: new Date().toISOString(),
     });
@@ -2800,6 +2887,7 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
         scope: exp.scope || 'fnb',
         category: exp.category || 'Operasional',
         amount: Number(exp.amount),
+        shift_id: shift.id,
         note: exp.note || 'Pengeluaran di tutup shift',
         created_at: new Date().toISOString(),
       });
@@ -2865,6 +2953,7 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
         scope: 'fnb',
         category: 'Bagi Hasil Vendor',
         amount: paid,
+        shift_id: shift.id,
         note: `Bagi Hasil ${r.vendor_name} (${settlement_no})`,
         created_at: new Date().toISOString(),
       });
@@ -2887,8 +2976,11 @@ app.post(['/api/shifts/close', '/shifts/close'], (req, res) => {
   const vendor_total_gross = Math.round(vendorReport.reduce((s, v) => s + v.gross, 0) * 100) / 100;
   const vendor_total_paid = Math.round(vendorReport.reduce((s, v) => s + v.paid, 0) * 100) / 100;
 
-  // Calculate Cash In & Out per scope
-  const cashTxs = db.cashTransactions || [];
+  // Calculate Cash In & Out per scope for this business date only.
+  const cashTxs = (db.cashTransactions || []).filter((transaction) => {
+    const transactionDate = orderDateStr({ created_at: transaction.created_at });
+    return transactionDate === closeDate;
+  });
   const cash_out_fnb = cashTxs.filter((t) => t.type === 'out' && (t.scope || 'fnb') === 'fnb').reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const cash_out_retail = cashTxs.filter((t) => t.type === 'out' && t.scope === 'retail').reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const cash_out_total = cash_out_fnb + cash_out_retail;
@@ -3170,9 +3262,12 @@ function getReportSummary(dateStr) {
     by_type[oType].total += oTotal;
     total_sales += oTotal;
 
-    const pm = o.payment_method || 'cash';
+    const pmRaw = String(o.payment_method || 'cash').toLowerCase();
+    // "tunai" is the Indonesian label for the same drawer cash as "cash"; keeping
+    // them as separate keys made cash_sales / cash_net under-count real cash sales.
+    const pm = pmRaw === 'tunai' ? 'cash' : pmRaw;
     by_pm[pm] = (by_pm[pm] || 0) + oTotal;
-    const isCash = pm === 'cash' || pm === 'tunai' || o.payment_method_type === 'cash';
+    const isCash = pm === 'cash' || o.payment_method_type === 'cash';
 
     if (oType === 'retail') {
       retail_total += oTotal;
@@ -3251,7 +3346,10 @@ function getReportSummary(dateStr) {
   // perhitungan tutup shift di POST /api/shifts/close), bukan angka bawaan
   // yang dibuat-buat, sehingga laporan tidak menampilkan pengeluaran yang
   // belum pernah terjadi.
-  const cashTxs = db.cashTransactions || [];
+  const cashTxs = (db.cashTransactions || []).filter((transaction) => {
+    const transactionDate = orderDateStr({ created_at: transaction.created_at });
+    return transactionDate === targetDate;
+  });
   const cash_out_fnb = cashTxs.filter((t) => t.type === 'out' && (t.scope || 'fnb') === 'fnb').reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const cash_out_retail = cashTxs.filter((t) => t.type === 'out' && t.scope === 'retail').reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const cash_out_total = cash_out_fnb + cash_out_retail;
@@ -5816,10 +5914,13 @@ app.post('/api/custom-widgets', requireAdmin, (req, res) => { const w = { id: 'w
 app.get('/api/custom-widgets/entries', (req, res) => res.json(db.customWidgetEntries));
 
 app.get('/api/payment-methods', (req, res) => {
+  // `type` is the canonical method vocabulary consumed by POS (pm.type) and by
+  // edge_sync's PAYMENT_METHOD_MAP. Omitting it made payment_method_type
+  // undefined and forced the UI to guess "cash" from the display name.
   res.json([
-    { id: 'cash', name: 'Tunai', active: true },
-    { id: 'qris', name: 'QRIS', active: true },
-    { id: 'transfer', name: 'Transfer Bank', active: true },
+    { id: 'cash', name: 'Tunai', type: 'cash', active: true },
+    { id: 'qris', name: 'QRIS', type: 'qris', active: true },
+    { id: 'transfer', name: 'Transfer Bank', type: 'transfer', active: true },
   ]);
 });
 
@@ -6251,24 +6352,6 @@ app.post('/api/rpt', createRateLimiter('rpt'), requireAuth, (req, res) => {
   
   // Review-04 R-LOG-01: diagnostic reports may contain sensitive data (tokens, API keys,
   // user records, passwords). Redact known secret keys before storing/logging.
-  function redactDiagnosticReport(obj, seen = new WeakSet()) {
-    if (!obj || typeof obj !== 'object') return obj;
-    if (seen.has(obj)) return '[Circular]';
-    seen.add(obj);
-    if (Array.isArray(obj)) return obj.map((v) => redactDiagnosticReport(v, seen));
-    const clone = { ...obj };
-    const secretKeys = ['password', 'password_plain', 'password_hash', 'pin', 'token', 'access_token', 'refresh_token', 'api_key', 'secret', 'authorization', 'cookie', 'session', 'jwt', 'bearer', 'apikey', 'apisecret'];
-    for (const k of Object.keys(clone)) {
-      const kl = k.toLowerCase();
-      if (secretKeys.some((s) => kl.includes(s))) {
-        clone[k] = '[REDACTED]';
-      } else if (clone[k] && typeof clone[k] === 'object') {
-        clone[k] = redactDiagnosticReport(clone[k], seen);
-      }
-    }
-    return clone;
-  }
-  
   const report = redactDiagnosticReport(rawReport);
   latestDiagnosticReport = {
     received_at: new Date().toISOString(),
@@ -6280,6 +6363,40 @@ app.post('/api/rpt', createRateLimiter('rpt'), requireAuth, (req, res) => {
   console.log('[Diagnostic Report] Summary:', typeof report === 'string' ? report.slice(0, 200) : JSON.stringify(report).slice(0, 500));
   res.json({ ok: true, message: 'Laporan diagnostik berhasil diterima oleh Server VPS Mandiri.' });
 });
+
+// Shared secret redaction helpers.
+// One rule set is used by the diagnostic report intake (`/api/rpt`) and by the
+// backup archive (`/api/backup/export`). Keeping a single implementation is the point:
+// the backup archive must never be weaker than the diagnostic path (SECURITY-AUDIT M-4).
+// Keys match by lowercase substring so `access_token`, `apiKey` and `AUTHORIZATION`
+// are all covered; recursion is tracked with a WeakSet to survive cycles.
+
+const SECRET_REDACTION_KEYS = [
+  'password', 'password_plain', 'password_hash', 'pin', 'token',
+  'access_token', 'refresh_token', 'api_key', 'secret', 'authorization',
+  'cookie', 'session', 'jwt', 'bearer', 'apikey', 'apisecret',
+];
+
+function isSecretKeyName(key) {
+  const kl = String(key).toLowerCase();
+  return SECRET_REDACTION_KEYS.some((s) => kl.includes(s));
+}
+
+function redactDiagnosticReport(obj, seen = new WeakSet()) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (seen.has(obj)) return '[Circular]';
+  seen.add(obj);
+  if (Array.isArray(obj)) return obj.map((v) => redactDiagnosticReport(v, seen));
+  const clone = { ...obj };
+  for (const k of Object.keys(clone)) {
+    if (isSecretKeyName(k)) {
+      clone[k] = '[REDACTED]';
+    } else if (clone[k] && typeof clone[k] === 'object') {
+      clone[k] = redactDiagnosticReport(clone[k], seen);
+    }
+  }
+  return clone;
+}
 
 app.get('/api/rpt/latest', requireAdmin, (req, res) => {
   res.json(latestDiagnosticReport || { message: 'Belum ada laporan diagnostik yang masuk.' });
@@ -6364,19 +6481,12 @@ app.post('/api/backup/gdrive/record-sync', requireAdmin, (req, res) => {
 // Review-04 R-DATA-01: the archive used to contain every collection verbatim, including
 // `users` with plaintext `password`/`password_plain`/`pin`. Credentials are now redacted
 // so the file can be shared with a backup destination without leaking logins.
-const BACKUP_SECRET_FIELDS = ['password', 'password_plain', 'pin'];
-
+// SECURITY-AUDIT M-4: backup redaction now shares the diagnostic redaction rule set
+// (SECRET_REDACTION_KEYS + recursive walk) instead of a weaker 3-field top-level check,
+// so a nested credential in any collection is redacted the same way it would be in a
+// diagnostic report.
 function redactBackupValue(key, value) {
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map((item) => redactBackupValue(key, item));
-  const clone = { ...value };
-  for (const field of BACKUP_SECRET_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(clone, field)) {
-      delete clone[field];
-      clone[`${field}_redacted`] = true;
-    }
-  }
-  return clone;
+  return redactDiagnosticReport(value);
 }
 
 app.get('/api/backup/export', requireAdmin, (req, res) => {
@@ -6394,7 +6504,7 @@ app.get('/api/backup/export', requireAdmin, (req, res) => {
       version: '2.10.0',
       exported_at: new Date().toISOString(),
       collections: Object.keys(db),
-      credentials_redacted: BACKUP_SECRET_FIELDS,
+      credentials_redacted: SECRET_REDACTION_KEYS,
     };
     zip.addFile('backup_metadata.json', Buffer.from(JSON.stringify(meta, null, 2), 'utf-8'));
 
@@ -6788,11 +6898,11 @@ app.post('/api/ai/assistant/chat', async (req, res) => {
 
 // Register MCP (Model Context Protocol) Server
 const { registerMcpServer } = require('./routes/mcpServer');
-const mcpInstance = registerMcpServer(app, db, broadcastRealtimeSync);
+const mcpInstance = registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin);
 
 // Register all audited missing business endpoints
 const { registerAllMissingRoutes } = require('./routes/allMissingRoutes');
-registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow);
+registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow, requireAdmin, verifyPassword);
 
 // ==========================================
 // Analytics Sync observability endpoints
@@ -6816,15 +6926,9 @@ app.post(['/api/analytics/sync/requeue', '/analytics/sync/requeue'], (req, res) 
   }
 });
 
-// Safe Fallback for any other API endpoints
+// Unknown API routes must fail loudly instead of reporting a synthetic success.
 app.all('/api/*', (req, res) => {
-  if (req.method === 'GET') {
-    if (req.path.endsWith('s') || req.path.endsWith('s/')) {
-      return res.json([]);
-    }
-    return res.json({});
-  }
-  res.json({ status: 'ok', id: 'gen-' + Date.now() });
+  res.status(404).json({ detail: 'Not found' });
 });
 
 // ==========================================

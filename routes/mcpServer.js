@@ -10,7 +10,7 @@ const crypto = require('crypto');
  *  - REST helper endpoints for UI testing and status (/api/mcp/tools, /api/mcp/execute, /api/mcp/status)
  */
 
-function registerMcpServer(app, db, broadcastRealtimeSync) {
+function registerMcpServer(app, db, broadcastRealtimeSync, requireAdmin) {
   // Activity log for MCP invocations
   if (!db.mcpInvocationLogs) {
     db.mcpInvocationLogs = [];
@@ -472,10 +472,12 @@ function registerMcpServer(app, db, broadcastRealtimeSync) {
         const totalDiscount = completedOrders.reduce((acc, o) => acc + (Number(o.discount) || 0), 0);
         const totalTax = completedOrders.reduce((acc, o) => acc + (Number(o.tax) || 0), 0);
 
-        // Payments breakdown
+        // Payments breakdown. "tunai" and "cash" are the same method; keeping them
+        // as separate keys split one drawer total across two report rows.
         const payments = {};
         completedOrders.forEach((o) => {
-          const pm = (o.payment_method || 'tunai').toLowerCase();
+          const raw = String(o.payment_method || 'cash').toLowerCase();
+          const pm = raw === 'tunai' ? 'cash' : raw;
           payments[pm] = (payments[pm] || 0) + (Number(o.total) || 0);
         });
 
@@ -632,10 +634,34 @@ function registerMcpServer(app, db, broadcastRealtimeSync) {
           return res;
         }
 
-        // Calculate expected drawer cash
-        const startingCash = Number(shift.starting_cash) || 0;
+        // Calculate expected drawer cash. "cash" and "tunai" are the same drawer
+        // money; matching only "tunai" under-counted every cash sale stored as
+        // "cash" and made expected_cash too low.
+        // The opening float lives in opening_cash_fnb/opening_cash_retail (per
+        // scope) or start_cash; `starting_cash` is not a field this data model
+        // writes, so reading it alone always produced 0.
+        const perScopeOpening = (Number(shift.opening_cash_fnb) || 0)
+          + (Number(shift.opening_cash_retail) || 0);
+        const startingCash = Number(
+          shift.starting_cash ?? (perScopeOpening || shift.start_cash || shift.opening_cash || 0)
+        ) || 0;
+        const isCashOrder = (o) => {
+          const m = String(o.payment_method || '').toLowerCase();
+          return m === 'cash' || m === 'tunai' || String(o.payment_method_type || '').toLowerCase() === 'cash';
+        };
+        // Legacy orders predate shift_id, so they are attributed by time window.
+        // Without the window every historical order without a shift_id was swept
+        // into the current drawer, inflating expected_cash by millions.
+        const shiftStart = Date.parse(shift.opened_at || shift.created_at || '') || 0;
+        const shiftEnd = shift.closed_at ? (Date.parse(shift.closed_at) || Infinity) : Infinity;
+        const inShiftWindow = (o) => {
+          const t = Date.parse(o.paid_at || o.created_at || '');
+          if (!Number.isFinite(t)) return false;
+          return t >= shiftStart && t <= shiftEnd;
+        };
         const cashOrders = (db.orders || [])
-          .filter((o) => (o.shift_id === shift.id || (!o.shift_id && shift.status === 'open')) && (o.payment_method || '').toLowerCase() === 'tunai' && o.status !== 'void')
+          .filter((o) => (o.shift_id === shift.id || (!o.shift_id && inShiftWindow(o)))
+            && isCashOrder(o) && o.status !== 'void')
           .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
 
         const outExpenses = (db.cashMovements || [])
@@ -1435,7 +1461,7 @@ function registerMcpServer(app, db, broadcastRealtimeSync) {
   // =========================================================================
 
   // 1. JSON-RPC 2.0 over HTTP POST (Standard Direct Remote MCP Endpoint)
-  app.post(['/api/mcp', '/mcp'], async (req, res) => {
+  app.post(['/api/mcp', '/mcp'], requireAdmin, async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('X-MCP-Protocol-Version', '2024-11-05');
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -1461,7 +1487,7 @@ function registerMcpServer(app, db, broadcastRealtimeSync) {
   });
 
   // 2. Server-Sent Events (SSE) Endpoint for Claude Desktop, Cursor, and Agents
-  app.get(['/api/mcp/sse', '/sse'], (req, res) => {
+  app.get(['/api/mcp/sse', '/sse'], requireAdmin, (req, res) => {
     const sessionId = 'mcp_sess_' + crypto.randomUUID();
 
     res.writeHead(200, {
@@ -1494,7 +1520,7 @@ function registerMcpServer(app, db, broadcastRealtimeSync) {
   });
 
   // 3. SSE Inbound Messages POST
-  app.post(['/api/mcp/messages', '/messages'], async (req, res) => {
+  app.post(['/api/mcp/messages', '/messages'], requireAdmin, async (req, res) => {
     const sessionId = req.query.sessionId || req.headers['x-mcp-session-id'];
     const clientInfo = req.headers['user-agent'] || `SSE-Client (${sessionId || 'anon'})`;
 
@@ -1516,7 +1542,7 @@ function registerMcpServer(app, db, broadcastRealtimeSync) {
   });
 
   // 4. REST Helper: MCP Server Status & Metadata
-  app.get(['/api/mcp', '/api/mcp/status'], (req, res) => {
+  app.get(['/api/mcp', '/api/mcp/status'], requireAdmin, (req, res) => {
     const host = req.get('host') || 'localhost:3000';
     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
     const baseUrl = `${protocol}://${host}`;
@@ -1567,7 +1593,7 @@ function registerMcpServer(app, db, broadcastRealtimeSync) {
   });
 
   // 5. REST Helper: Tools Catalog (for Frontend UI inspection)
-  app.get('/api/mcp/tools', (req, res) => {
+  app.get('/api/mcp/tools', requireAdmin, (req, res) => {
     res.json({
       tools: MCP_TOOLS,
       count: MCP_TOOLS.length,
@@ -1575,7 +1601,7 @@ function registerMcpServer(app, db, broadcastRealtimeSync) {
   });
 
   // 6. REST Helper: Execute Tool directly from in-app UI playground
-  app.post('/api/mcp/execute', async (req, res) => {
+  app.post('/api/mcp/execute', requireAdmin, async (req, res) => {
     const { name, arguments: args } = req.body || {};
     if (!name) {
       return res.status(400).json({ detail: 'Nama tool MCP wajib disertakan' });

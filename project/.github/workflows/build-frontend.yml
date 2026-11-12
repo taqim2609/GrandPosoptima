@@ -3,7 +3,7 @@ name: Build Frontend untuk Raspberry Pi
 # ⛔ DIMATIKAN (2026-08-28): auto-rebuild frontend di GitHub dinonaktifkan
 # karena meng-commit folder frontend/build yang sering konflik dengan build
 # lokal (OTA). Build sekarang dilakukan manual di workspace pengembang, dan
-# frontend/build di-track manual (sudah up-to-date di repo).
+# project/frontend/build di-track manual (sudah up-to-date di repo).
 #
 # Masih bisa dijalankan MANUAL kapan pun lewat tab "Actions" -> "Run workflow".
 
@@ -29,29 +29,28 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Aktifkan corepack (yarn sesuai packageManager)
-        run: corepack enable
+          cache: npm
+          cache-dependency-path: project/frontend/package-lock.json
 
       - name: Install dependency
-        working-directory: frontend
-        run: yarn install --frozen-lockfile --network-timeout 600000
+        working-directory: project/frontend
+        run: npm ci
 
       - name: Build produksi (prebuilt untuk Pi + bundle OTA)
-        working-directory: frontend
+        working-directory: project/frontend
         env:
           CI: "false"
           REACT_APP_BACKEND_URL: ""
           GENERATE_SOURCEMAP: "false"
-        run: yarn build
+        run: npm run build
 
       - name: Commit folder build bila berubah
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f frontend/build
+          git add -f project/frontend/build
           if git diff --cached --quiet; then
-            echo "Tidak ada perubahan pada frontend/build — lewati commit."
+            echo "Tidak ada perubahan pada project/frontend/build — lewati commit."
           else
             git commit -m "chore(ci): rebuild frontend/build otomatis [skip ci]"
             git push

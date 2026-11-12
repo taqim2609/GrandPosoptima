@@ -37,7 +37,7 @@ Buka `backend/.env.docker`, lalu isi/ubah:
 - `JWT_SECRET` → string acak panjang (WAJIB diganti).
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` → akun owner pertama.
 - Kunci AI (opsional): `OPENAI_COMPAT_API_KEY`, `EMERGENT_LLM_KEY`/`GEMINI_API_KEY`.
-- `CORS_ORIGINS=*` aman untuk LAN tertutup (tidak terhubung internet).
+- `CORS_ORIGINS` → daftar origin POS yang diizinkan, dipisah koma (mis. `http://192.168.1.100:3000,http://pos.local:3000`). Di production, bila variabel ini kosong, request lintas-origin dari browser ditolak; request same-origin tetap berjalan.
 
 **Khusus Raspberry Pi**, buat file `.env` di folder proyek:
 ```

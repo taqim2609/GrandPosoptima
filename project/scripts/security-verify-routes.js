@@ -139,10 +139,27 @@ function call(port, method, p, { body, headers = {} } = {}) {
       allowlisted.headers['access-control-allow-origin'] === 'https://pos.grandaceh.id',
       { acao: allowlisted.headers['access-control-allow-origin'] }
     );
+  } else if (process.env.NODE_ENV === 'production') {
+    // R-CFG-02 (hardened): with no allow-list in production, cross-origin requests must not
+    // receive a reflected ACAO, while same-origin (no Origin header) requests still work.
+    assert(
+      'CORS does not reflect arbitrary origin when CORS_ORIGINS is unset',
+      evilAcao !== 'https://evil.example',
+      { acao: evilAcao }
+    );
+    assert(
+      'CORS does not reflect allow-listed-looking origin when CORS_ORIGINS is unset',
+      allowlisted.headers['access-control-allow-origin'] !== 'https://pos.grandaceh.id',
+      { acao: allowlisted.headers['access-control-allow-origin'] }
+    );
   } else {
-    console.log = realLog;
-    realWarn('[verify] CORS_ORIGINS unset -> allow-all origin (see R-CFG-02); CORS assertions skipped.');
-    console.log = () => {};
+    // Non-production (this harness runs NODE_ENV=test): reflecting the caller origin is the
+    // documented development behaviour, so assert that instead of the production policy.
+    assert(
+      'CORS reflects caller origin in non-production when CORS_ORIGINS is unset',
+      evilAcao === 'https://evil.example',
+      { acao: evilAcao }
+    );
   }
 
   // ---- 7. Oversized JSON is rejected (2mb cap) ------------------------------

@@ -148,8 +148,12 @@ export default function Shift() {
   const expOpeningRetail = Number(session?.retail?.opening_cash ?? (session?.start_cash ? session.start_cash / 2 : 100000));
   const expOpeningTotal = expOpeningFnb + expOpeningRetail;
 
-  const expSalesCashFnb = Number(summary?.cash_sales_fnb ?? (summary?.by_payment?.cash ? summary.by_payment.cash * 0.7 : 0));
-  const expSalesCashRetail = Number(summary?.cash_sales_retail ?? (summary?.by_payment?.cash ? summary.by_payment.cash * 0.3 : 0));
+  // Cash-only sales per channel. The old fallback split total cash 70/30 between
+  // F&B and retail — a ratio nothing in the data supported, which made the drawer
+  // variance of both channels wrong at once. When the server omits a per-channel
+  // figure the honest value is 0, not an invented share.
+  const expSalesCashFnb = Number(summary?.cash_sales_fnb ?? 0) || 0;
+  const expSalesCashRetail = Number(summary?.cash_sales_retail ?? 0) || 0;
   const expSalesCashTotal = expSalesCashFnb + expSalesCashRetail;
 
   const expRecordedOutFnb = Number(cash?.out_fnb ?? 0);

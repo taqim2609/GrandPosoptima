@@ -83,8 +83,9 @@ assertContains(source, /const isSuper = isUserSuperAdmin\(user\);/, 'generateTok
 console.log('\n--- R-CFG: Configuration & CORS ---');
 
 // 6. CORS warning in production
-assertContains(source, /CORS_ALLOWED_ORIGINS\.length === 0 \&\& process\.env\.NODE_ENV === 'production'/, 'CORS_ORIGINS check in production');
+assertContains(source, /const CORS_STRICT = CORS_ALLOWED_ORIGINS\.length === 0 && process\.env\.NODE_ENV === 'production'/, 'CORS_ORIGINS strict check in production');
 assertContains(source, /console\.warn[\s\S]*CORS_ORIGINS is not set/, 'CORS production warning logged');
+assertContains(source, /if \(!origin\) return callback\(null, true\)/, 'same-origin requests still served');
 
 console.log('\n--- R-RBAC: Settings Endpoint Protection ---');
 
@@ -124,24 +125,26 @@ assertContains(source, /Entri dilewati \(nama koleksi tidak aman\)/, 'Unsafe col
 assertContains(source, /RESTORE_BLOCKED_COLLECTIONS.*new Set\(.*users.*\)/, 'users collection blocked from restore');
 assertContains(source, /RESTORE_MAX_COLLECTIONS = 80;/, 'Max collections cap at 80');
 
-// 9. Backup export redacts secrets
-assertContains(source, /BACKUP_SECRET_FIELDS = \['password', 'password_plain', 'pin'\]/, 'BACKUP_SECRET_FIELDS defined');
+// 9. Backup export redacts secrets (SECURITY-AUDIT M-4: unified with diagnostic redaction)
+assertNotContains(source, /BACKUP_SECRET_FIELDS/, 'Legacy BACKUP_SECRET_FIELDS constant removed');
 assertContains(source, /function redactBackupValue\(key, value\)/, 'redactBackupValue function');
-assertContains(source, /clone\[`\${field}_redacted`\] = true;/, 'Redacted fields marked');
+assertContains(source, /function redactBackupValue\(key, value\)\s*\{\s*return redactDiagnosticReport\(value\);/, 'redactBackupValue delegates to redactDiagnosticReport');
+assertContains(source, /credentials_redacted: SECRET_REDACTION_KEYS/, 'Backup metadata reports the unified key list');
 
 console.log('\n--- R-LOG: Diagnostic Report Redaction ---');
 
 // 10. Diagnostic report redaction
 assertContains(source, /function redactDiagnosticReport\(obj/, 'redactDiagnosticReport function');
-assertContains(source, /const secretKeys = \['password'/, 'Secret keys list includes password');
-assertContains(source, /secretKeys.*token/, 'Secret keys list includes token');
-assertContains(source, /secretKeys.*api_key/, 'Secret keys list includes api_key');
-assertContains(source, /secretKeys.*secret/, 'Secret keys list includes secret');
-assertContains(source, /secretKeys.*authorization/, 'Secret keys list includes authorization');
-assertContains(source, /secretKeys.*cookie/, 'Secret keys list includes cookie');
-assertContains(source, /secretKeys.*session/, 'Secret keys list includes session');
-assertContains(source, /secretKeys.*jwt/, 'Secret keys list includes jwt');
-assertContains(source, /secretKeys.*bearer/, 'Secret keys list includes bearer');
+assertContains(source, /const SECRET_REDACTION_KEYS = \[/, 'Shared secret key list declared');
+assertContains(source, /'password', 'password_plain', 'password_hash', 'pin', 'token'/, 'Secret keys list includes password family');
+assertContains(source, /SECRET_REDACTION_KEYS[\s\S]{0,400}'token'/, 'Secret keys list includes token');
+assertContains(source, /SECRET_REDACTION_KEYS[\s\S]{0,400}'api_key'/, 'Secret keys list includes api_key');
+assertContains(source, /SECRET_REDACTION_KEYS[\s\S]{0,400}'secret'/, 'Secret keys list includes secret');
+assertContains(source, /SECRET_REDACTION_KEYS[\s\S]{0,400}'authorization'/, 'Secret keys list includes authorization');
+assertContains(source, /SECRET_REDACTION_KEYS[\s\S]{0,400}'cookie'/, 'Secret keys list includes cookie');
+assertContains(source, /SECRET_REDACTION_KEYS[\s\S]{0,400}'session'/, 'Secret keys list includes session');
+assertContains(source, /SECRET_REDACTION_KEYS[\s\S]{0,400}'jwt'/, 'Secret keys list includes jwt');
+assertContains(source, /SECRET_REDACTION_KEYS[\s\S]{0,400}'bearer'/, 'Secret keys list includes bearer');
 assertContains(source, /REDACTED/, 'Secrets replaced with [REDACTED]');
 assertContains(source, /Intentionally log only the ts and a summary/, 'Full report body not logged');
 assertContains(source, /JSON\.stringify\(report\)\.slice\(0, 500\)/, 'Log summary truncated');

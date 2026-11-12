@@ -15,7 +15,7 @@ function wibDateOnly(ts) {
   return new Date(d.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow = () => {}) {
+function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow = () => {}, requireAdmin, verifyPassword) {
   // Helper: Get or Init collections
   if (!db.cashCategories) {
     db.cashCategories = ['Bahan Baku', 'Belanja Operasional', 'Bayar Supplier', 'Kasbon', 'Operasional', 'Lainnya'];
@@ -102,7 +102,11 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
 
     const impact = {
       amount: order.total || 0,
-      cash_reduction: order.payment_method === 'cash' ? (order.total || 0) : 0,
+      // Preview of the drawer impact must use the same cash test as the void path.
+      cash_reduction: (() => {
+        const m = String(order.payment_method || '').toLowerCase();
+        return (m === 'cash' || m === 'tunai' || order.payment_method_type === 'cash') ? (order.total || 0) : 0;
+      })(),
       restock_items: items.length,
       restock_qty,
       coupon: order.coupon_code || null,
@@ -164,13 +168,26 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       });
     }
 
-    // Reverse shift sales
+    // Reverse shift sales. Must mirror the pay path: split payments are reversed
+    // per split, and "tunai" is the same drawer cash as "cash".
     if (db.currentShift && (order.status === 'voided' || order.status === 'refunded')) {
       const tot = Number(order.total) || 0;
-      if (order.payment_method === 'cash') {
-        db.currentShift.cash_sales = Math.max(0, (db.currentShift.cash_sales || 0) - tot);
+      const splits = Array.isArray(order.payment_splits) ? order.payment_splits : null;
+      if (splits && splits.length > 0) {
+        for (const split of splits) {
+          const m = String(split.payment_method || '').toLowerCase();
+          const isCash = m === 'cash' || m === 'tunai';
+          const key = isCash ? 'cash_sales' : 'non_cash_sales';
+          db.currentShift[key] = Math.max(0, (db.currentShift[key] || 0) - (Number(split.amount) || 0));
+        }
       } else {
-        db.currentShift.non_cash_sales = Math.max(0, (db.currentShift.non_cash_sales || 0) - tot);
+        const m = String(order.payment_method || '').toLowerCase();
+        const isCash = m === 'cash' || m === 'tunai' || order.payment_method_type === 'cash';
+        if (isCash) {
+          db.currentShift.cash_sales = Math.max(0, (db.currentShift.cash_sales || 0) - tot);
+        } else {
+          db.currentShift.non_cash_sales = Math.max(0, (db.currentShift.non_cash_sales || 0) - tot);
+        }
       }
       db.currentShift.total_sales = Math.max(0, (db.currentShift.total_sales || 0) - tot);
       db.currentShift.orders_count = Math.max(0, (db.currentShift.orders_count || 0) - 1);
@@ -465,7 +482,11 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
   });
 
   app.delete(['/api/members/:id', '/members/:id'], (req, res) => {
+    const before = db.members.length;
     db.members = db.members.filter((m) => m.id !== req.params.id);
+    if (db.members.length === before) {
+      return res.status(404).json({ detail: 'Member tidak ditemukan' });
+    }
     res.json({ status: 'ok', detail: 'Member dihapus' });
   });
 
@@ -1584,14 +1605,22 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
     const sid = req.params.sid;
     const shift = (db.currentShift && db.currentShift.id === sid)
       ? db.currentShift
-      : db.shiftHistory.find((s) => s.id === sid) || db.currentShift || {
-          user_name: 'Kasir 1',
-          opened_at: new Date().toISOString(),
-          cash_sales: 150000,
-          non_cash_sales: 80000,
-          total_sales: 230000,
-          orders_count: 5,
-        };
+      : db.shiftHistory.find((s) => s.id === sid) || db.currentShift;
+    // Never print a report for a shift that does not exist: the old fallback
+    // invented cash_sales 150000 / non_cash_sales 80000 / 5 orders, so a typo in
+    // the shift id produced a plausible-looking receipt with fabricated money.
+    if (!shift) {
+      return res.status(404).json({ detail: 'Shift tidak ditemukan' });
+    }
+
+    // Opening float lives in opening_cash_fnb/opening_cash_retail (per scope) or
+    // start_cash/opening_cash; the report used to read only start_cash/opening_cash
+    // and printed Rp 0 for every shift opened through the two-scope flow.
+    const openingFloat = Number(
+      shift.start_cash ?? (shift.opening_cash || (
+        (Number(shift.opening_cash_fnb) || 0) + (Number(shift.opening_cash_retail) || 0)
+      ))
+    ) || 0;
 
     const varianceSection = shift.variance_report ? `
 ----------------------------------------
@@ -1603,22 +1632,38 @@ Selisih Kas     : Rp ${(Number(shift.variance_report.total?.variance || shift.va
 ${shift.variance_reason ? `Alasan Selisih  : ${shift.variance_reason}\n` : ''}${shift.denominations ? `Rincian Pecahan Fisik:
 ${Object.entries(shift.denominations).filter(([_, qty]) => Number(qty) > 0).map(([val, qty]) => ` - Rp ${Number(val).toLocaleString('id-ID')} x ${qty}`).join('\n') || ' -'}\n` : ''}` : '';
 
+    // Historical shifts keep their figures under `shift.report.*` (written by POST
+    // /api/shifts/close), not on the shift row itself. Reading only top-level fields
+    // printed Rp 0 for every past shift in the printed recap.
+    const rec = shift.report || {};
+    const reportCashSales = Number(shift.cash_sales ?? rec.cash_sales ?? 0) || 0;
+    const reportNonCash = Number(
+      shift.non_cash_sales
+      ?? rec.non_cash_sales
+      ?? ((Number(rec.total_sales) || 0) - (Number(rec.cash_sales_fnb) || 0) - (Number(rec.cash_sales_retail) || 0))
+    ) || 0;
+    const reportTotalSales = Number(shift.total_sales ?? rec.total_sales ?? 0) || 0;
+    const reportOrders = Number(shift.orders_count ?? rec.order_count ?? 0) || 0;
+    const reportCashOut = Number(
+      shift.cash_out ?? rec.cash_out ?? ((Number(rec.cash_out_fnb) || 0) + (Number(rec.cash_out_retail) || 0))
+    ) || 0;
+
     const text = `
 ========================================
        GRAND ACEH KULINER POS
    LAPORAN REKAPITULASI SHIFT KASIR
 ========================================
-Kasir         : ${shift.user_name || 'Kasir'}
+Kasir         : ${shift.user_name || shift.cashier_name || shift.opened_by || 'Kasir'}
 Waktu Buka    : ${shift.opened_at || '-'}
 Waktu Tutup   : ${shift.closed_at || 'Shift Sedang Aktif'}
 Status        : ${shift.status || 'open'}
 ----------------------------------------
-Modal Awal    : Rp ${(Number(shift.start_cash || shift.opening_cash) || 0).toLocaleString('id-ID')}
-Penjualan Kas : Rp ${(Number(shift.cash_sales) || 0).toLocaleString('id-ID')}
-Non-Tunai/QRIS: Rp ${(Number(shift.non_cash_sales) || 0).toLocaleString('id-ID')}
-Total Penjualan: Rp ${(Number(shift.total_sales) || 0).toLocaleString('id-ID')}
-Jumlah Bon    : ${shift.orders_count || 0} transaksi
-Total Kas Keluar: Rp ${(Number(shift.cash_out) || 0).toLocaleString('id-ID')}${varianceSection}
+Modal Awal    : Rp ${openingFloat.toLocaleString('id-ID')}
+Penjualan Kas : Rp ${reportCashSales.toLocaleString('id-ID')}
+Non-Tunai/QRIS: Rp ${reportNonCash.toLocaleString('id-ID')}
+Total Penjualan: Rp ${reportTotalSales.toLocaleString('id-ID')}
+Jumlah Bon    : ${reportOrders} transaksi
+Total Kas Keluar: Rp ${reportCashOut.toLocaleString('id-ID')}${varianceSection}
 ========================================
 Terima kasih atas kerja keras hari ini!
 `;
@@ -2924,10 +2969,14 @@ Keluarkan JSON dengan format:
   // Scope `transactions` hanya menghapus data penjualan/kas/shift; katalog menu
   // (products, categories, tables) tidak boleh tersentuh. Perubahan langsung
   // dipersistensikan agar tidak kembali setelah container restart.
-  app.post(['/api/admin/reset-data', '/admin/reset-data'], (req, res) => {
+  app.post(['/api/admin/reset-data', '/admin/reset-data'], requireAdmin, (req, res) => {
     const { scope, password } = req.body || {};
-    if (!password) {
-      return res.status(400).json({ detail: 'Password admin wajib diisi' });
+    if (!req.user || typeof verifyPassword !== 'function') {
+      return res.status(403).json({ detail: 'Verifikasi admin tidak tersedia' });
+    }
+    const authenticatedUser = db.users.find((user) => user.id === req.user.id);
+    if (!authenticatedUser || !verifyPassword(String(password || ''), authenticatedUser)) {
+      return res.status(403).json({ detail: 'Password admin salah' });
     }
     if (!['transactions', 'catalog', 'all'].includes(scope)) {
       return res.status(400).json({ detail: 'Cakupan reset tidak dikenal' });
