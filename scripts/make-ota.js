@@ -109,6 +109,20 @@ async function main() {
   // Tolak jalan supaya divergensi ini tidak pernah senyap.
   const distIndex = path.join(__dirname, "..", "dist", "index.html");
   const buildIndex = path.join(buildDir, "index.html");
+
+  // Gerbang template: `public/index.html` sempat memuat <script type="module" src="/src/index.jsx">.
+  // `src/` tidak pernah ikut ke build, dan nginx menjawab path apa pun dengan index.html, jadi
+  // browser menerima HTML sebagai module script dan menolaknya (MIME ketat). Tolak build supaya
+  // tag semacam itu tidak pernah lolos lagi. Diperiksa sebelum gerbang kesegaran: isi yang salah
+  // tetap salah walau berkasnya baru.
+  const builtHtml = fs.readFileSync(buildIndex, "utf8");
+  const deadSrc = builtHtml.match(/<script[^>]+src="\/?src\//i);
+  if (deadSrc) {
+    console.error(`[make-ota] build/index.html memuat script dari src/: ${deadSrc[0]}`);
+    console.error(`[make-ota] Hapus tag itu dari project/frontend/public/index.html.`);
+    process.exit(3);
+  }
+
   if (fs.existsSync(distIndex)) {
     const distMtime = fs.statSync(distIndex).mtimeMs;
     const buildMtime = fs.statSync(buildIndex).mtimeMs;
