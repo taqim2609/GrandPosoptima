@@ -137,14 +137,15 @@ async function main() {
     nodes: {
       primary_pi: {
         name: "Raspberry Pi Kasir (LAN Toko)",
-        version_url: "http://pos.local:3000/api/ota/version",
-        bundle_url: "http://pos.local:3000/ota/bundle.zip",
+        version_url: "http://100.109.98.56/api/ota/version",
+        bundle_url: "http://100.109.98.56/ota/bundle.zip",
         role: "local_master",
       },
       fallback_vps: {
         name: "Server VPS Go-Live (Tailscale Mesh)",
-        version_url: "http://100.117.186.13:8000/api/ota/version",
-        bundle_url: "http://100.117.186.13:8000/ota/bundle.zip",
+        // Port 3000 (node), bukan 8000 (FastAPI): backend tidak punya route OTA sama sekali.
+        version_url: "http://100.117.186.13:3000/api/ota/version",
+        bundle_url: "http://100.117.186.13:3000/ota/bundle.zip",
         role: "remote_fallback",
       },
     },
@@ -177,8 +178,8 @@ async function main() {
   console.log(`  Versi OTA   : ${version}`);
   console.log(`  Ukuran Zip  : ${(stat.size / 1024).toFixed(1)} KB`);
   console.log(`  Checksum    : ${checksum.slice(0, 16)}...`);
-  console.log(`  Node Pi LAN : http://pos.local:3000/ota/bundle.zip`);
-  console.log(`  Node VPS    : http://100.117.186.13:8000/ota/bundle.zip`);
+  console.log(`  Node Pi LAN : ${versionInfo.nodes.primary_pi.bundle_url}`);
+  console.log(`  Node VPS    : ${versionInfo.nodes.fallback_vps.bundle_url}`);
   console.log(`=======================================================`);
 }
 

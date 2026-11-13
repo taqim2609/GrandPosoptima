@@ -1,0 +1,25 @@
+# Kiosk frontend on the Raspberry Pi (kasir-pi / 100.109.98.56).
+# Adopted 2026-11-13: the container was previously created by hand with `docker run`,
+# which left it unmanageable. Values below are captured from that container.
+#
+#   FRONTEND_TAG=<commit> docker compose -f docker-compose.pi.yml up -d
+#
+# First adoption (container already exists by hand):
+#   docker rename project-frontend-1 project-frontend-old && docker stop project-frontend-old
+#   FRONTEND_TAG=<commit> docker compose -f docker-compose.pi.yml up -d
+services:
+  frontend:
+    image: project-frontend:${FRONTEND_TAG:-ff42b2c}
+    container_name: project-frontend-1
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      default:
+        aliases:
+          - frontend
+
+networks:
+  default:
+    name: project_pos_network
+    external: true

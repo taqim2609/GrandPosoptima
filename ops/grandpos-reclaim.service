@@ -1,0 +1,14 @@
+[Unit]
+Description=GrandPOS allowlist-only disk cache reclaim
+Wants=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/root/grandpos/pos-engine/ops/reclaim.sh
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true

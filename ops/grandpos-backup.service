@@ -1,0 +1,14 @@
+[Unit]
+Description=GrandPOS nightly PostgreSQL dump with retention
+Wants=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/root/grandpos/pos-engine/ops/grandpos-backup.sh
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true

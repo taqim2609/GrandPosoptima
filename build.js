@@ -218,72 +218,18 @@ fs.writeFileSync(destIndex, htmlContent, 'utf8');
 // Do NOT overwrite root index.html because Vite needs /src/index.jsx entrypoint for builds
 console.log(`[Build] dist/index.html updated: CSS=${cssFile || 'none'}, JS=${jsFile || 'none'}`);
 
-// 3. Buat paket OTA bundle.zip dan version.json untuk update APK Android / Sunmi
+// 3. Buat paket OTA lewat scripts/make-ota.js — satu implementasi saja.
+// Versi OTA, checksum, nodes, dan sanitasi WebView Android 7 semuanya didefinisikan di
+// sana. build.js dulu punya salinan sendiri; dua penulis membuat bundle/version.json
+// di dist/ota berganti-ganti isi tiap langkah.
 try {
-  const otaDir = path.join(destDir, 'ota');
-  if (!fs.existsSync(otaDir)) {
-    fs.mkdirSync(otaDir, { recursive: true });
-  }
-  const otaVersion = process.env.OTA_VERSION || `2.10.${stamp()}`;
-  const zip = new AdmZip();
-
-  // Tambahkan seluruh file dist kecuali folder ota
-  const entries = fs.readdirSync(destDir);
-  for (const entry of entries) {
-    if (entry === 'ota') continue;
-    const fullPath = path.join(destDir, entry);
-    const stat = fs.statSync(fullPath);
-    if (stat.isDirectory()) {
-      zip.addLocalFolder(fullPath, entry);
-    } else {
-      zip.addLocalFile(fullPath);
-    }
-  }
-
-  const zipDest = path.join(otaDir, 'bundle.zip');
-  zip.writeZip(zipDest);
-
-  const crypto = require('crypto');
-  let checksum = '';
-  try {
-    checksum = 'sha256:' + crypto.createHash('sha256').update(fs.readFileSync(zipDest)).digest('hex');
-  } catch (_) {}
-
-  const versionJson = {
-    version: otaVersion,
-    url: '/ota/bundle.zip',
-    apiUrl: '/api/ota/bundle.zip',
-    updated_at: new Date().toISOString(),
-    bundle_size: fs.statSync(zipDest).size,
-    bundle_size_kb: Math.round(fs.statSync(zipDest).size / 1024),
-    checksum,
-    nodes: {
-      primary_pi: {
-        name: "Raspberry Pi Kasir (LAN Toko)",
-        version_url: "http://pos.local:3000/api/ota/version",
-        bundle_url: "http://pos.local:3000/ota/bundle.zip",
-        role: "local_master",
-      },
-      fallback_vps: {
-        name: "Server VPS Go-Live (Tailscale Mesh)",
-        version_url: "http://100.117.186.13:8000/api/ota/version",
-        bundle_url: "http://100.117.186.13:8000/ota/bundle.zip",
-        role: "remote_fallback",
-      },
-    },
-  };
-  fs.writeFileSync(path.join(otaDir, 'version.json'), JSON.stringify(versionJson, null, 2));
-
-  // Salin juga ke srcDir jika masih ada
-  if (fs.existsSync(srcDir)) {
-    const srcOtaDir = path.join(srcDir, 'ota');
-    if (!fs.existsSync(srcOtaDir)) fs.mkdirSync(srcOtaDir, { recursive: true });
-    fs.writeFileSync(path.join(srcOtaDir, 'version.json'), JSON.stringify(versionJson, null, 2));
-  }
-
-  console.log(`[Build] Paket OTA siap: versi ${otaVersion} (${(versionJson.bundle_size / 1024).toFixed(1)} KB)`);
+  require('child_process').execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'make-ota.js')], {
+    stdio: 'inherit',
+    env: process.env,
+  });
 } catch (otaErr) {
-  console.warn('[Build] Gagal membuat bundle OTA:', otaErr.message);
+  console.warn('[Build] Gagal membuat paket OTA:', otaErr.message);
+  process.exitCode = 1;
 }
 
 console.log('[Build] Build completed successfully.');

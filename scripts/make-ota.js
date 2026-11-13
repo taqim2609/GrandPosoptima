@@ -6,13 +6,13 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-// Cari folder build yang valid (dist atau build)
+// Cari folder build yang valid. `dist/` TIDAK ikut jadi kandidat: `build.js` sudah
+// menyalin project/frontend/build -> dist, jadi memilih dist di sini berarti memaketkan
+// ulang artefak yang mungkin basi. Sumber kebenaran OTA adalah project/frontend/build.
 function findBuildDir() {
   const candidates = [
-    path.join(__dirname, "..", "dist"),
-    path.join(__dirname, "..", "build"),
     path.join(__dirname, "..", "project", "frontend", "build"),
-    path.join(process.cwd(), "dist"),
+    path.join(process.cwd(), "project", "frontend", "build"),
     path.join(process.cwd(), "build"),
   ];
   for (const c of candidates) {
@@ -20,7 +20,7 @@ function findBuildDir() {
       return c;
     }
   }
-  return path.join(__dirname, "..", "dist");
+  return path.join(__dirname, "..", "project", "frontend", "build");
 }
 
 function stamp() {
@@ -104,6 +104,23 @@ async function main() {
     process.exit(1);
   }
 
+  // Gerbang kesegaran: api-server.js mendahulukan dist/ota & dist/index.html. Kalau dist
+  // lebih tua dari build, kiosk akan dilayani JS lama sementara OTA memaketkan yang baru.
+  // Tolak jalan supaya divergensi ini tidak pernah senyap.
+  const distIndex = path.join(__dirname, "..", "dist", "index.html");
+  const buildIndex = path.join(buildDir, "index.html");
+  if (fs.existsSync(distIndex)) {
+    const distMtime = fs.statSync(distIndex).mtimeMs;
+    const buildMtime = fs.statSync(buildIndex).mtimeMs;
+    if (distMtime < buildMtime) {
+      console.error(
+        `[make-ota] dist/ lebih tua dari build (dist ${new Date(distMtime).toISOString()} < build ${new Date(buildMtime).toISOString()}).`
+      );
+      console.error(`[make-ota] Jalankan "node build.js" dulu agar dist/ tersinkron.`);
+      process.exit(2);
+    }
+  }
+
   // 1. Sanitasi kompatibilitas WebView Android 7
   const patchedCount = sanitizeOldWebview(buildDir);
   if (patchedCount > 0) {
@@ -136,14 +153,15 @@ async function main() {
     nodes: {
       primary_pi: {
         name: "Raspberry Pi Kasir (LAN Toko)",
-        version_url: "http://pos.local:3000/api/ota/version",
-        bundle_url: "http://pos.local:3000/ota/bundle.zip",
+        version_url: "http://100.109.98.56/api/ota/version",
+        bundle_url: "http://100.109.98.56/ota/bundle.zip",
         role: "local_master",
       },
       fallback_vps: {
         name: "Server VPS Go-Live (Tailscale Mesh)",
-        version_url: "http://100.117.186.13:8000/api/ota/version",
-        bundle_url: "http://100.117.186.13:8000/ota/bundle.zip",
+        // Port 3000 (node), bukan 8000 (FastAPI): backend tidak punya route OTA sama sekali.
+        version_url: "http://100.117.186.13:3000/api/ota/version",
+        bundle_url: "http://100.117.186.13:3000/ota/bundle.zip",
         role: "remote_fallback",
       },
     },
@@ -177,8 +195,8 @@ async function main() {
   console.log(`  Versi OTA   : ${version}`);
   console.log(`  Ukuran Zip  : ${(stat.size / 1024).toFixed(1)} KB`);
   console.log(`  Checksum    : ${checksum.slice(0, 16)}...`);
-  console.log(`  Node Pi LAN : http://pos.local:3000/ota/bundle.zip`);
-  console.log(`  Node VPS    : http://100.117.186.13:8000/ota/bundle.zip`);
+  console.log(`  Node Pi LAN : ${versionInfo.nodes.primary_pi.bundle_url}`);
+  console.log(`  Node VPS    : ${versionInfo.nodes.fallback_vps.bundle_url}`);
   console.log(`=======================================================`);
 }
 

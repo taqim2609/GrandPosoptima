@@ -1,0 +1,11 @@
+[Unit]
+Description=Run GrandPOS cache reclaim daily at 03:30 local time
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=5min
+Unit=grandpos-reclaim.service
+
+[Install]
+WantedBy=timers.target

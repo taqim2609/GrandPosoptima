@@ -1,0 +1,11 @@
+[Unit]
+Description=Run GrandPOS nightly PostgreSQL dump at 02:30 local time
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=10min
+Unit=grandpos-backup.service
+
+[Install]
+WantedBy=timers.target

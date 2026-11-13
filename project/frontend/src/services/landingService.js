@@ -80,8 +80,8 @@ function saveToLocalAndNotify(config) {
 }
 
 /**
- * Service Layer: Memuat konfigurasi landing page dari API Gudang.
- * Endpoint: GET /api/landing/config
+ * Service Layer: Memuat konfigurasi landing page dari store node.
+ * Endpoint: GET /api/public/landing-config
  */
 export async function fetchLandingConfig(forceServer = false) {
   if (!forceServer && inMemoryConfig) {
@@ -97,13 +97,15 @@ export async function fetchLandingConfig(forceServer = false) {
 }
 
 /**
- * Pengambil data internal dari endpoint REST API Gudang.
- * GET /api/landing/config
+ * Pengambil data internal dari store landing page milik node app.
+ * GET /api/public/landing-config — publik, tanpa kredensial backend.
+ * (Backend FastAPI /api/landing/config menuntut header X-API-Key yang tidak pernah
+ * dikirim klien, sehingga jalur itu selalu 401. Store node sudah jadi sumbernya.)
  */
 async function fetchLandingConfigFromServer() {
   try {
     const srv = getServerUrl();
-    const res = await fetch(`${srv}/api/landing/config`, {
+    const res = await fetch(`${srv}/api/public/landing-config`, {
       method: "GET",
       headers: {
         "Cache-Control": "no-cache",
@@ -124,8 +126,8 @@ async function fetchLandingConfigFromServer() {
 }
 
 /**
- * Service Layer: Memperbarui konfigurasi landing page ke API Gudang & Database.
- * Endpoint: PUT /api/landing/config
+ * Service Layer: Memperbarui konfigurasi landing page ke store node.
+ * POST /api/settings/landing-page — butuh token admin (requireAdmin).
  */
 export async function updateLandingConfig(updatedConfig) {
   const merged = mergeLandingDefaults(updatedConfig);
@@ -141,21 +143,21 @@ export async function updateLandingConfig(updatedConfig) {
     };
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const res = await fetch(`${srv}/api/landing/config`, {
-      method: "PUT",
+    const res = await fetch(`${srv}/api/settings/landing-page`, {
+      method: "POST",
       headers,
-      body: JSON.stringify({ config: merged }),
+      body: JSON.stringify(merged),
     });
 
     if (res.ok) {
       const json = await res.json();
-      if (json && json.config) {
-        saveToLocalAndNotify(json.config);
+      if (json && json.data) {
+        saveToLocalAndNotify(json.data);
       }
       successServer = true;
     }
   } catch (err) {
-    console.warn("[LandingService] Gagal menyimpan ke server Gudang, disimpan di cache lokal:", err.message);
+    console.warn("[LandingService] Gagal menyimpan ke server, disimpan di cache lokal:", err.message);
   }
 
   return { config: inMemoryConfig, successServer };
@@ -175,7 +177,7 @@ function getAuthToken() {
 
 /**
  * Service Layer: Mengembalikan konfigurasi landing page ke setelan default awal.
- * Endpoint: PUT /api/landing/config with DEFAULT_LANDING_CONFIG
+ * POST /api/settings/landing-page dengan DEFAULT_LANDING_CONFIG
  */
 export async function resetLandingConfigService() {
   saveToLocalAndNotify(DEFAULT_LANDING_CONFIG);
@@ -187,10 +189,10 @@ export async function resetLandingConfigService() {
     };
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    await fetch(`${srv}/api/landing/config`, {
-      method: "PUT",
+    await fetch(`${srv}/api/settings/landing-page`, {
+      method: "POST",
       headers,
-      body: JSON.stringify({ config: DEFAULT_LANDING_CONFIG }),
+      body: JSON.stringify(DEFAULT_LANDING_CONFIG),
     });
   } catch (e) {}
 
