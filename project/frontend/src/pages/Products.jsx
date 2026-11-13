@@ -9,6 +9,8 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import LazyProductImage from "@/components/LazyProductImage";
 import { syncProductToFirestore, syncAllMenuAndStockToFirestore, getLastSyncInfo } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
+import { isAdmin } from "@/lib/rbac";
 
 const empty = { name: "", sku: "", category_id: "", type: "makanan", price: 0, cost: 0, vendor_id: "", vendor_share_percent: 0, description: "", image: "", active: true, sold_out: false, stock: 0, min_stock: 10, weight_sale: false, weight_unit: "ons" };
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
@@ -27,6 +29,10 @@ export default function Products() {
   const [aiImg, setAiImg] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [syncingCloud, setSyncingCloud] = useState(false);
+  const { user } = useAuth();
+  // Server requires admin on the import endpoints (xlsx has no upstream fix), so the
+  // button must not be offered to a cashier who would only collect a 403.
+  const adminUser = isAdmin(user);
 
   const load = () => Promise.all([api.get("/products"), api.get("/categories"), api.get("/vendors")]).then(([p, c, v]) => { setItems(p.data); setCats(c.data); setVendors(v.data); });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount
@@ -144,7 +150,7 @@ export default function Products() {
           </button>
           <button data-testid="download-template-btn" onClick={() => download("/products/template", "template_produk.xlsx")} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><Download size={16} /> Template</button>
           <button data-testid="export-btn" onClick={() => download("/products/export", "produk.xlsx")} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><FileDown size={16} /> Export</button>
-          <button data-testid="import-btn" onClick={() => setImportOpen(true)} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><FileUp size={16} /> Import</button>
+          {adminUser && <button data-testid="import-btn" onClick={() => setImportOpen(true)} className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2"><FileUp size={16} /> Import</button>}
           <button data-testid="add-product-btn" onClick={() => { setForm(empty); setEditId(null); setOpen(true); }} className="tap h-11 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center gap-2"><Plus size={18} /> Tambah</button>
         </div>
       </div>

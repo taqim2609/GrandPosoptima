@@ -252,7 +252,10 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
   });
 
   // POST /api/products/import/preview
-  app.post(['/api/products/import/preview', '/products/import/preview'], upload.single('file'), (req, res) => {
+  // requireAdmin: xlsx@0.18.5 has no upstream fix (prototype pollution + ReDoS in the
+  // parser). The global gate only requires *a* login, so without this a cashier could
+  // reach the parser. Narrowing who can parse is the only mitigation available.
+  app.post(['/api/products/import/preview', '/products/import/preview'], requireAdmin, upload.single('file'), (req, res) => {
     try {
       if (!req.file || !req.file.buffer) {
         return res.status(400).json({ detail: 'File Excel (.xlsx) wajib diunggah' });
@@ -289,7 +292,7 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
   });
 
   // POST /api/products/import/commit
-  app.post(['/api/products/import/commit', '/products/import/commit'], upload.single('file'), (req, res) => {
+  app.post(['/api/products/import/commit', '/products/import/commit'], requireAdmin, upload.single('file'), (req, res) => {
     try {
       if (!req.file || !req.file.buffer) {
         return res.status(400).json({ detail: 'File Excel (.xlsx) wajib diunggah' });
@@ -803,7 +806,7 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
   });
 
   // POST /api/ingredients/import
-  app.post(['/api/ingredients/import', '/ingredients/import'], upload.single('file'), (req, res) => {
+  app.post(['/api/ingredients/import', '/ingredients/import'], requireAdmin, upload.single('file'), (req, res) => {
     try {
       if (!req.file || !req.file.buffer) {
         return res.status(400).json({ detail: 'File Excel wajib diunggah' });
@@ -2268,7 +2271,7 @@ Terima kasih atas kerja keras hari ini!
   });
 
   // POST /api/ai/assistant/import-excel
-  app.post(['/api/ai/assistant/import-excel', '/ai/assistant/import-excel'], upload.single('file'), (req, res) => {
+  app.post(['/api/ai/assistant/import-excel', '/ai/assistant/import-excel'], requireAdmin, upload.single('file'), (req, res) => {
     try {
       if (!req.file || !req.file.buffer) {
         return res.status(400).json({ detail: 'File Excel (.xlsx) wajib diunggah' });

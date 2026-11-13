@@ -1,0 +1,10 @@
+[Unit]
+Description=Check GrandPOS disk and backup freshness every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Unit=grandpos-alert.service
+
+[Install]
+WantedBy=timers.target

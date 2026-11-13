@@ -10,7 +10,7 @@ import api, { apiError } from "@/lib/api";
 import { toast } from "sonner";
 import { wibToday, formatWib } from "@/lib/format";
 import { useAuth } from "@/context/AuthContext";
-import { can, canAny } from "@/lib/rbac";
+import { can, canAny, isAdmin } from "@/lib/rbac";
 import {
   Boxes, Plus, Trash2, Loader2, ShoppingCart, Pencil, ClipboardList,
   Printer, MessageCircle, RefreshCw, Save, X, AlertTriangle, ScanLine, Wallet, History,
@@ -419,10 +419,10 @@ export default function IngredientsPage() {
               className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2 disabled:opacity-50">
               <Tags size={16} /> Kategori Bahan{cats.length ? ` (${cats.length})` : ""}
             </button>
-            <button data-testid="import-bahan-btn" onClick={() => fileXlsxRef.current?.click()} disabled={impBusy}
+            {isAdmin(user) && <button data-testid="import-bahan-btn" onClick={() => fileXlsxRef.current?.click()} disabled={impBusy}
               className="tap h-11 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2 disabled:opacity-60">
               {impBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} className="rotate-90" />} Import Excel
-            </button>
+            </button>}
             <input ref={fileXlsxRef} type="file" accept=".xlsx,.xlsm" className="hidden" onChange={(e) => { doImport(e.target.files?.[0]); e.target.value = ""; }} />
             <button data-testid="add-bahan-btn" onClick={openNew} className="tap h-11 px-5 rounded-xl bg-[#E63946] hover:bg-[#BE123C] text-white font-bold flex items-center gap-2"><Plus size={18} /> Bahan Baru</button>
           </div>

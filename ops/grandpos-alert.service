@@ -1,0 +1,12 @@
+[Unit]
+Description=GrandPOS disk and backup freshness alert
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/root/grandpos/pos-engine/ops/disk-alert.sh
+Nice=15
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
