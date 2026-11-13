@@ -144,10 +144,10 @@ export default function Reservations() {
       .catch(() => {});
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch on date change
   useEffect(() => {
     load();
     loadRules();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch on date change
   }, [date]);
 
   const addKeyword = () => {

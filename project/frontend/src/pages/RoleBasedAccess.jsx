@@ -262,9 +262,9 @@ export default function RoleBasedAccess() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, []);
 
   const selectedUser = useMemo(() => {
@@ -308,6 +308,7 @@ export default function RoleBasedAccess() {
   const roleDefaultPerms = useMemo(() => {
     if (!selectedUser) return [];
     return getRoleDefaultPerms(workingRole || selectedUser.role || "kasir");
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- role defaults are derived from the selected role state
   }, [selectedUser, workingRole, rolesMeta]);
 
   // Filtered users by role and search query

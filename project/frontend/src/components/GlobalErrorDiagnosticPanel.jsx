@@ -64,7 +64,6 @@ export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
     publishing: { status: "unknown", version: getBundleVersion(), latest: null, message: "Memeriksa versi..." },
   });
 
-  // Subscribe to real-time error log stream
   useEffect(() => {
     const unsubscribe = subscribeErrorLog((newLogs) => {
       setLogs(newLogs);
@@ -72,6 +71,7 @@ export default function GlobalErrorDiagnosticPanel({ embedded = false }) {
     // Initial quick test
     runQuickServiceCheck();
     return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- stable mount lifecycle
   }, []);
 
   // Analyze persistent failure patterns
