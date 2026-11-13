@@ -42,18 +42,20 @@ cp /tmp/nginx-kiosk.conf build/../nginx.conf
 docker build --platform linux/arm64 -t project-frontend:<commit> .
 ```
 
-With `docker-compose.pi.yml` present, recreate declaratively:
+The container is managed by Compose since 2026-11-13. Files live at
+`/home/taqim258/grand-aceh-pos/` on the Pi (`docker-compose.pi.yml`, this runbook).
 
 ```sh
-cd /home/taqim258/grand-aceh-pos && FRONTEND_TAG=<commit> docker compose -f docker-compose.pi.yml up -d
+cd /home/taqim258/grand-aceh-pos
+FRONTEND_TAG=<commit> docker compose -f docker-compose.pi.yml up -d
 ```
 
-Compose adoption requires removing the hand-made container once:
+`up -d` alone is enough for a new tag; `--force-recreate` is only needed to prove the
+Compose path still works. The container carries `com.docker.compose.project=grand-aceh-pos`
+and `com.docker.compose.service=frontend`.
 
-```sh
-docker rename project-frontend-1 project-frontend-old && docker stop project-frontend-old
-docker compose -f docker-compose.pi.yml up -d
-```
+Adoption was done once, on 2026-11-13, by renaming the hand-made container to
+`project-frontend-manual` and letting Compose create `project-frontend-1`. Do not repeat it.
 
 ## Verify
 
