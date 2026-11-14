@@ -6915,7 +6915,7 @@ registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persistNow, req
 // Exposes the P1A → analytics outbox state so ops can verify that completed
 // orders actually reached the analytics database (no silent data loss).
 // ==========================================
-app.get(['/api/analytics/sync/status', '/analytics/sync/status'], (req, res) => {
+app.get(['/api/analytics/sync/status', '/analytics/sync/status'], requireAdmin, (req, res) => {
   try {
     res.json(analyticsSync.getStatus());
   } catch (err) {
@@ -6923,7 +6923,10 @@ app.get(['/api/analytics/sync/status', '/analytics/sync/status'], (req, res) => 
   }
 });
 
-app.post(['/api/analytics/sync/requeue', '/analytics/sync/requeue'], (req, res) => {
+// requireAdmin: requeue mutates the outbox for every undelivered order at once. The
+// global gate only requires *a* login, so without this a cashier could trigger a
+// fleet-wide re-sync from the till.
+app.post(['/api/analytics/sync/requeue', '/analytics/sync/requeue'], requireAdmin, (req, res) => {
   try {
     res.json({ ok: true, ...analyticsSync.requeueAllCompleted(db) });
   } catch (err) {

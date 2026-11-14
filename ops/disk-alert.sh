@@ -30,8 +30,29 @@ else
   [ "$age_h" -gt "$BACKUP_MAX_AGE_H" ] && problems="$problems backup_age=${age_h}h"
 fi
 
-# Dedupe: log hanya saat status berubah, supaya file tidak tumbuh oleh alarm yang sama.
+# Order yang belum sampai ke analytics. Kelas kegagalan yang dulu tidak terlihat: entri
+# berstatus `done` tetapi membawa error, sehingga tidak ada yang mencoba ulang dan tidak
+# ada yang tahu. Dibaca langsung dari outbox di disk, bukan lewat endpoint: watchdog tidak
+# perlu autentikasi, dan jumlahnya tetap benar walau API sedang mati.
+OUTBOX_FILE=${OUTBOX_FILE:-/root/grandpos/pos-engine/data/analytics-outbox.json}
+if [ -f "$OUTBOX_FILE" ]; then
+  undelivered=$(/usr/bin/python3 -c '
+import json,sys
+try:
+    entries=json.load(open(sys.argv[1]))
+except Exception:
+    print("unreadable"); raise SystemExit
+print(sum(1 for e in entries if e.get("stuck") or e.get("error") or not e.get("done")))
+' "$OUTBOX_FILE" 2>/dev/null || printf 'unreadable')
+  case "$undelivered" in
+    unreadable) problems="$problems analytics_outbox=unreadable" ;;
+    0) : ;;
+    *) problems="$problems analytics_undelivered=${undelivered}" ;;
+  esac
+fi
+
 if [ -n "$problems" ]; then
+  # Dedupe: log hanya saat status berubah, supaya file tidak tumbuh oleh alarm yang sama.
   if [ "$(cat "$STATE_FILE" 2>/dev/null)" != "$problems" ]; then
     log "ALERT:$problems"
     printf '%s' "$problems" >"$STATE_FILE"

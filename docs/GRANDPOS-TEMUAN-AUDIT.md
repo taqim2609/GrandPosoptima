@@ -1582,3 +1582,80 @@ Disk 84% → **76%** (4.6 GB → 6.8 GB free). Semua dihapus hanya setelah dibuk
 
 **Pasca-pembersihan diverifikasi:** 4/4 container Up, api/web/pi 200, `orders=110`,
 `sum(id)=32459` (identik baseline), `hindsight-daemon` active.
+
+### Data hilang ditemukan dan dipulihkan: 6 order 13 Nov (2026-11-14 05:1x–05:3x UTC)
+
+#### Temuan
+
+`orders` di Postgres berhenti di **2026-11-12**. POS punya 6 order tanggal 13 Nov yang
+`status='completed'` tetapi tidak pernah sampai ke analytics. Total **Rp 1.432.500**.
+
+Penyebab berlapis, dan yang kedua membuat masalahnya tidak terlihat:
+
+1. **Retry habis dalam 31 detik.** `drainOutbox` menyerah pada `attempts >= 5` dengan
+   backoff `min(1000·2^n, 30000)`: 1+2+4+8+16 = 31 detik. Saat disk penuh 13 Nov dan
+   `grandpos-db-1` crash-loop berjam-jam, kelima order menyerah dalam setengah menit.
+2. **`done: true` + `error` terbaca sebagai sukses.** Entri yang menyerah ditandai
+   `done` sehingga `getStatus().pending` = 0 dan tidak ada yang mencoba ulang. Kegagalan
+   dan keberhasilan tidak bisa dibedakan dari endpoint status.
+3. **`DATABASE_URL` container API menunjuk database yang tidak ada:**
+   `postgresql://paperclip:***@127.0.0.1:5432/paperclip`. `/health` membalas
+   `db: false`. `.env` repo sudah benar (`db:5432/grandpos`), tetapi **variabel shell host
+   menang atas `env_file`** — sisa sesi Hindsight. `docker compose config` membuktikannya:
+   dengan `DATABASE_URL` di-unset hasilnya `grandpos_app@db:5432/grandpos`.
+
+Temuan 3 berarti `/sync/orders` membalas error koneksi yang datang dari API, bukan dari
+Node. Itu yang membuat diagnosis pertama salah arah.
+
+#### Perbaikan
+
+| Berkas | Perubahan |
+| :--- | :--- |
+| `lib/analytics-sync.js` | `MAX_ATTEMPTS=200`, `MAX_BACKOFF_MS=30m`, `GIVE_UP_AFTER_MS=7d`. Menyerah hanya berdasarkan jam dinding, bukan jumlah percobaan; entri yang habis waktu ditandai `stuck`, bukan `done`. |
+| `lib/analytics-sync.js` | `getStatus()` menambah `stuck`. `pending`/`failed` tidak lagi menghitung entri yang parkir. |
+| `lib/analytics-sync.js` | `requeueAllCompleted` memulihkan entri di tempat, tidak lagi mengosongkan `state.synced` dan `outbox`. Entri `done + error` (bentuk warisan) diperlakukan sebagai belum terkirim. |
+| `api-server.js` | `requireAdmin` di `GET /api/analytics/sync/status` dan `POST /api/analytics/sync/requeue`. Sebelumnya cukup login: kasir bisa memicu re-sync seluruh outbox dari meja kasir. |
+| `ops/disk-alert.sh` | Menghitung entri belum terkirim langsung dari `analytics-outbox.json`. `done + error` ikut dihitung, jadi kelas kegagalan ini tidak bisa lagi senyap. |
+| `scripts/requeue-analytics.js` | Pemulihan manual: menandatangani token admin dengan `JWT_SECRET` milik server, bukan menebak kredensial. `--dry-run` menampilkan yang tertunda tanpa mengubah apa pun. |
+
+#### Uji
+
+`tests/analytics-sync-retry-policy.js` — **7/7**. Dibuktikan RED lebih dulu: dijalankan
+terhadap kode lama lewat `git stash`, hasilnya **1 lulus / 5 gagal**.
+
+`tests/analytics-sync-rbac.js` — **5/5**: anon 401, kasir **403**, admin 200. Server nyata
+di port 3992 di atas salinan `pos-db.json`; token ditandatangani signer server sendiri.
+
+Dua kegagalan awal ada di uji saya sendiri, bukan di kode: modul ter-cache `require`
+sehingga outbox hasil edit tidak terbaca, dan regex `outbox = []` cocok dengan komentar.
+Keduanya diperbaiki sebelum uji dianggap sah.
+
+Satu bug nyata juga tertangkap uji ini: `outbox` hanya dimuat di `initSync`, jadi bila
+worker tidak pernah init, `requeue` menganggap semua order baru dan menimpa riwayat.
+Ditambal dengan memuat dari disk saat kosong.
+
+#### Pemulihan data
+
+```
+"retried": 6, "added": 0
+[AnalyticsSync] ✅ GAK-20261113-039 … 044
+```
+
+| Bukti | Nilai |
+| :--- | :--- |
+| `orders` sebelum | 110 |
+| `orders` sesudah | 116 |
+| Rentang tanggal | 2026-10-30 .. 2026-11-14 |
+| Enam order 13 Nov | Rp 121.000 + 415.000 + 104.000 + 222.000 + 410.500 + 160.000 |
+| Jumlah | **Rp 1.432.500** — sama persis dengan yang hilang |
+| `/health` API | `db: true` (sebelumnya `false`) |
+
+Backup outbox pra-tindakan: `/root/backups/grandpos/analytics-outbox-20261114T051830Z.json`
+dan `analytics-sync-state-20261114T051830Z.json`.
+
+#### Catatan operasional
+
+`DATABASE_URL` di shell host **bocor ke `docker compose`** dan mengalahkan `env_file`.
+Setiap recreate container API harus lewat `env -u DATABASE_URL -u AI_DATABASE_URL`, atau
+variabel itu dihapus dari profil shell. Belum diperbaiki di tingkat shell — itu keputusan
+pemilik host.
