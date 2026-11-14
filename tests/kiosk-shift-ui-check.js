@@ -15,7 +15,14 @@
  * Run: node tests/kiosk-shift-ui-check.js http://100.109.98.56
  */
 const fs = require('fs');
-const { chromium } = require('/root/c-founder/node_modules/playwright');
+// Resolve playwright from this repo rather than an absolute path that may not exist.
+const { chromium } = (() => {
+  for (const id of [process.env.PLAYWRIGHT_MODULE, 'playwright-core', 'playwright']) {
+    if (!id) continue;
+    try { return require(id); } catch (_) {}
+  }
+  throw new Error('playwright not installed: npm i -D playwright-core');
+})();
 
 const BASE = process.argv[2] || 'http://100.109.98.56';
 

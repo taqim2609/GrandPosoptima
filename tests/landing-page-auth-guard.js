@@ -83,7 +83,20 @@ function tokenFor(claims) {
   assert('anonymous POST /api/settings/landing-page -> 401', anon.status === 401, { status: anon.status });
 
   // 2. Non-admin write must be refused.
-  const kasir = tokenFor({ id: 'u-kasir2', username: 'kasir2', role: 'kasir', role_base: 'kasir' });
+  // The token must name a real, active user: the auth gate resolves the token against
+  // db.users and treats an unknown identity as anonymous (401), which would make this a
+  // bad test of the 403 path -- it would pass while never reaching requireAdmin.
+  const snapshot = JSON.parse(fs.readFileSync(path.join(tmpDir, 'pos-db.json'), 'utf8'));
+  const kasirUser = (snapshot.data?.users || []).find(
+    (u) => u.active !== false && String(u.role || '').toLowerCase() === 'kasir'
+  );
+  if (!kasirUser) throw new Error('no real kasir account in the snapshot: cannot test the 403 path');
+  const kasir = tokenFor({
+    id: kasirUser.id,
+    username: kasirUser.username,
+    role: kasirUser.role,
+    role_base: kasirUser.role_base || kasirUser.role,
+  });
   const nonAdmin = await call(port, 'POST', '/api/settings/landing-page', {
     body: { hero_title: marker },
     headers: { Authorization: kasir },
