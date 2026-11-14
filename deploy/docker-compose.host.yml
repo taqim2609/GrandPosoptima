@@ -1,0 +1,65 @@
+# Compose produksi untuk host POS (gudang).
+#
+# Kode tidak dibakar ke dalam image: /root/grandpos/pos-engine di-bind-mount ke /app dan
+# dijalankan lewat `tsx server.ts` tanpa watch. Artinya berkas di disk BUKAN kode yang
+# berjalan -- setiap perubahan server-side wajib diikuti restart container:
+#
+#   docker compose -f docker-compose.host.yml up -d --force-recreate --no-deps grandpos-app
+#
+# Nilai rahasia ada di .env di sebelah berkas ini (tidak masuk git). Lihat .env.example.
+services:
+  grandpos-app:
+    image: node:20-alpine
+    container_name: grandpos_web_app
+    restart: always
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - NODE_SYNC_KEY=${NODE_SYNC_KEY:?NODE_SYNC_KEY is required}
+      # Analytics API (FastAPI) hidup di host, dijangkau lewat gateway bridge Docker.
+      - ANALYTICS_URL=${ANALYTICS_URL:-http://172.20.0.1:8000}
+      - HERMES_WA_WEBHOOK_URL=${HERMES_WA_WEBHOOK_URL:-http://127.0.0.1:8644/webhooks/grandpos-outbox}
+      # Allow-list for credentialed cross-origin calls. Unset means the `cors`
+      # package reflects every origin while credentials:true is on, i.e. any site
+      # could read authenticated responses. Keep the POS/kiosk origins only.
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://127.0.0.1:3000}
+    volumes:
+      - ${POS_ENGINE_DIR:-/root/grandpos/pos-engine}:/app:rw
+    command: sh -c "NODE_ENV=production PORT=3000 npx tsx server.ts"
+    networks:
+      - gak_network
+    labels:
+      # The app is bind-mounted from the host and is not published to any registry.
+      # Watchtower must not recreate this container: it would restart the POS mid-shift
+      # and could pull an unintended node:20-alpine base. Opt out explicitly.
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  watchtower:
+    # Ping the daemon with a modern API version: the daemon requires >= 1.40.
+    image: containrrr/watchtower:latest
+    container_name: gak_watchtower_updater
+    restart: unless-stopped
+    environment:
+      # Watchtower defaults its Docker client to API 1.25 (too old for this daemon).
+      - DOCKER_API_VERSION=1.44
+      - WATCHTOWER_POLL_INTERVAL=86400
+      - WATCHTOWER_TIMEOUT=60s
+      - WATCHTOWER_CLEANUP=true
+      - TZ=UTC
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - gak_network
+    labels:
+      # Do not let watchtower update itself (it could never clean up properly).
+      - "com.centurylinklabs.watchtower.enable=false"
+    command: ["--cleanup", "--interval", "86400"]
+
+networks:
+  gak_network:
+    driver: bridge
