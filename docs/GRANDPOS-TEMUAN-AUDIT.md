@@ -1707,3 +1707,36 @@ mengatakan terkirim dibersihkan dari `error`/`stuck` dan tidak dikirim ulang.
 
 Setelah restart: outbox **15 entri**, ledger **25**, **0 belum terkirim**. API `db: true`,
 web 200, Pi 200, `orders=116`, total Rp 16.815.400.
+
+### Koreksi catatan: `pos-db.json` berubah hash, tetapi tidak ada data yang berubah
+
+Saat menutup pekerjaan di atas, hash `data/pos-db.json` berubah di antara dua penjalanan
+rangkaian uji, dan sempat saya duga ada uji yang menulis ke data produksi. Penelusuran
+per-test menunjukkan **tidak satu pun** dari 23 berkas uji mengubah berkas itu, dan
+`pos-db.json` stabil saat server diam.
+
+Sebabnya: aplikasi menulis ulang seluruh snapshot pada setiap boot lewat `saved_at` baru.
+Dibuktikan dengan membandingkan dua tangkapan penuh berturut-turut:
+
+```
+identik kecuali saved_at : True
+saved_at 05:37:02.415Z -> 05:37:29.750Z
+orders 44 | products 407 | users 3 | tables 79
+```
+
+Jadi yang berubah adalah stempel waktu, bukan isi. Catatan ini ditulis karena dugaan awal
+saya ("ada uji menulis ke produksi") **salah**, dan angka hash tanpa konteks akan
+menyesatkan pembaca berikutnya.
+
+Empat uji yang gagal, semuanya sudah gagal sebelum pekerjaan ini dan tidak saya sentuh
+(`git diff HEAD~4..HEAD` untuk keempatnya kosong):
+
+| Uji | Sebab |
+| :--- | :--- |
+| `kiosk-shift-ui-check.js` | butuh `playwright`, tidak terpasang |
+| `shift-single-form-e2e.js` | butuh `playwright`, tidak terpasang |
+| `pos-host-gate.js` | argumen `path` `undefined` di harness-nya sendiri |
+| `landing-page-auth-guard.js` | 6/7: kasir menerima 401, bukan 403 — token uji tidak valid |
+
+`landing-page-auth-guard` perlu diperbaiki terpisah: 401 vs 403 di situ berarti uji tidak
+pernah benar-benar menguji RBAC-nya, hanya gagal lebih awal.
