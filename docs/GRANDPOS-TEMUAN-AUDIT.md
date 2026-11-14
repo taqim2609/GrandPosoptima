@@ -1471,3 +1471,89 @@ Status akhir yang teramati: `grandpos_web_app` menyajikan `main.61fdce88.js` dan
 **Pelajaran.** Bind-mount membuat perubahan file tampak "sudah terpasang" — `grep`, `git status`,
 dan isi container semua setuju. Yang menentukan hanya waktu start proses. Untuk layanan tanpa
 hot-reload, deploy belum selesai sampai proses dijalankan ulang dan perilakunya diuji lewat HTTP.
+
+### Publikasi artefak dan restart host (2026-11-14 02:0x UTC / 09:0x WIB)
+
+#### Artefak audit dan query masuk ke repo
+
+Audit dan perintah verifikasi sebelumnya hanya ada di direktori scratch di luar repo, sehingga
+setiap angka di laporan hanya bisa direproduksi dari riwayat chat. Sekarang ada di dalam tree:
+
+- `docs/GRANDPOS-TEMUAN-AUDIT.md` — 1473 baris, append-only, isi sama dengan salinan kerja.
+- `ops/QUERIES.md` — perintah yang benar-benar dijalankan, dikelompokkan per topik, dengan
+  penanda **MUTASI** pada recreate container dan peringatan bahwa `/sync/orders` memvalidasi body
+  sebelum auth (body kosong membalas 422, bukan 401).
+
+**Repo `GrandPosoptima` bersifat publik** (`GET /repos/taqim2609/GrandPosoptima` →
+`private: false`). Audit memuat IP host, port, dan topologi, jadi keduanya disanitasi sebelum
+commit: `<PI_HOST>` → `<PI_HOST>`, `<VPS_HOST>` → `<VPS_HOST>`, `<PI_USER>` → `<PI_USER>`,
+`<PI_HOSTNAME>` → `<PI_HOSTNAME>`, `<GUDANG_HOST>` → `<GUDANG_HOST>`. Salinan kerja di scratch tidak
+diubah.
+
+Pemindaian sebelum commit: tidak ada password, token, JWT, private key, atau URI Postgres
+berkredensial. Dua kecocokan yang muncul adalah positif palsu (`$PWD` variabel shell, dan
+`postgresql://grandpos_app:***@…` yang sudah bertanda bintang).
+
+Catatan terbuka: repo publik itu **sudah** memuat IP tailnet dan nama host di `AGENTS.md`,
+`api-server.js`, `deploy/*`, dan skrip backup sejak sebelum sesi ini. Itu keputusan pemilik repo,
+bukan sesuatu yang diperbaiki diam-diam di sini, tetapi perlu diketahui saat menilai paparan.
+
+#### Restart host
+
+Jendela dipilih saat `select count(*) from shifts where closed_at is null` = **0** (09:04 WIB,
+toko belum buka). Backup segar diambil lebih dulu lewat systemd:
+`grandpos-20261114T020651Z.dump` (186844 bytes).
+
+`systemctl restart docker` — seluruh stack berhenti dan hidup lagi lewat restart policy.
+
+**Bukti pasca-restart (semua diamati, bukan diasumsikan):**
+
+| Pemeriksaan | Hasil |
+| :--- | :--- |
+| Container | 4/4 Up; api, db, watchtower healthy |
+| `/health` API | 200 |
+| `:3000/` dan `/api/health` | 200 |
+| Pi `/` dan `/api/health` | 200 |
+| Baris DB | orders 110, order_items 518, products 417, shifts 0, edge_ingest_log 338 |
+| `sum(id)` orders | 32459 — sama dengan baseline pra-restart |
+| RBAC anon | 401 di tiga endpoint import |
+| RBAC kasir | **403** di tiga endpoint import |
+| MCP `tools/list` anon | 401 |
+| `/sync/orders` tanpa key | 401 |
+| Versi disajikan | `main.61fdce88.js`, OTA `2.10.20261113212532` (web dan Pi sama) |
+| Log rotation | 4/4 container `max-size=10m max-file=3` |
+
+Efek samping yang terdeteksi sendiri: pemeriksaan pertama saya memakai
+`url=${u%%:*}` yang memotong URL di `http:`, sehingga semua endpoint tampak `000`. Itu bug
+perintah, bukan server — `curl` langsung membalas 200. Diulang dengan pemisah `|`.
+
+#### Disk: alarm bekerja, dan itu membuka temuan
+
+Selama restart disk naik ke 88–89% dan `grandpos-alert.log` mencatat tiga alarm
+(`85%`, `87%`, `89%`) — alarm yang dipasang di R2 memang berfungsi pada kondisi nyata.
+
+Penyebabnya bukan container:
+
+- `/root/.hermes` 8.9 GB, termasuk `state.db` sesi ini 494 MB dan snapshot pra-update 468 MB.
+- `/var/tmp/hv` **585 MB** — cluster PostgreSQL yang sudah mati (`database system is shut down`,
+  log terakhir 02:09:03), dibuat 02:02 oleh proses lain, bukan GrandPOS. Dihapus setelah
+  dipastikan tidak ada proses yang memakainya; 19 proses Postgres yang hidup adalah cluster
+  sistem `/var/lib/postgresql/15/main`, bukan itu.
+- 441.8 MB anonymous volume sisa container probe (`docker volume prune`).
+
+**Tidak disentuh:** `grandpos_pgdata`, `/root/backups`, dan volume proyek lain
+(`grand-aceh-vps_postgres_data` 48 MB, milik proyek `grand-aceh-vps` sejak 18 Okt).
+
+Hasil: **3.5 GB → 4.6 GB free (88% → 84%)**.
+
+Sisa yang belum ditangani: `/root/.hermes` 8.9 GB tumbuh oleh state sesi dan snapshot. Itu di
+luar allowlist reclaim dan butuh keputusan pemilik (hapus snapshot lama?) sebelum disentuh.
+
+#### Commit
+
+| Repo | Commit | Isi |
+| :--- | :--- | :--- |
+| pos-engine | `6b726c0` | `docs/GRANDPOS-TEMUAN-AUDIT.md`, `ops/QUERIES.md` (tersanitasi) |
+| pos-engine | `894e959` | `tests/import-rbac-prod-data.js` |
+| pos-engine | `0862580` | RBAC import + bump axios/react-router + alert disk |
+| backend-landing-page | — | tidak ada perubahan; repo bersih |
