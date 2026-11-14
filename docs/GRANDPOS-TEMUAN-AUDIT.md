@@ -1813,3 +1813,44 @@ Akibat jangka panjangnya belum bisa dipastikan: setiap perubahan Pengaturan seja
 7 November — nomor WhatsApp, template, RBAC, tampilan — kemungkinan besar **tidak pernah
 tersimpan**, dan yang terbaca sekarang adalah nilai dari snapshot lama. Isinya perlu
 dicocokkan dengan yang seharusnya oleh pemilik toko, bukan oleh saya.
+
+### Empat uji yang gagal: semuanya soal cara menjalankan, bukan kode (2026-11-14 06:0x UTC)
+
+Empat uji dinyatakan gagal di seluruh rangkaian sebelumnya. Setelah ditelusuri, **tidak ada
+satu pun** yang menunjukkan kerusakan produk.
+
+| Uji | Sebab sebenarnya | Hasil setelah dibetulkan |
+| :--- | :--- | :--- |
+| `kiosk-shift-ui-check.js` | `require('/root/c-founder/node_modules/playwright')` — direktori itu tidak ada | **19/19 lulus** terhadap Pi |
+| `shift-single-form-e2e.js` | butuh kasir login; harness `_e2e-server.js` sudah ada tetapi tidak pernah dijalankan, sehingga uji menembak server hidup dengan user yang tidak ada → 401 | **17/17 lulus** |
+| `pos-host-gate.js` | butuh path bundle sebagai argumen, dijalankan tanpa argumen | **13/13 lulus** |
+| `landing-page-auth-guard.js` | token kasir ditandatangani untuk `kasir2`, akun yang **tidak ada** di basis data | **7/7 lulus** |
+
+#### Yang paling perlu dicatat: `landing-page-auth-guard` tidak pernah menguji RBAC
+
+Gate otentikasi mencocokkan token ke `db.users`. Identitas yang tidak dikenal diperlakukan
+sebagai anonim, jadi hasilnya **401**, bukan 403 — dan uji itu berhenti di sana. Artinya
+selama ini uji tersebut **tidak membuktikan apa pun** tentang `requireAdmin`: ia lulus
+assertion yang salah. Sekarang token diambil dari akun kasir nyata di snapshot, dan
+assertion-nya 403.
+
+Diperiksa silang dengan token sungguhan: kasir → 403, identitas asing → 401, superadmin → 200.
+
+#### `run-tests.js`
+
+Menjalankan semua uji dengan argumen yang benar. `npm test` sekarang memanggilnya.
+Aturannya: SKIP dideklarasikan di muka beserta alasannya (chromium tidak ada, build tidak
+ada); proses yang mati karena timeout adalah **FAIL**, bukan SKIP.
+
+Versi pertama runner ini melaporkan **16 SKIP palsu** karena `spawnSync` memakai
+`timeout` dalam **milidetik** — `180` berarti 180 ms, sehingga setiap uji dibunuh sebelum
+selesai dan terbaca sebagai "dilewati". Bug di runner, bukan di uji.
+
+#### Hasil akhir
+
+```
+24 passed, 0 failed, 0 skipped
+```
+
+Data produksi tidak tersentuh: `settings` tetap 17 key, 44 order, tanpa sisa probe.
+`playwright-core` dicatat di `devDependencies` supaya klon baru bisa menjalankan uji browser.
