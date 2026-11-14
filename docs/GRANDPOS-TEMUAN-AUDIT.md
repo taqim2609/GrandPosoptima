@@ -1557,3 +1557,28 @@ luar allowlist reclaim dan butuh keputusan pemilik (hapus snapshot lama?) sebelu
 | pos-engine | `894e959` | `tests/import-rbac-prod-data.js` |
 | pos-engine | `0862580` | RBAC import + bump axios/react-router + alert disk |
 | backend-landing-page | — | tidak ada perubahan; repo bersih |
+
+### Pembersihan lanjutan: yang tidak dipakai lagi (2026-11-14 02:3x–04:2x UTC)
+
+Disk 84% → **76%** (4.6 GB → 6.8 GB free). Semua dihapus hanya setelah dibuktikan tidak dirujuk.
+
+| Yang dihapus | Ukuran | Bukti tidak terpakai |
+| :--- | ---: | :--- |
+| 7 environment Hermes yatim | 1 049 MB | `PYTHONPATH` semua proses hidup menunjuk **satu** env (`8a70cd57…`); `facts.json` menunjuk `982a5c8b…`. Keduanya disimpan. |
+| Cache `uv` + `pnpm` | 140 MB | Cache builder, dibuat ulang saat dipakai. |
+| Snapshot pra-update 12 Nov (8 profil) | 838 MB | `quick_check` state.db hidup = `ok`; update sudah jalan 2 hari. Rollback setengah jadi dibuang seluruhnya, bukan sebagian. |
+| 5 dump hindsight duplikat | 338 MB | Disimpan satu per hari untuk 7 hari terakhir; 3 dump hari ini diciutkan jadi 1. |
+
+**Sengaja tidak disentuh:**
+
+- `hermes-agent-self-evolution` (372 MB) — repo clone eksternal, ada 11 perubahan lokal + 1 commit
+  tidak ter-push (`output/`, `reports/`). Itu pekerjaan, bukan sampah.
+- `tools/chromium-1208` (364 MB) — tidak ada di `PATH` proses induk, tetapi dipakai `agent-browser`
+  dan `cua-driver`. Menghapusnya mematikan browser automation yang justru menjadi gap audit ini.
+- `/root/backups/hindsight/pre-delete-old-bank-20261102-111900` (6.4 MB) — sengaja disimpan sebagai
+  titik balik penghapusan bank lama.
+- Volume `grand-aceh-vps_*` — milik proyek lain.
+- `grandpos_pgdata`, `/root/backups/grandpos` (4 dump, retensi 14 hari sudah bekerja).
+
+**Pasca-pembersihan diverifikasi:** 4/4 container Up, api/web/pi 200, `orders=110`,
+`sum(id)=32459` (identik baseline), `hindsight-daemon` active.
