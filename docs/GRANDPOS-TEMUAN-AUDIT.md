@@ -1740,3 +1740,76 @@ Empat uji yang gagal, semuanya sudah gagal sebelum pekerjaan ini dan tidak saya 
 
 `landing-page-auth-guard` perlu diperbaiki terpisah: 401 vs 403 di situ berarti uji tidak
 pernah benar-benar menguji RBAC-nya, hanya gagal lebih awal.
+
+### Temuan besar: semua simpanan Pengaturan hilang setiap restart (2026-11-14 05:4x UTC)
+
+Ditemukan tidak sengaja saat memeriksa `landing-page-auth-guard`. Bukan soal RBAC —
+RBAC-nya benar (kasir 403, token asing 401). Yang rusak adalah penyimpanannya.
+
+#### Bukti
+
+`GET /api/settings/business|ui|features|report` mengembalikan **200 dengan body kosong**.
+`PUT /api/settings/business` mengembalikan **200** dan `{"outlet_name":"BUGPROBE"}`, tetapi
+tidak ada yang sampai ke disk. Setelah restart, nilainya kembali seperti semula.
+
+Diuji pada salinan `pos-db.json` di direktori sementara (bukan produksi):
+
+```
+GET  business  -> 200, body kosong
+PUT  business  -> 200, {"outlet_name":"BUGPROBE"}
+settings on disk -> list
+BUGPROBE persisted -> False
+```
+
+#### Akar
+
+Snapshot menyimpan `settings` sebagai **array** berisi `{_id: "wa"|"business"|"ui"|...}`,
+bentuk koleksi. Seluruh `api-server.js` membacanya sebagai **objek**: `db.settings.wa`,
+`db.settings.business`, `db.settings.landing_page` — 55 rujukan, tidak satu pun memakai
+indeks array.
+
+Saat `loadSnapshot` menyalin `data.settings` apa adanya, objek seed tertimpa array. Dua
+akibat sekaligus:
+
+1. **Baca kosong.** `db.settings.business` pada array bernilai `undefined` → `res.json(undefined)`
+   → body kosong, status tetap 200.
+2. **Tulis hilang.** `db.settings.ui = {...}` menempelkan properti ke sebuah Array.
+   `JSON.stringify` **tidak** menyerialkan properti non-indeks pada array, jadi nilainya
+   tidak pernah masuk snapshot.
+
+Bentuk array ini sudah ada di seluruh 14 berkas `pos-db.json.bak-*` (7–11 Nov), jadi ini
+bukan regresi sesi ini. Tidak ada kode yang mengiterasi `settings` sebagai array — bentuk
+objek memang yang dimaksud, dan berkas di disk yang salah bentuk.
+
+#### Perbaikan
+
+`normaliseSettings()` di `lib/db-snapshot.js`, dipanggil di batas muat saja:
+
+```js
+db[key] = key === 'settings' ? normaliseSettings(value) : value;
+```
+
+Satu tempat, tanpa menyentuh 55 pemanggil. Array `{_id, ...}` menjadi objek ber-key `_id`;
+nilai yang sudah berbentuk objek dikembalikan apa adanya.
+
+#### Uji
+
+`tests/settings-persistence.js` — **5/5**, dibuktikan RED lebih dulu terhadap kode lama:
+**0 lulus / 5 gagal**.
+
+Di produksi, dengan nilai asli (bukan probe): `low_stock_threshold` 3 → 7, `docker restart`,
+baca ulang → **7**, lalu dikembalikan ke 3. Sebelum perbaikan, setiap `PUT` settings
+mengembalikan 200 tanpa menyimpan apa pun.
+
+Setelah perbaikan, di disk: `settings` menjadi **dict** dengan **17 key utuh**
+(`wa.api_key` masih ada, tidak ada koleksi yang hilang).
+
+Backup pra-perbaikan: `/root/backups/grandpos/pos-db-pre-settings-fix-20261114T054237Z.json`
+(663 055 byte).
+
+#### Yang belum dikerjakan
+
+Akibat jangka panjangnya belum bisa dipastikan: setiap perubahan Pengaturan sejak
+7 November — nomor WhatsApp, template, RBAC, tampilan — kemungkinan besar **tidak pernah
+tersimpan**, dan yang terbaca sekarang adalah nilai dari snapshot lama. Isinya perlu
+dicocokkan dengan yang seharusnya oleh pemilik toko, bukan oleh saya.
