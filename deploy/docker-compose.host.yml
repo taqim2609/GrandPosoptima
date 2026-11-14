@@ -19,7 +19,6 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
-      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
       - NODE_SYNC_KEY=${NODE_SYNC_KEY:?NODE_SYNC_KEY is required}
       # Analytics API (FastAPI) hidup di host, dijangkau lewat gateway bridge Docker.
       - ANALYTICS_URL=${ANALYTICS_URL:-http://172.20.0.1:8000}
