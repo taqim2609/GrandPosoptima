@@ -1854,3 +1854,57 @@ selesai dan terbaca sebagai "dilewati". Bug di runner, bukan di uji.
 
 Data produksi tidak tersentuh: `settings` tetap 17 key, 44 order, tanpa sisa probe.
 `playwright-core` dicatat di `devDependencies` supaya klon baru bisa menjalankan uji browser.
+
+### Deploy host: compose produksi akhirnya ter-versi (2026-11-15 00:4x UTC / 07:4x WIB)
+
+`/root/grandpos/deploy/` **bukan repo git**. Berkas yang menentukan bagaimana POS berjalan —
+bind mount, restart policy, opt-out watchtower, allow-list CORS — hanya ada di satu disk.
+Membangun ulang host ini dari repo akan menghasilkan server yang hidup, melayani, dan
+**mempercayai setiap origin**.
+
+Yang di-commit (tanpa satu pun rahasia):
+
+- `deploy/docker-compose.host.yml` — IP nyata dipindah ke variabel yang default-nya
+  localhost. Tiga nilai memakai `${VAR:?}` sehingga compose **menolak start** daripada boot
+  dengan kunci tanda tangan kosong: `JWT_SECRET`, `NODE_SYNC_KEY`.
+- `deploy/.env.example` — hanya nama kunci.
+
+Komentar lama tentang kenapa watchtower tidak boleh me-recreate container ini ikut dibawa:
+restart di tengah jam buka lebih buruk daripada image basi.
+
+#### `DATABASE_URL` yang menyesatkan
+
+Container hidup membawa `DATABASE_URL=postgresql://...@127.0.0.1:5432/paperclip` — basis
+data yang **salah**, warisan dari shell yang kebetulan menjalankannya. Tidak pernah merusak
+apa pun karena **tidak ada satu pun modul pos-engine yang membacanya** (`grep` = nol di
+JS/TS). Itu konfigurasi mati yang tampak seperti kredensial hidup yang menunjuk data orang
+lain. Dibuang dari compose, dengan komentar alasannya.
+
+#### Deploy dan verifikasi
+
+Dijalankan lewat compose baru: `docker compose -p deploy -f docker-compose.host.yml up -d
+--force-recreate --no-deps grandpos-app`.
+
+| Pemeriksaan | Hasil |
+| :--- | :--- |
+| web `:3000` | **200** |
+| API `/health` | `db: true` |
+| Pi | **200** |
+| `DATABASE_URL` di container | **tidak ada lagi** |
+| opt-out watchtower | utuh (`false`) |
+| `orders` / `products` / `users` / `settings` vs backup pra-deploy | **identik** |
+| `node --check` entrypoint | OK |
+
+Jendela deploy dipilih saat toko tutup (order terakhir 16:30, deploy 00:35 WIB).
+
+#### Kesalahan saya sendiri, dicatat
+
+Saat menguji persistensi settings di produksi saya menulis `low_stock_threshold` ke
+`settings.features`. Kunci itu **tidak dibaca kode** — `low_stock_threshold` di
+`api-server.js` adalah konstanta `10` di ringkasan laporan, bukan setting. Nilai itu
+dihapus kembali dari snapshot dengan container berhenti, dan `settings.features` kembali
+persis ke 9 kunci semula. Backup pra-deploy dipakai sebagai pembanding: keempat koleksi
+identik.
+
+Pelajaran: uji tulis di produksi harus memakai kunci yang **dibuktikan** dibaca kode lebih
+dulu (`grep`), bukan kunci yang terdengar masuk akal.
