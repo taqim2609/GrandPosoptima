@@ -1659,3 +1659,51 @@ dan `analytics-sync-state-20261114T051830Z.json`.
 Setiap recreate container API harus lewat `env -u DATABASE_URL -u AI_DATABASE_URL`, atau
 variabel itu dihapus dari profil shell. Belum diperbaiki di tingkat shell — itu keputusan
 pemilik host.
+
+### Susulan: kebocoran yang ditemukan saat menutup pekerjaan ini (2026-11-14 05:2x–05:5x UTC)
+
+Menjalankan uji justru membongkar dua bug yang lebih tua dari yang sedang diperbaiki.
+
+#### `analytics-outbox.json` produksi ditimpa oleh uji
+
+`lib/analytics-sync.js` menulis outbox ke `path.join(__dirname, '../data')` — **path tetap**,
+tidak menghormati `GRANDPOS_DATA_DIR`. Setiap harness di repo ini menjalankan server dengan
+`GRANDPOS_DATA_DIR` menunjuk salinan sementara, jadi niatnya jelas: jangan sentuh data asli.
+Modulnya mengabaikan niat itu.
+
+Akibatnya terukur: outbox produksi **15 entri → 1 entri** saat rangkaian uji dijalankan.
+Entri yang hilang bukan order, melainkan riwayat percobaan; ledger `analytics-sync-state.json`
+(`synced: 25`) selamat, sehingga tidak ada order yang benar-benar hilang. Outbox dipulihkan
+dari `analytics-outbox-20261114T051830Z.json` dan satu entri asing dibuang.
+
+Entri asing itu **`GAK-20261114-001`, Rp 200.000, enam item Tomyam** — bukan order toko,
+melainkan fixture `tests/vendor-share-on-order.js` yang ikut tertulis ke outbox produksi.
+Kalau lolos, ia akan masuk ke analytics sebagai penjualan palsu. Teridentifikasi dari
+`client_ref` `ord-1794634083575` → `2026-11-14T05:28:03Z`, dan dari enam `product_id`
+yang persis sama dengan fixture itu.
+
+Perbaikan: `DATA_DIR = process.env.GRANDPOS_DATA_DIR || path.join(__dirname, '../data')`.
+Dibuktikan dengan hash: menjalankan kedua suite tidak lagi mengubah
+`analytics-outbox.json`, `analytics-sync-state.json`, maupun `pos-db.json`.
+
+#### Ledger dan antrean saling bertentangan
+
+Memulihkan outbox lama memunculkan enam entri ber-`done: true` + `error` — bentuk warisan
+jalur give-up. Keenamnya **sudah terkirim** (semua ada di `state.synced` dengan `ok: true`),
+tetapi watchdog akan melaporkannya sebagai belum terkirim selamanya, dan requeue akan
+mengirimnya ulang.
+
+Akar tambahannya: `let state = { synced: {}, lastRun: null }`. Dengan nilai awal itu, setiap
+penjaga `if (!state?.synced) loadState()` menyimpulkan ledger sudah di memori padahal belum,
+sehingga seluruh riwayat pengiriman terbaca kosong. Sekarang `state = null` sampai benar-benar
+dimuat, dan `loadOutbox` merekonsiliasi antrean terhadap ledger: entri yang ledgernya
+mengatakan terkirim dibersihkan dari `error`/`stuck` dan tidak dikirim ulang.
+
+| Uji | Hasil |
+| :--- | :--- |
+| `tests/analytics-sync-retry-policy.js` | **10/10** (termasuk 2 uji rekonsiliasi ledger) |
+| `tests/analytics-sync-rbac.js` | **5/5** — anon 401, kasir 403, admin 200 |
+| Isolasi data | ketiga berkas produksi **tidak berubah** (sha256 sama sebelum/sesudah) |
+
+Setelah restart: outbox **15 entri**, ledger **25**, **0 belum terkirim**. API `db: true`,
+web 200, Pi 200, `orders=116`, total Rp 16.815.400.
