@@ -26,3 +26,5 @@ data/
 
 # APK build artifacts: distributed via GitHub Releases, served from disk by /api/apk
 apk/*.apk
+# screenshot written by tests/shift-single-form-e2e.js
+shift-single-form.png
