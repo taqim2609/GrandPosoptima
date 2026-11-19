@@ -20,7 +20,7 @@ const http = require('http');
 // We can do a quick smoke test by starting the server on a random port, 
 // making requests, then closing it.
 
-const app = require('/root/grandpos/pos-engine/api-server.js');
+const app = require(require('path').join(__dirname, '..', 'api-server.js'));
 
 // Access internal db via closure? Not possible without modifying api-server.js.
 // But we can check if there's a way to get it...

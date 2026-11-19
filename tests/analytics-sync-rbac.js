@@ -26,10 +26,19 @@ fs.copyFileSync(path.join(REPO, 'data/pos-db.json'), path.join(tmp, 'pos-db.json
 fs.writeFileSync(path.join(tmp, 'analytics-outbox.json'), '[]');
 fs.writeFileSync(path.join(tmp, 'analytics-sync-state.json'), '{"synced":{}}');
 
-const users = JSON.parse(fs.readFileSync(path.join(tmp, 'pos-db.json'), 'utf8')).data.users;
+const snapshot = JSON.parse(fs.readFileSync(path.join(tmp, 'pos-db.json'), 'utf8'));
+const users = snapshot.data.users;
 const byRole = (r) => users.find((u) => u.active !== false && String(u.role || '').toLowerCase() === r);
 const admin = users.find((u) => u.active !== false && /admin|owner/.test(String(u.role || '').toLowerCase()));
-const kasir = byRole('kasir') || users.find((u) => u.active !== false && String(u.role || '').toLowerCase() !== 'admin');
+// The live snapshot may intentionally contain only the owner account. Do not
+// accidentally select that owner as the cashier fallback: use a synthetic
+// non-admin identity so this RBAC test still proves the deny path.
+let kasir = byRole('kasir');
+if (!kasir) {
+  kasir = { id: 'rbac-kasir', username: 'rbac-kasir', role: 'kasir', role_base: 'kasir', active: true, perms: [] };
+  users.push(kasir);
+  fs.writeFileSync(path.join(tmp, 'pos-db.json'), JSON.stringify(snapshot));
+}
 
 if (!admin || !kasir) {
   console.error('need one admin and one non-admin account in the snapshot');

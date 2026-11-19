@@ -194,7 +194,7 @@ function resolveInsideDir(baseDir, name) {
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
 
 // ---------------------------------------------------------------------------
@@ -2443,6 +2443,145 @@ function normalizePaymentSplits(rawSplits, totalAmount) {
   return splits;
 }
 
+// ---------------------------------------------------------------------------
+// Loyalty (member points + coupon) and grand-total rounding — server authority
+// ---------------------------------------------------------------------------
+// Before this existed the server stored `member_id` / `redeem_points` /
+// `coupon_code` exactly as the client sent them, but never moved a point,
+// never consumed a coupon, and never reduced the total. The refund path then
+// "reverted" points that had never been awarded, so a refunded sale actually
+// SUBTRACTED points from the member. Every movement is now journaled on the
+// order (`points_earned`, `points_redeemed`, `coupon_applied`) so void/refund
+// can reverse precisely what was applied.
+
+function businessSettings() {
+  const s = db.settings && db.settings.business;
+  return s && typeof s === 'object' ? s : {};
+}
+
+// Round the grand total DOWN to the configured step (0/absent = exact total).
+// Rounding down is deliberate: the drawer can never hold less than the recorded
+// sale, so cash_sales stays truthful for any amount tendered.
+function roundGrandTotal(amount) {
+  const step = Number(businessSettings().rounding) || 0;
+  const exact = Math.round(amount * 100) / 100;
+  if (!(step > 0)) return { total: exact, adjustment: 0 };
+  const rounded = Math.floor(exact / step) * step;
+  return {
+    total: Math.round(rounded * 100) / 100,
+    adjustment: Math.round((exact - rounded) * 100) / 100,
+  };
+}
+
+function activeCoupon(code) {
+  const wanted = String(code || '').trim().toUpperCase();
+  if (!wanted) return null;
+  return (db.coupons || []).find((c) => String(c.code || '').trim().toUpperCase() === wanted) || null;
+}
+
+function couponIsUsable(cp) {
+  if (!cp || cp.active === false) return false;
+  const quota = Number(cp.max_uses || 0);
+  if (quota > 0 && Number(cp.used_count || 0) >= quota) return false;
+  if (cp.expires_at) {
+    const exp = Date.parse(cp.expires_at);
+    if (Number.isFinite(exp) && exp < Date.now()) return false;
+  }
+  return true;
+}
+
+// Validates the loyalty request and returns the amounts to journal.
+// `base` = subtotal - manual discount + service tax.
+function planLoyalty({ base, memberId, redeemPoints, couponCode }) {
+  const biz = businessSettings();
+  const pointValue = Math.max(1, Number(biz.member_redeem_per_point) || 100);
+  const earnRate = Math.max(1, Number(biz.member_earn_per_rupiah) || 10000);
+
+  const redeem = Math.max(0, Math.floor(Number(redeemPoints) || 0));
+  let member = null;
+  if (memberId) {
+    member = (db.members || []).find((m) => m.id === memberId);
+    if (!member) return { error: 'Member tidak ditemukan' };
+    if (redeem > Number(member.points || 0)) {
+      return { error: `Poin member tidak cukup (tersedia ${Number(member.points || 0)})` };
+    }
+  } else if (redeem > 0) {
+    return { error: 'Poin hanya bisa ditukar bila member dipilih' };
+  }
+
+  let coupon = null;
+  let couponDiscount = 0;
+  if (couponCode) {
+    coupon = activeCoupon(couponCode);
+    if (!coupon) return { error: 'Kode kupon tidak dikenal' };
+    if (!couponIsUsable(coupon)) return { error: 'Kupon tidak aktif, kedaluwarsa, atau kuotanya habis' };
+    const ctype = String(coupon.type || '').toLowerCase();
+    if (ctype === 'percent') {
+      const pct = Math.min(Math.max(Number(coupon.value) || 0, 0), 100);
+      couponDiscount = Math.round((base * pct) / 100 * 100) / 100;
+    } else {
+      couponDiscount = Math.max(0, Number(coupon.value) || 0);
+    }
+    couponDiscount = Math.min(couponDiscount, base);
+  }
+
+  const redeemValue = Math.min(redeem * pointValue, Math.max(0, base - couponDiscount));
+  return {
+    member,
+    coupon,
+    redeem,
+    redeemValue,
+    couponDiscount,
+    earnRate,
+    loyaltyDiscount: Math.round((couponDiscount + redeemValue) * 100) / 100,
+  };
+}
+
+// Journals the loyalty movement and settles the member balance. Call once,
+// only when the order actually becomes paid.
+function commitLoyalty(order, plan) {
+  order.coupon_code = plan.coupon ? plan.coupon.code : null;
+  order.coupon_applied = Boolean(plan.coupon);
+  order.coupon_discount = plan.couponDiscount;
+  order.points_redeemed = plan.redeem;
+  order.redeem_points = plan.redeem; // keep the legacy field meaningful
+  order.redeem_value = plan.redeemValue;
+  order.loyalty_discount = plan.loyaltyDiscount;
+  order.member_id = plan.member ? plan.member.id : (order.member_id || null);
+  order.points_earned = plan.member ? Math.floor((Number(order.total) || 0) / plan.earnRate) : 0;
+
+  if (plan.coupon) plan.coupon.used_count = Number(plan.coupon.used_count || 0) + 1;
+  if (plan.member) {
+    plan.member.points = Math.max(0, Number(plan.member.points || 0) - plan.redeem + order.points_earned);
+    plan.member.total_spent = Math.round(((Number(plan.member.total_spent || 0)) + (Number(order.total) || 0)) * 100) / 100;
+  }
+  return order;
+}
+
+// Exact inverse of commitLoyalty, driven by what was journaled on the order.
+function revertLoyalty(order) {
+  let couponReverted = false;
+  if (order.coupon_applied && order.coupon_code) {
+    const cp = activeCoupon(order.coupon_code);
+    if (cp && Number(cp.used_count || 0) > 0) {
+      cp.used_count = Number(cp.used_count) - 1;
+      couponReverted = true;
+    }
+  }
+  let pointsReverted = false;
+  if (order.member_id) {
+    const mem = (db.members || []).find((m) => m.id === order.member_id);
+    if (mem) {
+      const earned = Number(order.points_earned || 0);
+      const redeemed = Number(order.points_redeemed || 0);
+      mem.points = Math.max(0, Number(mem.points || 0) - earned + redeemed);
+      mem.total_spent = Math.max(0, Math.round(((Number(mem.total_spent || 0)) - (Number(order.total) || 0)) * 100) / 100);
+      pointsReverted = true;
+    }
+  }
+  return { couponReverted, pointsReverted };
+}
+
 app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
   if (!db.currentShift || db.currentShift.status !== 'open') {
     return res.status(400).json({ detail: 'POS Kasir terkunci: Shift belum dibuka. Buka shift terlebih dahulu sebelum melayani transaksi.' });
@@ -2464,7 +2603,20 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
   if (discountType === 'percent') discount = (itemsSubtotal * discountValue) / 100;
   else if (discountType === 'amount') discount = discountValue;
   const serviceTax = Number(req.body.service_tax || order.service_tax || 0) || 0;
-  const totalAmount = Math.max(0, itemsSubtotal - discount + serviceTax);
+  const baseTotal = Math.max(0, itemsSubtotal - discount + serviceTax);
+
+  // Member points / coupon are applied here, on the server, then the grand total
+  // is rounded. Client-sent totals are never trusted.
+  const loyaltyPlan = planLoyalty({
+    base: baseTotal,
+    memberId: order.member_id || req.body.member_id,
+    redeemPoints: order.redeem_points ?? req.body.redeem_points,
+    couponCode: order.coupon_code || req.body.coupon_code,
+  });
+  if (loyaltyPlan.error) return res.status(400).json({ detail: loyaltyPlan.error });
+
+  const roundedTotal = roundGrandTotal(Math.max(0, baseTotal - loyaltyPlan.loyaltyDiscount));
+  const totalAmount = roundedTotal.total;
 
   const paymentSplits = normalizePaymentSplits(req.body.splits, totalAmount);
   if (Array.isArray(req.body.splits) && req.body.splits.length > 0 && !paymentSplits) {
@@ -2493,7 +2645,9 @@ app.post(['/api/orders/:id/pay', '/orders/:id/pay'], (req, res) => {
   order.total = totalAmount;
   order.subtotal = itemsSubtotal;
   order.discount = discount;
+  order.rounding_adjustment = roundedTotal.adjustment;
   order.paid_at = new Date().toISOString();
+  commitLoyalty(order, loyaltyPlan);
 
   // If table was dine-in, free the table
   if (order.table_id) {
@@ -2554,7 +2708,12 @@ app.post(['/api/orders', '/orders'], (req, res) => {
     const prod = (db.products || []).find((p) => p.id === it.product_id || p.id === it.id || p.sku === it.product_id) || {};
     const known = Boolean(prod.id);
     let price = known ? Number(prod.price || 0) : Number(it.price || 0);
-    const cost = known ? Number(prod.cost || 0) : Number(it.cost || 0);
+    // COGS: a product's own `cost` wins; otherwise the HPP derived from its recipe
+    // (`cost_price`, written by POST /api/recipes) is used. Before this, recipe HPP
+    // was computed and stored but never reached the order line, so HPP read 0.
+    const cost = known
+      ? Number(prod.cost || prod.cost_price || 0)
+      : Number(it.cost || it.cost_price || 0);
     const qty = Number(it.qty || 1) || 1;
     const name = prod.name || it.name || 'Produk';
     const type = prod.type || it.type || 'fnb';
@@ -2619,7 +2778,25 @@ app.post(['/api/orders', '/orders'], (req, res) => {
   const serviceTax = Number.isFinite(requestedServiceTax)
     ? Math.min(Math.max(requestedServiceTax, 0), discountedBase)
     : 0;
-  const total = Math.round((discountedBase + serviceTax) * 100) / 100;
+  const grossTotal = Math.round((discountedBase + serviceTax) * 100) / 100;
+
+  // Loyalty is settled only for a sale that is paid now; an open bill keeps the
+  // member/coupon on the order and they are applied by POST /orders/:id/pay.
+  const loyaltyPlan = req.body.pay_now
+    ? planLoyalty({
+      base: grossTotal,
+      memberId: req.body.member_id,
+      redeemPoints: req.body.redeem_points,
+      couponCode: req.body.coupon_code,
+    })
+    : null;
+  if (loyaltyPlan && loyaltyPlan.error) return res.status(400).json({ detail: loyaltyPlan.error });
+
+  const afterLoyalty = loyaltyPlan
+    ? Math.max(0, grossTotal - loyaltyPlan.loyaltyDiscount)
+    : grossTotal;
+  const roundedTotal = roundGrandTotal(afterLoyalty);
+  const total = roundedTotal.total;
   const subtotal = itemsSubtotal;
 
   // Resolve cashier name
@@ -2725,14 +2902,29 @@ app.post(['/api/orders', '/orders'], (req, res) => {
     });
   }
 
-  // Update current shift sales
+  // Update current shift sales. Split payments must be split per method exactly
+  // like POST /orders/:id/pay; charging the whole bill to cash inflates the drawer.
+  if (loyaltyPlan && order.status === 'completed') {
+    order.rounding_adjustment = roundedTotal.adjustment;
+    commitLoyalty(order, loyaltyPlan);
+  }
+
   if (db.currentShift && order.status === 'completed') {
     const orderTot = Number(order.total) || 0;
-    const pmLower = String(order.payment_method || '').toLowerCase();
-    if (pmLower === 'cash' || pmLower === 'tunai' || order.payment_method_type === 'cash') {
-      db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + orderTot;
+    const splits = Array.isArray(order.payment_splits) ? order.payment_splits : null;
+    if (splits && splits.length > 0) {
+      for (const split of splits) {
+        const m = String(split.payment_method || '').toLowerCase();
+        const key = (m === 'cash' || m === 'tunai') ? 'cash_sales' : 'non_cash_sales';
+        db.currentShift[key] = (db.currentShift[key] || 0) + (Number(split.amount) || 0);
+      }
     } else {
-      db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + orderTot;
+      const pmLower = String(order.payment_method || '').toLowerCase();
+      if (pmLower === 'cash' || pmLower === 'tunai' || order.payment_method_type === 'cash') {
+        db.currentShift.cash_sales = (db.currentShift.cash_sales || 0) + orderTot;
+      } else {
+        db.currentShift.non_cash_sales = (db.currentShift.non_cash_sales || 0) + orderTot;
+      }
     }
     db.currentShift.total_sales = (db.currentShift.total_sales || 0) + orderTot;
     db.currentShift.orders_count = (db.currentShift.orders_count || 0) + 1;
@@ -4679,7 +4871,7 @@ app.post('/api/public/booking', async (req, res) => {
   const resTime = reservation.time;
   const resPax = reservation.pax;
   const tName = reservation.table_name;
-  const outletPhone = (db.settings && db.settings.business && db.settings.business.phone) || '081269001234';
+  const outletPhone = readOutletSettings().phone || '081269001234';
 
   const confirmMsg = `*RESERVASI ONLINE GRAND ACEH KULINER*\n\nKode Booking: *${bookingCode}*\nNama: ${reservation.customer_name}\nWhatsApp: ${reservation.phone}\nTanggal: ${resDate}\nJam: ${resTime} WIB\nJumlah: ${resPax} Orang\nArea/Meja: ${tName}\nCatatan: ${reservation.note || '-'}\n\nMohon konfirmasi ketersediaan meja kami. Terima kasih! 🙏`;
 
@@ -5486,8 +5678,10 @@ app.get(['/api/vendor-settlements', '/vendor-settlements'], (req, res) => {
   return res.json(out);
 });
 
+// Keep the canonical void/refund audit route backed by the same collection
+// written by POST /api/orders/:id/void. The old stub hid every reversal.
 app.get('/api/voids', (req, res) => {
-  res.json([]);
+  res.json(Array.isArray(db.voidRows) ? db.voidRows : []);
 });
 
 // ==========================================
@@ -5852,10 +6046,46 @@ app.put('/api/settings/ui', requireAdmin, (req, res) => { db.settings.ui = { ...
 app.get('/api/settings/features', (req, res) => res.json(db.settings.features));
 app.put('/api/settings/features', requireAdmin, (req, res) => { db.settings.features = { ...db.settings.features, ...req.body }; res.json(db.settings.features); });
 
-app.get(['/api/settings/outlet', '/settings/outlet'], (req, res) => res.json(db.settings.business || {}));
+// Outlet identity (name/address/phone/logo) lives in settings.outlet — that is
+// what the receipt reads. Older builds wrote it into settings.business, so reads
+// fall back when a key is absent and writes mirror the identity keys back into
+// business (reservation WhatsApp still reads business.phone). An explicitly
+// cleared value ("") must stay cleared instead of falling back to platform.
+const OUTLET_IDENTITY_KEYS = ['name', 'address', 'phone', 'logo_url'];
+
+function hasOwnKey(obj, key) {
+  return Boolean(obj) && Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function readOutletSettings() {
+  const outlet = (db.settings && db.settings.outlet) || {};
+  const biz = (db.settings && db.settings.business) || {};
+  const plat = (db.settings && db.settings.platform) || {};
+  const fallback = {
+    name: biz.outlet_name || biz.name || plat.app_name || '',
+    address: biz.outlet_address || biz.address || '',
+    phone: biz.outlet_phone || biz.phone || '',
+    logo_url: biz.logo_url || plat.logo_url || '',
+  };
+  const merged = { ...outlet };
+  for (const key of OUTLET_IDENTITY_KEYS) {
+    merged[key] = hasOwnKey(outlet, key) ? outlet[key] : fallback[key];
+  }
+  return merged;
+}
+
+app.get(['/api/settings/outlet', '/settings/outlet'], (req, res) => res.json(readOutletSettings()));
 app.put(['/api/settings/outlet', '/settings/outlet'], requireAdmin, (req, res) => {
-  db.settings.business = { ...(db.settings.business || {}), ...req.body };
-  res.json(db.settings.business);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  db.settings.outlet = db.settings.outlet || {};
+  for (const [key, value] of Object.entries(body)) {
+    db.settings.outlet[key] = value;
+  }
+  db.settings.business = db.settings.business || {};
+  for (const key of OUTLET_IDENTITY_KEYS) {
+    if (hasOwnKey(body, key)) db.settings.business[key] = body[key];
+  }
+  res.json(readOutletSettings());
 });
 app.post(['/api/settings/outlet/logo', '/settings/outlet/logo', '/api/settings/platform/logo', '/settings/platform/logo'], requireAdmin, upload.single('file'), (req, res) => {
   try {
@@ -5864,6 +6094,8 @@ app.post(['/api/settings/outlet/logo', '/settings/outlet/logo', '/api/settings/p
     }
     const mime = req.file.mimetype || "image/png";
     const b64 = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+    if (!db.settings.outlet) db.settings.outlet = {};
+    db.settings.outlet.logo_url = b64;
     if (!db.settings.business) db.settings.business = {};
     db.settings.business.logo_url = b64;
     if (db.settings.platform) db.settings.platform.logo_url = b64;
@@ -7000,4 +7232,3 @@ process.on('unhandledRejection', (reason, promise) => {
 
 module.exports = app;
 module.exports.default = app;
-

@@ -24,11 +24,19 @@ const REPO = path.join(__dirname, '..');
 const PRE_FIX_REV = process.env.FIX01_BASELINE || '8de8958';
 
 function headSource(relPath) {
-  return execFileSync('git', ['show', `${PRE_FIX_REV}:${relPath}`], {
-    cwd: REPO,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  try {
+    return execFileSync('git', ['show', `${PRE_FIX_REV}:${relPath}`], {
+      cwd: REPO,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    console.log(`SKIP fix01 negative control: baseline ${PRE_FIX_REV} is not readable `
+      + `(${String(err.stderr || err.message).split('\n')[0].trim()}).`);
+    console.log('     This control needs git history; the working tree cannot be checked without it.');
+    process.exit(0);
+  }
 }
 
 function workSource(relPath) {

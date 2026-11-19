@@ -20,11 +20,14 @@ const REPO = __dirname;
 const FAST = process.argv.includes('--fast');
 const PI = process.env.GRANDPOS_PI_URL || 'http://100.109.98.56';
 const E2E_PORT = '3988';
+const PLAYWRIGHT_DIR = '/root/.cache/ms-playwright';
 const CHROME = [
   process.env.PLAYWRIGHT_CHROMIUM,
-  ...fs.readdirSync('/root/.cache/ms-playwright', { withFileTypes: true })
-    .filter((d) => d.isDirectory() && d.name.startsWith('chromium-'))
-    .map((d) => path.join('/root/.cache/ms-playwright', d.name, 'chrome-linux64', 'chrome')),
+  ...(fs.existsSync(PLAYWRIGHT_DIR)
+    ? fs.readdirSync(PLAYWRIGHT_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && d.name.startsWith('chromium-'))
+      .map((d) => path.join(PLAYWRIGHT_DIR, d.name, 'chrome-linux64', 'chrome'))
+    : []),
 ].filter(Boolean).find((p) => { try { return fs.existsSync(p); } catch { return false; } });
 
 const bundle = path.join(REPO, 'project/frontend/build/static/js');

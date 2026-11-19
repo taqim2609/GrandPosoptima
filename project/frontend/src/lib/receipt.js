@@ -663,13 +663,8 @@ function browserPrint(order, cfg, logoB64) {
       doc.write(html);
       doc.close();
       setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-        } catch (_) {
-          // Fallback to window.open if iframe print fails
-          fallbackWindowOpen(html);
-        }
+        // `html` sudah memanggil window.print() tepat sekali dari onload.
+        // Jangan memanggil print() lagi di parent: WebView/Chromium mencetak dua kali.
         setTimeout(() => {
           try { iframe.remove(); } catch (_) {}
         }, 5000);

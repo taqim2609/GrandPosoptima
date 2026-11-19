@@ -193,19 +193,29 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       db.currentShift.orders_count = Math.max(0, (db.currentShift.orders_count || 0) - 1);
     }
 
-    // Revert coupon
-    if (order.coupon_code) {
-      const cp = db.coupons.find((c) => c.code.toUpperCase() === order.coupon_code.toUpperCase());
-      if (cp && cp.used > 0) cp.used -= 1;
+    // Revert coupon — same field the payment path increments (`used_count`).
+    let couponReverted = false;
+    if (order.coupon_applied && order.coupon_code) {
+      const code = String(order.coupon_code).trim().toUpperCase();
+      const cp = (db.coupons || []).find((c) => String(c.code || '').trim().toUpperCase() === code);
+      if (cp && Number(cp.used_count || 0) > 0) {
+        cp.used_count = Number(cp.used_count) - 1;
+        couponReverted = true;
+      }
     }
 
-    // Revert member points
+    // Revert member points exactly as they were journaled at payment time.
+    // The old code subtracted floor(total/10000) even though no points had ever
+    // been awarded, so refunding a sale reduced the member's balance.
+    let pointsReverted = false;
     if (order.member_id) {
-      const mem = db.members.find((m) => m.id === order.member_id);
+      const mem = (db.members || []).find((m) => m.id === order.member_id);
       if (mem) {
-        const earned = Math.floor((order.total || 0) / 10000);
-        mem.points = Math.max(0, (mem.points || 0) - earned + (order.redeem_points || 0));
-        mem.total_spent = Math.max(0, (mem.total_spent || 0) - (order.total || 0));
+        const earned = Number(order.points_earned || 0);
+        const redeemed = Number(order.points_redeemed || order.redeem_points || 0);
+        mem.points = Math.max(0, Number(mem.points || 0) - earned + redeemed);
+        mem.total_spent = Math.max(0, Math.round(((Number(mem.total_spent || 0)) - (Number(order.total) || 0)) * 100) / 100);
+        pointsReverted = true;
       }
     }
 
@@ -225,8 +235,8 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       order,
       effects: {
         restock: restocked,
-        coupon_reverted: !!order.coupon_code,
-        points_reverted: !!order.member_id,
+        coupon_reverted: couponReverted,
+        points_reverted: pointsReverted,
       },
     });
   });
@@ -1821,6 +1831,8 @@ Terima kasih atas kerja keras hari ini!
       db.settings = db.settings || {};
       db.settings.business = db.settings.business || {};
       db.settings.business.logo_url = url;
+      db.settings.outlet = db.settings.outlet || {};
+      db.settings.outlet.logo_url = url;
       if (typeof broadcastRealtimeSync === 'function') {
         broadcastRealtimeSync('outlet_logo_updated', { logo_url: url });
       }
