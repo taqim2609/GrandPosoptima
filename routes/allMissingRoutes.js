@@ -3,6 +3,12 @@ const path = require('path');
 const xlsx = require('xlsx');
 const vendorLedger = require('../lib/vendor-settlement');
 const journalCorrection = require('../lib/journal-correction');
+const {
+  readWaConfig,
+  saveWaConfig,
+  syncWaMirror,
+  probeWaStatus,
+} = require('../lib/whatsapp-config');
 
 /**
  * Tanggal bisnis WIB (UTC+7) dari sebuah timestamp. Dipakai agar settlement
@@ -50,21 +56,10 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
       last: null,
     };
   }
-  if (!db.whatsappConfig) {
-    db.whatsappConfig = {
-      provider: 'evolution', // 'evolution' | 'wacloud' | 'local'
-      configured: true,
-      evolution_url: process.env.EVOLUTION_API_URL || 'https://evolution-api-pos-xyz.asia-southeast1.run.app',
-      evolution_api_key: process.env.EVOLUTION_API_KEY || 'GAK_EVOLUTION_SECRET_KEY_2026',
-      evolution_instance: process.env.EVOLUTION_INSTANCE_NAME || 'grand-aceh-pos',
-      device_id: 'grand-aceh-pos',
-      device_name: 'Evolution Cloud Run (Kasir POS)',
-      phone: '081269001122',
-      status: 'connected',
-      auto_receipt: true,
-      recipients: ['081269001122'],
-    };
-  }
+  // WhatsApp settings live in settings.wa. whatsappConfig is only a derived
+  // mirror (see lib/whatsapp-config.js) so a fresh install never boots with a
+  // hard-coded "connected" Evolution placeholder.
+  syncWaMirror(db);
   if (!db.dashboardConfig) {
     db.dashboardConfig = {
       widgets: [
@@ -1870,7 +1865,7 @@ Terima kasih atas kerja keras hari ini!
     const isSuper = req.user.is_superadmin || req.user.role === 'superadmin';
     const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
     if (!isAdmin) return res.status(403).json({ detail: 'Akses Ditolak: Memerlukan izin Admin' });
-    const cfg = db.whatsappConfig || {};
+    const cfg = readWaConfig(db);
     const key = cfg.api_key || cfg.evolution_api_key || '';
     res.json({
       ...cfg,
@@ -1883,68 +1878,24 @@ Terima kasih atas kerja keras hari ini!
     const isSuper = req.user.is_superadmin || req.user.role === 'superadmin';
     const isAdmin = isSuper || req.user.role === 'admin' || req.user.role_base === 'admin';
     if (!isAdmin) return res.status(403).json({ detail: 'Akses Ditolak: Memerlukan izin Admin' });
-    Object.assign(db.whatsappConfig, req.body);
+    saveWaConfig(db, req.body || {});
     res.json(db.whatsappConfig);
   });
 
-  // GET /api/whatsapp/status - Realtime connection status check (Evolution API & local)
+  // GET /api/whatsapp/status - same probe as the primary route.
   app.get(['/api/whatsapp/status', '/whatsapp/status'], async (req, res) => {
-    const config = db.whatsappConfig || {};
-    const provider = config.provider || 'evolution';
-
-    if (provider === 'evolution' && config.evolution_url) {
-      try {
-        const instance = config.evolution_instance || 'grand-aceh-pos';
-        const url = `${config.evolution_url.replace(/\/+$/, '')}/instance/connectionState/${instance}`;
-        const resp = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'apikey': config.evolution_api_key || '',
-            'Content-Type': 'application/json',
-          },
-          signal: AbortSignal.timeout(4000),
-        });
-
-        if (resp.ok) {
-          const data = await resp.json();
-          const state = data?.instance?.state || data?.state || 'open';
-          const isConnected = state === 'open';
-          return res.json({
-            provider: 'evolution',
-            status: isConnected ? 'connected' : state,
-            state: state,
-            instance: instance,
-            server_url: config.evolution_url,
-            phone: config.phone || '6281269001122',
-            message: isConnected ? 'Evolution API Terhubung' : `Status Evolution API: ${state}`,
-          });
-        }
-      } catch (e) {
-        // Fallback or network error
-      }
-    }
-
-    // Default status if simulated/internal
-    res.json({
-      provider: config.provider || 'evolution',
-      status: config.status || 'connected',
-      state: config.status === 'connected' ? 'open' : 'disconnected',
-      instance: config.evolution_instance || 'grand-aceh-pos',
-      server_url: config.evolution_url,
-      phone: config.phone || '081269001122',
-      message: 'Layanan WhatsApp Aktif & Siap',
-    });
+    res.json(await probeWaStatus(db));
   });
 
   // POST /api/whatsapp/instance/create - Create or Reconnect Evolution API Instance
   app.post(['/api/whatsapp/instance/create', '/whatsapp/instance/create'], async (req, res) => {
-    const config = db.whatsappConfig || {};
+    const config = readWaConfig(db);
     const instanceName = req.body?.instance_name || config.evolution_instance || 'grand-aceh-pos';
-    const baseUrl = req.body?.evolution_url || config.evolution_url || 'https://evolution-api-pos-xyz.asia-southeast1.run.app';
+    const baseUrl = req.body?.evolution_url || config.evolution_url || '';
     const apiKey = req.body?.evolution_api_key || config.evolution_api_key || '';
 
     try {
-      if (baseUrl && !baseUrl.includes('xyz.asia-southeast1.run.app')) {
+      if (baseUrl) {
         const url = `${baseUrl.replace(/\/+$/, '')}/instance/create`;
         const resp = await fetch(url, {
           method: 'POST',

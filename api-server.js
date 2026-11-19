@@ -15,6 +15,13 @@ const {
   resolveSnapshotPath,
 } = require('./lib/db-snapshot');
 const vendorLedger = require('./lib/vendor-settlement');
+const {
+  readWaConfig,
+  isWaConfigured,
+  saveWaConfig,
+  syncWaMirror,
+  probeWaStatus,
+} = require('./lib/whatsapp-config');
 
 // Secret Key for JWT Signing & Verification
 // Review-04 R-AUTH-01: a hard-coded fallback secret means every deployment that forgot
@@ -1082,7 +1089,51 @@ const db = {
 // then creates the durable snapshot.
 const dbSnapshotPath = resolveSnapshotPath();
 const restoredSnapshot = loadSnapshot(db);
+
+// One-time cleanup of stores that used to be duplicated. Everything here is
+// idempotent: it only removes stale copies, never live business data.
+function migrateLegacyStores(database) {
+  if (!database.settings) database.settings = {};
+  let changed = false;
+
+  // Branding: db.platform is the only source read by /api/app-info and the
+  // settings form. settings.platform was a stale copy (old tagline/colors and
+  // a dead /uploads logo) that only confused readers, so drop it.
+  if (database.settings.platform) {
+    if (!database.platform) database.platform = database.settings.platform;
+    delete database.settings.platform;
+    changed = true;
+    console.log('[Migrasi] settings.platform dihapus; branding memakai db.platform.');
+  }
+
+  // Leftover metrics counters from an old process monitor. Nothing reads them.
+  let removedMetrics = 0;
+  for (const key of Object.keys(database.settings)) {
+    if (/^metrics_process:\d+$/.test(key)) {
+      delete database.settings[key];
+      removedMetrics += 1;
+    }
+  }
+  if (removedMetrics) {
+    changed = true;
+    console.log(`[Migrasi] ${removedMetrics} kunci metrics_process:* sampah dihapus.`);
+  }
+
+  // WhatsApp: settings.wa is authoritative; whatsappConfig becomes a mirror.
+  const before = JSON.stringify(database.whatsappConfig || {});
+  syncWaMirror(database);
+  if (before !== JSON.stringify(database.whatsappConfig || {})) changed = true;
+
+  return changed;
+}
+
+migrateLegacyStores(db);
+
 const persistDb = createDebouncedSaver(db);
+// The cleanup above is persisted by the next successful write (the app already
+// schedules a save after every mutating API call). Deliberately not writing the
+// snapshot at boot: tooling/tests that require this module without pointing
+// GRANDPOS_DATA_DIR at a temp dir must never rewrite the live snapshot.
 // Start background worker for P1A → analytics sync (outbox + retry)
 const analyticsSync = require('./lib/analytics-sync');
 analyticsSync.initSync(db);
@@ -1556,7 +1607,7 @@ app.get(['/api/system/servers/status', '/api/system-servers'], async (req, res) 
   const reqOrigin = req.headers.origin || (reqHost ? `https://${reqHost}` : '');
   const googleUrl = process.env.AISTUDIO_URL || reqOrigin || 'https://grandposopt.ai.studio';
   const firestoreDbId = 'ai-studio-grandposoptima-268f86d5-06a2-4402-8f77-90451ffce535';
-  const waCfg = db.settings.wa || {};
+  const waCfg = readWaConfig(db);
   const env = detectHostEnvironment();
 
   // 1. Uji Server 1: Server VPS Mandiri Utama
@@ -3822,7 +3873,7 @@ async function sendWhatsAppMessage(to, text) {
   if (!to || !text) return { ok: false, error: 'Recipient or text missing' };
   const isGroup = String(to).endsWith('@g.us') || String(to).includes('@g.us');
   const cleanTo = isGroup ? String(to).trim() : String(to).replace(/[^0-9]/g, '');
-  const cfg = db.settings.wa || {};
+  const cfg = readWaConfig(db);
   const autoFailover = cfg.auto_failover !== false; // Default: true
 
   // Helper pengiriman melalui Cloud (wacloud.id)
@@ -3921,10 +3972,10 @@ async function sendWhatsAppMessage(to, text) {
 }
 
 app.get(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) => {
-  const cfg = db.settings.wa || {};
+  const cfg = readWaConfig(db);
   const key = cfg.api_key || '';
   const evoKey = cfg.evolution_api_key || '';
-  const provider = cfg.provider || 'hermes';
+  const provider = cfg.provider || 'wacloud';
   const hermesUrl = cfg.hermes_url || process.env.HERMES_WA_WEBHOOK_URL || 'http://127.0.0.1:8644/webhooks/grandpos-outbox';
   const hermesSecret = cfg.hermes_secret || process.env.HERMES_WA_WEBHOOK_SECRET || '';
 
@@ -3948,11 +3999,11 @@ app.get(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) =
     base_url: cfg.base_url || 'https://app.wacloud.id/api/v1',
     device_id: cfg.device_id || '',
     device_name: cfg.device_name || '',
-    evolution_url: cfg.evolution_url || 'http://localhost:8080',
+    evolution_url: cfg.evolution_url || '',
     evolution_api_key: evoKey,
     evolution_instance: cfg.evolution_instance || 'grand-aceh-pos',
     phone: cfg.phone || '',
-    status: cfg.status || 'disconnected',
+    status: cfg.status || 'unknown',
     // Group reservation & keyword rules
     group_only_reservation: cfg.group_only_reservation !== false,
     reservation_keywords: cfg.reservation_keywords || '#reservasi, #booking, !reservasi, reservasi',
@@ -3964,20 +4015,20 @@ app.get(['/api/whatsapp/config', '/whatsapp/config'], requireAdmin, (req, res) =
 });
 
 app.put(['/api/whatsapp/config', '/whatsapp/config', '/api/settings/whatsapp', '/settings/whatsapp'], requireAdmin, (req, res) => {
-  db.settings.wa = { ...(db.settings.wa || {}), ...(req.body || {}) };
+  const saved = saveWaConfig(db, req.body || {});
   console.info('[WA Config] Updated by admin:', req.user?.username);
-  res.json({ ok: true, wa: db.settings.wa, message: 'Pengaturan WhatsApp berhasil disimpan' });
+  res.json({ ok: true, wa: saved, message: 'Pengaturan WhatsApp berhasil disimpan' });
 });
 
 app.post(['/api/whatsapp/config', '/whatsapp/config', '/api/settings/whatsapp', '/settings/whatsapp'], requireAdmin, (req, res) => {
-  db.settings.wa = { ...(db.settings.wa || {}), ...(req.body || {}) };
+  const saved = saveWaConfig(db, req.body || {});
   console.info('[WA Config] Saved via POST by admin:', req.user?.username);
-  res.json({ ok: true, wa: db.settings.wa, message: 'Pengaturan WhatsApp berhasil disimpan' });
+  res.json({ ok: true, wa: saved, message: 'Pengaturan WhatsApp berhasil disimpan' });
 });
 
 // Dedicated Reservation Settings Endpoint
 app.get(['/api/whatsapp/reservation-settings', '/whatsapp/reservation-settings'], (req, res) => {
-  const cfg = db.settings.wa || {};
+  const cfg = readWaConfig(db);
   res.json({
     group_only_reservation: cfg.group_only_reservation !== false,
     reservation_keywords: cfg.reservation_keywords || '#reservasi, #booking, !reservasi, reservasi',
@@ -3989,13 +4040,13 @@ app.get(['/api/whatsapp/reservation-settings', '/whatsapp/reservation-settings']
 });
 
 app.post(['/api/whatsapp/reservation-settings', '/whatsapp/reservation-settings'], requireAdmin, (req, res) => {
-  db.settings.wa = { ...(db.settings.wa || {}), ...req.body };
-  res.json({ ok: true, settings: db.settings.wa });
+  const saved = saveWaConfig(db, req.body || {});
+  res.json({ ok: true, settings: saved });
 });
 
 // List Available WhatsApp Groups
 app.get(['/api/whatsapp/groups', '/whatsapp/groups'], requireAdmin, async (req, res) => {
-  const cfg = db.settings.wa || {};
+  const cfg = readWaConfig(db);
   const groups = [];
 
   // Try Evolution API if configured
@@ -4037,53 +4088,10 @@ app.get(['/api/whatsapp/groups', '/whatsapp/groups'], requireAdmin, async (req, 
 });
 
 app.get(['/api/whatsapp/status', '/api/settings/whatsapp', '/whatsapp/status'], async (req, res) => {
-  const cfg = db.settings.wa || {};
+  const cfg = readWaConfig(db);
   const provider = cfg.provider || 'evolution';
 
-  if (provider === 'evolution') {
-    const url = (cfg.evolution_url || 'http://localhost:8080').replace(/\/$/, '');
-    const instance = cfg.evolution_instance || 'grand-aceh-pos';
-    const key = cfg.evolution_api_key || '';
-
-    let state = 'disconnected';
-    let details = {};
-    if (url && key) {
-      try {
-        const response = await fetch(`${url}/instance/connectionState/${instance}`, {
-          headers: { apikey: key },
-          signal: AbortSignal.timeout(3000),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const instState = (data.instance && data.instance.state) || data.state || '';
-          if (['open', 'connected'].includes(instState.toLowerCase())) {
-            state = 'connected';
-          } else {
-            state = instState.toLowerCase() || 'connecting';
-          }
-          details = data;
-        } else if (response.status === 404) {
-          state = 'not_created';
-        }
-      } catch (err) {
-        state = 'offline';
-        details = { error: err.message };
-      }
-    } else {
-      state = 'unconfigured';
-    }
-
-    const status = state === 'connected' ? 'connected' : 'disconnected';
-    return res.json({
-      status,
-      state,
-      provider: 'evolution',
-      api_url: url,
-      instance_name: instance,
-      has_key: Boolean(key),
-      details,
-    });
-  } else if (provider === 'hermes') {
+  if (provider === 'hermes') {
     const isPrimary = ['primary', 'master', 'gudang', '644'].includes((process.env.NODE_ROLE || 'backup').toLowerCase());
     const hermesUrl = cfg.hermes_url || process.env.HERMES_WA_WEBHOOK_URL || 'http://127.0.0.1:8644/webhooks/grandpos-outbox';
     const isBridgeConfigured = Boolean(hermesUrl && (cfg.hermes_secret || process.env.HERMES_WA_WEBHOOK_SECRET) && isPrimary);
@@ -4104,19 +4112,12 @@ app.get(['/api/whatsapp/status', '/api/settings/whatsapp', '/whatsapp/status'], 
       node_id: process.env.NODE_ID || '644',
       node_role: process.env.NODE_ROLE || 'backup',
     });
-  } else {
-    const configured = Boolean(cfg.api_key && cfg.device_id);
-    return res.json({
-      status: configured ? 'connected' : 'disconnected',
-      state: configured ? 'open' : 'disconnected',
-      provider: 'wacloud',
-      device_name: cfg.device_name || '',
-      device_id: cfg.device_id || '',
-      api_url: cfg.base_url || 'https://app.wacloud.id/api/v1',
-      instance_name: cfg.device_name || 'Device WACloud',
-      has_key: Boolean(cfg.api_key),
-    });
   }
+
+  // WACloud / Evolution: probe the provider so the stored `status` field can
+  // never claim "connected" on its own.
+  const probe = await probeWaStatus(db);
+  return res.json(probe);
 });
 
 // Outbox endpoints for WhatsApp Gateway & Hermes Outbox syncing
@@ -4156,7 +4157,7 @@ app.post(['/api/whatsapp/outbox/dispatch', '/whatsapp/outbox/dispatch'], (req, r
 });
 
 app.post(['/api/whatsapp/instance/create', '/whatsapp/instance/create'], async (req, res) => {
-  const cfg = db.settings.wa || {};
+  const cfg = readWaConfig(db);
   const { url, key, instance } = normalizeEvolutionConfig(
     req.body?.evolution_url || cfg.evolution_url,
     req.body?.evolution_api_key || cfg.evolution_api_key,
@@ -4264,13 +4265,12 @@ app.post(['/api/whatsapp/instance/create', '/whatsapp/instance/create'], async (
     });
   }
 
-  db.settings.wa = {
-    ...(db.settings.wa || {}),
+  saveWaConfig(db, {
     provider: 'evolution',
     evolution_url: url,
     evolution_api_key: key,
     evolution_instance: instance,
-  };
+  });
 
   res.json({
     ok: true,
@@ -4283,7 +4283,7 @@ app.post(['/api/whatsapp/instance/create', '/whatsapp/instance/create'], async (
 });
 
 app.get(['/api/whatsapp/devices', '/whatsapp/devices'], async (req, res) => {
-  const cfg = db.settings.wa || {};
+  const cfg = readWaConfig(db);
   const key = cfg.api_key;
   if (!key) {
     return res.json({ devices: [] });
@@ -4399,7 +4399,7 @@ app.post(['/api/whatsapp/chats/:phone/send', '/whatsapp/chats/:phone/send'], asy
 // Hermes bridge status. `db.settings.wa.hermes_*` is authoritative; env vars are the
 // fallback used by the outbox bridge.
 app.get(['/api/whatsapp/hermes/status', '/whatsapp/hermes/status'], (req, res) => {
-  const cfg = db.settings.wa || {};
+  const cfg = readWaConfig(db);
   const url = cfg.hermes_url || process.env.HERMES_WA_WEBHOOK_URL || '';
   const secret = cfg.hermes_secret || process.env.HERMES_WA_WEBHOOK_SECRET || '';
   const isPrimary = ['primary', 'master', 'gudang', '644'].includes(
@@ -5402,7 +5402,7 @@ app.post(['/api/webhook/whatsapp', '/webhook/whatsapp'], async (req, res) => {
       return res.json({ ok: true, ignored: true, reason: 'fromMe or empty message' });
     }
 
-    const waCfg = db.settings.wa || {};
+    const waCfg = readWaConfig(db);
     const groupOnly = waCfg.group_only_reservation !== false;
     const rawKeywords = waCfg.reservation_keywords || '#reservasi, #booking, !reservasi, reservasi';
     const keywordList = rawKeywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);
@@ -5556,7 +5556,7 @@ app.post(['/api/whatsapp/simulate-reservation', '/whatsapp/simulate-reservation'
       return res.status(400).json({ detail: 'Teks pesan wajib diisi' });
     }
 
-    const waCfg = db.settings.wa || {};
+    const waCfg = readWaConfig(db);
     const groupOnly = waCfg.group_only_reservation !== false;
     const rawKeywords = waCfg.reservation_keywords || '#reservasi, #booking, !reservasi, reservasi';
     const keywordList = rawKeywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);

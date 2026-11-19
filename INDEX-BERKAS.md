@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-11-19 07:35:21 WIB`
-> Total Berkas Terindeks: **834 berkas**
+> Terakhir diperbarui: `2026-11-19 11:49:36 WIB`
+> Total Berkas Terindeks: **838 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -27,7 +27,7 @@ python3 project/scripts/update_file_index.py
 | **Dokumentasi Teknis** | `17` | Modul dokumentasi teknis sistem POS |
 | **Deployment & DevOps** | `71` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `440` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `444` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -482,7 +482,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (440 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (444 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -542,6 +542,7 @@ python3 project/scripts/update_file_index.py
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/1b4824f1a237e69222e33becba8f3418ace1e5ba3d1926119f8fc16e8c333e7c.json` | Berkas konfigurasi/data: 1b4824f1a237e69222e33becba8f3418ace1e5ba3d1926119f8fc16e8c333e7c.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/1bd7a092852337f8dd22dc423883b94fbad8564dac0bc8c773cc0734cf24f1fd.json` | Berkas konfigurasi/data: 1bd7a092852337f8dd22dc423883b94fbad8564dac0bc8c773cc0734cf24f1fd.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/1d8ff3c0821411aaed0af2255d2c0211ae2a7e5a3739a17894f059ba0adac18c.json` | Berkas konfigurasi/data: 1d8ff3c0821411aaed0af2255d2c0211ae2a7e5a3739a17894f059ba0adac18c.json. |
+| `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/1dc1ad73ffe890543cf5d1bd3217da99db1e5cd38151786148b20268f48feaa1.json` | Berkas konfigurasi/data: 1dc1ad73ffe890543cf5d1bd3217da99db1e5cd38151786148b20268f48feaa1.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/1e110bd3b5906a53226eeb43a584c865f05e2bfc464092c5519315a4dc4b5128.json` | Berkas konfigurasi/data: 1e110bd3b5906a53226eeb43a584c865f05e2bfc464092c5519315a4dc4b5128.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/1f0346eaa988822502ff5974cbb3192fb54b13d3e4da6f0b203ed00667562b1a.json` | Berkas konfigurasi/data: 1f0346eaa988822502ff5974cbb3192fb54b13d3e4da6f0b203ed00667562b1a.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/2149829fab41697c659550e8dc3bbb8147de28496de482944933910b35c35a4d.json` | Berkas konfigurasi/data: 2149829fab41697c659550e8dc3bbb8147de28496de482944933910b35c35a4d.json. |
@@ -689,6 +690,7 @@ python3 project/scripts/update_file_index.py
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/b65daef439a86365bb2c7b4e33e3a2cbd5c0256f99a8edb985df3a721e666325.json` | Berkas konfigurasi/data: b65daef439a86365bb2c7b4e33e3a2cbd5c0256f99a8edb985df3a721e666325.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/b6ff5a846e52a291e33c4f0906a19939d7d43f0a5fff902299599b77098266df.json` | Berkas konfigurasi/data: b6ff5a846e52a291e33c4f0906a19939d7d43f0a5fff902299599b77098266df.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/b8af66c08f4ca969f66531285f2439e021969f9d4a71b8b359cd77b79f0d42d5.json` | Berkas konfigurasi/data: b8af66c08f4ca969f66531285f2439e021969f9d4a71b8b359cd77b79f0d42d5.json. |
+| `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/bab028044d035c36428c1e96053ac2cb6cf60030affda878c101abccb79001fc.json` | Berkas konfigurasi/data: bab028044d035c36428c1e96053ac2cb6cf60030affda878c101abccb79001fc.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/badcca872e3af8cbe3e4a77afa3791c697dc252dd2d53e265c7ad7e2adb75f8b.json` | Berkas konfigurasi/data: badcca872e3af8cbe3e4a77afa3791c697dc252dd2d53e265c7ad7e2adb75f8b.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/bb0912c44e38d5a9b850428b402063603b9360cad841f3688dc467bb9ae09d12.json` | Berkas konfigurasi/data: bb0912c44e38d5a9b850428b402063603b9360cad841f3688dc467bb9ae09d12.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/bbd453af61106d51ac34c78fbbab42c0a5098434227b3a0b45cb60618bd86118.json` | Berkas konfigurasi/data: bbd453af61106d51ac34c78fbbab42c0a5098434227b3a0b45cb60618bd86118.json. |
@@ -778,6 +780,7 @@ python3 project/scripts/update_file_index.py
 | `lib/seed-products.js` | Berkas konfigurasi/data: seed-products.js. |
 | `lib/sync-to-analytics.js` | Berkas konfigurasi/data: sync-to-analytics.js. |
 | `lib/vendor-settlement.js` | Berkas konfigurasi/data: vendor-settlement.js. |
+| `lib/whatsapp-config.js` | Berkas konfigurasi/data: whatsapp-config.js. |
 | `ops/PANDUAN-DISK-ALERT.md` | Berkas konfigurasi/data: PANDUAN-DISK-ALERT.md. |
 | `ops/PANDUAN-DOCKER-LOG.md` | Berkas konfigurasi/data: PANDUAN-DOCKER-LOG.md. |
 | `ops/QUERIES.md` | Berkas konfigurasi/data: QUERIES.md. |
@@ -924,6 +927,7 @@ python3 project/scripts/update_file_index.py
 | `tests/vendor-settlement-e2e.js` | Berkas konfigurasi/data: vendor-settlement-e2e.js. |
 | `tests/vendor-settlement-integrity.js` | Berkas konfigurasi/data: vendor-settlement-integrity.js. |
 | `tests/vendor-share-on-order.js` | Berkas konfigurasi/data: vendor-share-on-order.js. |
+| `tests/whatsapp-branding-unified.js` | Berkas konfigurasi/data: whatsapp-branding-unified.js. |
 | `tests/x-gak-token-bypass-removed.js` | Berkas konfigurasi/data: x-gak-token-bypass-removed.js. |
 | `tsconfig.json` | Berkas konfigurasi/data: tsconfig.json. |
 
