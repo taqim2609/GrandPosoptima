@@ -68,6 +68,16 @@ export default function IngredientsPage() {
   const fileRef = useRef(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanRows, setScanRows] = useState(null); // hasil edit {name,qty,unit,amount}
+  // Prediksi HPP dari nota belanja (tanpa qty pemakaian)
+  const [hppData, setHppData] = useState(null);
+  const [hppDays, setHppDays] = useState(30);
+  const [hppBusy, setHppBusy] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [mapTarget, setMapTarget] = useState(null);
+  const [mapSel, setMapSel] = useState([]);
+  const [mapQuery, setMapQuery] = useState("");
+  const [mapBusy, setMapBusy] = useState(false);
+  const [notaMeta, setNotaMeta] = useState({ supplier: "", invoice_no: "", photo: "" });
   // AI Recipe & Ingredient Recommendation
   const [aiModalOpen, setAiModalOpen] = useState(false);
 
@@ -107,6 +117,9 @@ export default function IngredientsPage() {
   };
 
   const loadIngs = useCallback(() => api.get("/ingredients").then((r) => setIngs(r.data || [])).catch(() => {}), []);
+  const loadProducts = useCallback(() => api.get("/products")
+    .then((r) => setProducts(Array.isArray(r.data) ? r.data : (r.data?.items || [])))
+    .catch(() => {}), []);
   const loadCats = useCallback(() => api.get("/ingredient-categories")
     .then((r) => {
       setCats(r.data?.items || []);
@@ -140,6 +153,8 @@ export default function IngredientsPage() {
   if (produk) allowedTabs.push("bahan");
   if (belanja) allowedTabs.push("belanja", "pembelian");
   if (opname) allowedTabs.push("opname");
+  // Prediksi HPP mengubah harga pokok katalog — hanya admin.
+  if (isAdmin(user)) allowedTabs.push("hpp");
   const allowedTabsKey = allowedTabs.join(",");
   useEffect(() => {
     if (!allowedTabs.includes(tab)) setTab(allowedTabs[0] || "bahan");
@@ -325,10 +340,67 @@ export default function IngredientsPage() {
     if (!items.length) return toast.error("Isi jumlah beli minimal 1 baris");
     setSaving(true);
     try {
-      const { data } = await api.post("/ingredients/purchase-bulk", { items });
-      toast.success(`Pembelian tersimpan: ${data.count} bahan`);
-      setBulkRows([]); await loadIngs(); await loadPur(purDate);
+      const { data } = await api.post("/ingredients/nota", {
+        items,
+        supplier: notaMeta.supplier,
+        invoice_no: notaMeta.invoice_no,
+        photo: notaMeta.photo,
+      });
+      const applied = data?.applied?.applied?.length || 0;
+      toast.success(`Nota tersimpan: ${data.saved} bahan${applied ? `, HPP ${applied} produk diperbarui` : ""}`);
+      setBulkRows([]); setNotaMeta({ supplier: "", invoice_no: "", photo: "" });
+      await loadIngs(); await loadPur(purDate);
     } catch (e) { toast.error(apiError(e.response?.data?.detail)); } finally { setSaving(false); }
+  };
+
+  const pickNotaPhoto = (file) => {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) return toast.error("Pilih file foto nota");
+    const reader = new FileReader();
+    reader.onload = () => setNotaMeta((m) => ({ ...m, photo: String(reader.result) }));
+    reader.readAsDataURL(file);
+  };
+
+  // ---------- tab PREDIKSI HPP ----------
+  const loadHpp = async (days = hppDays) => {
+    setHppBusy(true);
+    try {
+      const { data } = await api.get("/costing/prediction", { params: { days } });
+      setHppData(data);
+    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+    finally { setHppBusy(false); }
+  };
+  useEffect(() => {
+    if (tab !== "hpp") return;
+    if (!products.length) loadProducts();
+    loadHpp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+  const applyHpp = async () => {
+    if (!hppData) return;
+    if (!window.confirm("Terapkan prediksi HPP ke katalog? Produk yang punya resep tidak diubah.")) return;
+    setHppBusy(true);
+    try {
+      const { data } = await api.post("/costing/apply", { days: hppDays });
+      toast.success(`HPP diterapkan ke ${(data.applied || []).length} produk`);
+      await loadHpp(); await loadIngs();
+    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+    finally { setHppBusy(false); }
+  };
+  const openMap = (ing) => {
+    setMapTarget(ing);
+    setMapSel(Array.isArray(ing.used_in) ? ing.used_in : []);
+    setMapQuery("");
+    if (!products.length) loadProducts();
+  };
+  const saveMap = async () => {
+    setMapBusy(true);
+    try {
+      await api.put(`/ingredients/${mapTarget.id}/usage-targets`, { product_ids: mapSel });
+      toast.success(`Pemakaian ${mapTarget.name} disimpan (${mapSel.length} produk)`);
+      setMapTarget(null); await loadIngs(); await loadHpp();
+    } catch (e) { toast.error(apiError(e.response?.data?.detail)); }
+    finally { setMapBusy(false); }
   };
   // scan faktur (vision)
   const onPickFile = async (file) => {
@@ -345,12 +417,28 @@ export default function IngredientsPage() {
       });
       const { data } = await api.post("/ai/ingredient-vision", { image: b64 });
       toast.success(`AI membaca ${(data?.items || []).length} item — periksa lalu simpan`, { id: t, duration: 6000 });
-      setScanRows((data?.items || []).map((x) => ({ ...x })));
+      // Kolom di layar adalah TOTAL rupiah. Nota kadang hanya menulis total,
+      // kadang harga satuan; samakan ke `amount` agar tidak tampil kosong.
+      setScanRows((data?.items || []).map((x) => {
+        const qty = Number(x.qty) || 0;
+        const unitCost = Number(x.unit_cost || x.cost || 0);
+        const total = Number(x.total_cost || 0) || unitCost * qty;
+        return { ...x, qty, unit_cost: unitCost, amount: total };
+      }));
     } catch (e) { toast.error(apiError(e.response?.data?.detail), { id: t, duration: 9000 }); }
     finally { setScanBusy(false); }
   };
   const commitScan = async () => {
-    const items = (scanRows || []).filter((r) => (r.name || "").trim() && Number(r.qty) > 0);
+    const items = (scanRows || []).filter((r) => (r.name || "").trim() && Number(r.qty) > 0)
+      .map((r) => ({
+        ingredient_id: r.ingredient_id,
+        name: r.name,
+        qty: Number(r.qty),
+        unit: r.unit,
+        // Kolom di layar scan adalah TOTAL rupiah, bukan harga satuan.
+        total_cost: Number(r.amount || r.total_cost || 0),
+        unit_cost: Number(r.unit_cost || 0),
+      }));
     if (!items.length) return toast.error("Tidak ada baris valid");
     setSaving(true);
     try {
@@ -452,6 +540,7 @@ export default function IngredientsPage() {
         {allowedTabs.includes("belanja") && <TabBtn k="belanja" on={tab} set={setTab} icon={ShoppingCart} lbl="Daftar Belanja" />}
         {allowedTabs.includes("pembelian") && <TabBtn k="pembelian" on={tab} set={setTab} icon={Wallet} lbl="Pembelian Bahan" />}
         {allowedTabs.includes("opname") && <TabBtn k="opname" on={tab} set={setTab} icon={ClipboardList} lbl="Stok Opname" />}
+        {allowedTabs.includes("hpp") && <TabBtn k="hpp" on={tab} set={setTab} icon={Sparkles} lbl="Prediksi HPP" />}
       </div>
 
       {/* ============ MASTER BAHAN ============ */}
@@ -602,7 +691,21 @@ export default function IngredientsPage() {
 
           {bulkRows.length > 0 && (
             <div className="bg-white rounded-2xl border p-4">
-              <div className="font-extrabold mb-2">Input Pembelian (massal)</div>
+              <div className="font-extrabold mb-1">Input Nota Belanja</div>
+              <p className="text-[11px] text-[#a1a1aa] mb-3">
+                Foto nota boleh dilampirkan sebagai bukti; angka tetap bisa diketik. Setelah disimpan,
+                stok dan harga rata-rata bahan diperbarui, lalu HPP produk yang bahannya sudah ditandai ikut diprediksi.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                <input value={notaMeta.supplier} onChange={(e) => setNotaMeta((m) => ({ ...m, supplier: e.target.value }))}
+                  placeholder="Supplier / toko" className="h-10 rounded-lg border px-2 text-sm" />
+                <input value={notaMeta.invoice_no} onChange={(e) => setNotaMeta((m) => ({ ...m, invoice_no: e.target.value }))}
+                  placeholder="No. nota (opsional)" className="h-10 rounded-lg border px-2 text-sm" />
+                <label className={`tap h-10 rounded-lg border px-3 text-sm font-bold flex items-center gap-2 cursor-pointer justify-center ${notaMeta.photo ? "bg-[#D1FAE5] border-[#047857] text-[#047857]" : "bg-[#F4F5F7]"}`}>
+                  <ScanLine size={15} /> {notaMeta.photo ? "Foto nota siap" : "Lampirkan foto nota"}
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { pickNotaPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+                </label>
+              </div>
               <div className="space-y-2">
                 {bulkRows.map((r, i) => {
                   const b = ings.find((x) => x.id === r.ingredient_id);
@@ -752,6 +855,137 @@ export default function IngredientsPage() {
         </div>
       )}
 
+      {/* ============ PREDIKSI HPP ============ */}
+      {tab === "hpp" && (
+        <div className="space-y-4" data-testid="hpp-tab">
+          <div className="bg-white rounded-2xl border p-4 flex flex-wrap items-end gap-3">
+            <div>
+              <Lbl>Periode belanja</Lbl>
+              <select value={hppDays} onChange={(e) => { const d = Number(e.target.value); setHppDays(d); loadHpp(d); }}
+                className="mt-1 h-10 rounded-xl border px-3 bg-white text-sm font-bold">
+                <option value={7}>7 hari</option>
+                <option value={30}>30 hari</option>
+                <option value={60}>60 hari</option>
+                <option value={90}>90 hari</option>
+              </select>
+            </div>
+            <button onClick={() => loadHpp(hppDays)} disabled={hppBusy}
+              className="tap h-10 px-4 rounded-xl bg-white border font-bold text-sm flex items-center gap-2 disabled:opacity-60">
+              {hppBusy ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Hitung Prediksi
+            </button>
+            <button onClick={applyHpp} disabled={hppBusy || !hppData}
+              className="tap h-10 px-5 rounded-xl bg-[#047857] text-white font-bold text-sm flex items-center gap-2 disabled:opacity-60">
+              <Save size={15} /> Terapkan HPP
+            </button>
+            <p className="text-[11px] text-[#52525B] max-w-md">
+              Prediksi = total belanja bahan pada periode ÷ jumlah porsi terjual yang memakai bahan itu.
+              Cukup tandai <b>dipakai di produk mana</b>; tidak perlu mengisi jumlah pemakaian.
+            </p>
+          </div>
+
+          {hppData && (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="bg-white rounded-2xl border p-4">
+                  <div className="text-[11px] uppercase font-bold text-[#52525B]">Belanja periode</div>
+                  <div className="text-xl font-extrabold font-num mt-1">{fmtRp(hppData.summary.purchases_total)}</div>
+                </div>
+                <div className="bg-white rounded-2xl border p-4">
+                  <div className="text-[11px] uppercase font-bold text-[#52525B]">Belum terpakai</div>
+                  <div className="text-xl font-extrabold font-num mt-1 text-[#B45309]">{fmtRp(hppData.summary.unallocated_pool)}</div>
+                </div>
+                <div className="bg-white rounded-2xl border p-4">
+                  <div className="text-[11px] uppercase font-bold text-[#52525B]">Omzet tercakup HPP</div>
+                  <div className="text-xl font-extrabold font-num mt-1 text-[#047857]">{nf(hppData.summary.coverage_percent)}%</div>
+                </div>
+                <div className="bg-white rounded-2xl border p-4">
+                  <div className="text-[11px] uppercase font-bold text-[#52525B]">Bahan belum dipetakan</div>
+                  <div className={`text-xl font-extrabold font-num mt-1 ${hppData.summary.products_without_mapping ? "text-[#E63946]" : ""}`}>{hppData.summary.products_without_mapping}</div>
+                </div>
+              </div>
+
+              {hppData.missing_mapping.length > 0 && (
+                <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-2xl p-4">
+                  <div className="font-extrabold text-sm text-[#92400E] mb-2 flex items-center gap-2"><AlertTriangle size={15} /> Bahan ini belum ditandai dipakai di produk mana</div>
+                  <div className="space-y-1.5">
+                    {hppData.missing_mapping.map((m) => (
+                      <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span><b>{m.name}</b> <span className="text-[#92400E]/70 font-num">belanja {fmtRp(m.pool)}</span></span>
+                        <button onClick={() => openMap(ings.find((b) => b.id === m.id) || m)}
+                          className="tap h-8 px-3 rounded-lg bg-white border border-[#FDE68A] font-bold text-xs">Atur pemakaian</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {hppData.warnings.length > 0 && (
+                <div className="text-[11px] text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded-xl px-3 py-2">
+                  {hppData.warnings.map((w, i) => <div key={i}>• {w}</div>)}
+                </div>
+              )}
+
+              <div className="bg-white rounded-2xl border overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-[#F4F5F7] text-[#52525B] text-xs uppercase tracking-wider">
+                    <tr>
+                      <th className="text-left p-3">Produk</th>
+                      <th className="text-right p-3">Terjual</th>
+                      <th className="text-right p-3">Harga</th>
+                      <th className="text-right p-3">HPP sekarang</th>
+                      <th className="text-right p-3">Prediksi HPP</th>
+                      <th className="text-right p-3">Margin</th>
+                      <th className="text-left p-3">Sumber</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hppData.products.filter((p) => p.sold_units > 0 || p.predicted_hpp > 0).map((p) => (
+                      <tr key={p.product_id} className="border-t">
+                        <td className="p-3 font-bold">{p.name}</td>
+                        <td className="p-3 text-right font-num">{nf(p.sold_units)}</td>
+                        <td className="p-3 text-right font-num">{fmtRp(p.price)}</td>
+                        <td className="p-3 text-right font-num text-[#a1a1aa]">{p.current_cost_price ? fmtRp(p.current_cost_price) : "—"}</td>
+                        <td className="p-3 text-right font-num font-extrabold">{p.predicted_hpp ? fmtRp(p.predicted_hpp) : "—"}</td>
+                        <td className={`p-3 text-right font-num font-bold ${p.margin_percent == null ? "text-[#a1a1aa]" : p.margin_percent < 0 ? "text-[#EF4444]" : "text-[#047857]"}`}>
+                          {p.margin_percent == null ? "—" : `${nf(p.margin_percent)}%`}
+                        </td>
+                        <td className="p-3 text-xs">
+                          {p.source === "recipe" ? <span className="px-2 py-0.5 rounded bg-[#D1FAE5] text-[#047857] font-bold">resep (akurat)</span>
+                            : p.source === "predicted_allocation" ? <span className="px-2 py-0.5 rounded bg-[#EDE9FE] text-[#6D28D9] font-bold">prediksi</span>
+                              : <span className="text-[#a1a1aa]">belum ada</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {!hppData.products.filter((p) => p.sold_units > 0 || p.predicted_hpp > 0).length && (
+                      <tr><td colSpan={7} className="p-6 text-center text-[#a1a1aa] text-sm">Belum ada penjualan/prediksi pada periode ini.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-white rounded-2xl border">
+                <h3 className="font-extrabold px-5 pt-4 pb-2 flex items-center gap-2"><Boxes size={16} className="text-[#6D28D9]" /> Bahan &amp; Pemakaian</h3>
+                <div className="p-3 pt-0 space-y-1.5 max-h-[360px] overflow-y-auto">
+                  {hppData.ingredients.filter((i) => i.pool > 0 || (i.mapped_products || []).length > 0).map((i) => (
+                    <div key={i.ingredient_id} className="rounded-xl border px-3 py-2 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm truncate">{i.name} <span className="text-[#a1a1aa] font-normal">· {fmtRp(i.pool)}</span></div>
+                        <div className="text-[11px] text-[#a1a1aa] truncate">
+                          {(i.mapped_products || []).length ? i.mapped_products.map((p) => p.name).join(", ") : "belum dipetakan"}
+                          {i.predicted_per_portion ? ` · ±${fmtRp(i.predicted_per_portion)}/porsi` : ""}
+                        </div>
+                      </div>
+                      <button onClick={() => openMap(ings.find((b) => b.id === i.ingredient_id) || { id: i.ingredient_id, name: i.name, used_in: (i.mapped_products || []).map((p) => p.id) })}
+                        className="tap h-8 px-3 rounded-lg bg-[#F4F5F7] border font-bold text-xs shrink-0">Dipakai di…</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ---- dialog hasil scan vision ---- */}
       <Dialog open={!!scanRows} onOpenChange={(o) => { if (!o) setScanRows(null); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -896,6 +1130,41 @@ export default function IngredientsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* dialog bahan dipakai di produk mana */}
+      <Dialog open={!!mapTarget} onOpenChange={(o) => { if (!o) setMapTarget(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Dipakai di produk mana — {mapTarget?.name}</DialogTitle></DialogHeader>
+          <p className="text-xs text-[#52525B] -mt-1">
+            Pilih menu yang memakai bahan ini. <b>Tidak perlu mengisi jumlah pemakaian</b> —
+            sistem membagi total belanja bahan dengan porsi terjual menu yang dipilih.
+          </p>
+          <input value={mapQuery} onChange={(e) => setMapQuery(e.target.value)} placeholder="Cari produk…"
+            className="mt-2 h-10 w-full rounded-xl border px-3 text-sm" />
+          <div className="mt-2 max-h-[45vh] overflow-y-auto border rounded-xl p-2 space-y-0.5">
+            {products
+              .filter((p) => !mapQuery.trim() || String(p.name || "").toLowerCase().includes(mapQuery.trim().toLowerCase()))
+              .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+              .slice(0, 120)
+              .map((p) => (
+                <label key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#F4F5F7] cursor-pointer">
+                  <input type="checkbox" checked={mapSel.includes(p.id)}
+                    onChange={() => setMapSel((sel) => sel.includes(p.id) ? sel.filter((x) => x !== p.id) : [...sel, p.id])} />
+                  <span className="text-sm flex-1 truncate">{p.name}</span>
+                  <span className="text-xs font-num text-[#a1a1aa] shrink-0">{fmtRp(p.price)}</span>
+                </label>
+              ))}
+            {!products.length && <p className="text-sm text-[#a1a1aa] p-3">Produk belum dimuat.</p>}
+          </div>
+          <p className="text-xs text-[#52525B]">Terpilih: <b>{mapSel.length}</b> produk</p>
+          <DialogFooter>
+            <button onClick={saveMap} disabled={mapBusy}
+              className="tap w-full h-12 rounded-xl bg-[#047857] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+              {mapBusy ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />} Simpan Pemakaian
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* AI Recommendation Modal */}
       <AiIngredientRecommendationModal
         open={aiModalOpen}

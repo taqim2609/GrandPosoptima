@@ -1,8 +1,8 @@
 # Indeks Katalog Berkas — Grand Aceh Kuliner POS
 
 > **Buku Besar Katalog Berkas Repositori**
-> Terakhir diperbarui: `2026-11-19 11:49:36 WIB`
-> Total Berkas Terindeks: **838 berkas**
+> Terakhir diperbarui: `2026-11-19 23:07:28 WIB`
+> Total Berkas Terindeks: **846 berkas**
 
 Dokumen ini memuat daftar lengkap seluruh berkas di repositori beserta kategori dan fungsinya.
 Setiap kali ada penambahan atau perubahan berkas, jalankan skrip berikut untuk memperbarui indeks:
@@ -27,7 +27,7 @@ python3 project/scripts/update_file_index.py
 | **Dokumentasi Teknis** | `17` | Modul dokumentasi teknis sistem POS |
 | **Deployment & DevOps** | `71` | Modul deployment & devops sistem POS |
 | **Agent Skill System** | `51` | Modul agent skill system sistem POS |
-| **Berkas Pendukung / Konfigurasi** | `444` | Modul berkas pendukung / konfigurasi sistem POS |
+| **Berkas Pendukung / Konfigurasi** | `452` | Modul berkas pendukung / konfigurasi sistem POS |
 
 ---
 
@@ -482,7 +482,7 @@ python3 project/scripts/update_file_index.py
 | `.agents/skills/ui-design/SKILL.md` | Definisi kemampuan agen: SKILL.md. |
 | `.agents/skills/ui-design/agents/openai.yaml` | Definisi kemampuan agen: openai.yaml. |
 
-### 📁 Berkas Pendukung / Konfigurasi (444 berkas)
+### 📁 Berkas Pendukung / Konfigurasi (452 berkas)
 
 | Jalur Berkas (`Path`) | Deskripsi Fungsi |
 | :--- | :--- |
@@ -499,6 +499,8 @@ python3 project/scripts/update_file_index.py
 | `api-server.js` | Berkas konfigurasi/data: api-server.js. |
 | `capacitor.config.json` | Berkas konfigurasi/data: capacitor.config.json. |
 | `data/pos-db.json` | Berkas konfigurasi/data: pos-db.json. |
+| `deploy/.env` | Berkas konfigurasi/data: .env. |
+| `deploy/.env.example` | Berkas konfigurasi/data: .env.example. |
 | `deploy/PANDUAN-PI.md` | Berkas konfigurasi/data: PANDUAN-PI.md. |
 | `deploy/nginx-kiosk.conf` | Berkas konfigurasi/data: nginx-kiosk.conf. |
 | `docs/GRANDPOS-TEMUAN-AUDIT.md` | Berkas konfigurasi/data: GRANDPOS-TEMUAN-AUDIT.md. |
@@ -548,10 +550,12 @@ python3 project/scripts/update_file_index.py
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/2149829fab41697c659550e8dc3bbb8147de28496de482944933910b35c35a4d.json` | Berkas konfigurasi/data: 2149829fab41697c659550e8dc3bbb8147de28496de482944933910b35c35a4d.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/215af1573b8bac925e6dca42e4c338b1e7a115f5c82d7f3eae9824355dda61ee.json` | Berkas konfigurasi/data: 215af1573b8bac925e6dca42e4c338b1e7a115f5c82d7f3eae9824355dda61ee.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/22df056063ee2930f5834c8c3eee87352ff13263c66b5fb5d1ef1cbbafb0563e.json` | Berkas konfigurasi/data: 22df056063ee2930f5834c8c3eee87352ff13263c66b5fb5d1ef1cbbafb0563e.json. |
+| `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/235af50fa8407676d3260c539c6446ca2534d346bc208e782556004cd0b83f23.json` | Berkas konfigurasi/data: 235af50fa8407676d3260c539c6446ca2534d346bc208e782556004cd0b83f23.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/23a3f28115d9b2027ecbb19684ed0afb4c4b29ecbad06beeda1602f52df14e35.json` | Berkas konfigurasi/data: 23a3f28115d9b2027ecbb19684ed0afb4c4b29ecbad06beeda1602f52df14e35.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/24041c0a1a35f4b30562be9435d6abe7c0d53ecc6958a4399aede44b615567a5.json` | Berkas konfigurasi/data: 24041c0a1a35f4b30562be9435d6abe7c0d53ecc6958a4399aede44b615567a5.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/24a1f49bb383ef61fdab75f47a309af785e62955d1749601333b90d02316b8ef.json` | Berkas konfigurasi/data: 24a1f49bb383ef61fdab75f47a309af785e62955d1749601333b90d02316b8ef.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/253d1b7a87fff8aadce7b1df723720d2d7ff47f2860b1fd245ba05f186e28671.json` | Berkas konfigurasi/data: 253d1b7a87fff8aadce7b1df723720d2d7ff47f2860b1fd245ba05f186e28671.json. |
+| `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/2568964838e92aa3815357b52089be3c542b255e524c41d1599abc55b41549c0.json` | Berkas konfigurasi/data: 2568964838e92aa3815357b52089be3c542b255e524c41d1599abc55b41549c0.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/26bbfdcb38f18a2edd8a3cee2203686ae9dd9d17e102a20eb643d45a3fa961a8.json` | Berkas konfigurasi/data: 26bbfdcb38f18a2edd8a3cee2203686ae9dd9d17e102a20eb643d45a3fa961a8.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/2789d547a05d86f34c1270854290853abbdf90b2850e7509f54e9bcf127af024.json` | Berkas konfigurasi/data: 2789d547a05d86f34c1270854290853abbdf90b2850e7509f54e9bcf127af024.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/27e9ede5d0899a6e6e162ed7357a48d80c514d3b8ba2d244231e51de81024ca0.json` | Berkas konfigurasi/data: 27e9ede5d0899a6e6e162ed7357a48d80c514d3b8ba2d244231e51de81024ca0.json. |
@@ -569,6 +573,7 @@ python3 project/scripts/update_file_index.py
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/393ed9035b6b110b78faff3f64846252a0c287222f7a8949620fa34d5f6d04cc.json` | Berkas konfigurasi/data: 393ed9035b6b110b78faff3f64846252a0c287222f7a8949620fa34d5f6d04cc.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/39d3405413119e88f36edee1a30297ddbf702633a1892d4170d2e7557902f449.json` | Berkas konfigurasi/data: 39d3405413119e88f36edee1a30297ddbf702633a1892d4170d2e7557902f449.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/39f3089fa8d50f512f03d274c94479323ba12e7c9a5404e05c068d6dc148080c.json` | Berkas konfigurasi/data: 39f3089fa8d50f512f03d274c94479323ba12e7c9a5404e05c068d6dc148080c.json. |
+| `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/3b8cbf490294566d5b61a10118bf3ccb9008fd7ae9a1db3320f0741b3ceabe4f.json` | Berkas konfigurasi/data: 3b8cbf490294566d5b61a10118bf3ccb9008fd7ae9a1db3320f0741b3ceabe4f.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/3c25e68e1de4e34d16e19ace2c460d674b707df78bdda2c0991ce8dcf923e2e0.json` | Berkas konfigurasi/data: 3c25e68e1de4e34d16e19ace2c460d674b707df78bdda2c0991ce8dcf923e2e0.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/3d71a52196fb7dfc4c626c09c4f4ce3d51131d75b7ce8074d8fe164690a6e145.json` | Berkas konfigurasi/data: 3d71a52196fb7dfc4c626c09c4f4ce3d51131d75b7ce8074d8fe164690a6e145.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/3e6a382535f86068ff72e7e7a8660f3aa225fc52e62d416f26125d78fdc68ee7.json` | Berkas konfigurasi/data: 3e6a382535f86068ff72e7e7a8660f3aa225fc52e62d416f26125d78fdc68ee7.json. |
@@ -667,6 +672,7 @@ python3 project/scripts/update_file_index.py
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/a3f6c03a47c521f9d442d961098bc64a7019f6ec3676ac655b3986f98f82fcb9.json` | Berkas konfigurasi/data: a3f6c03a47c521f9d442d961098bc64a7019f6ec3676ac655b3986f98f82fcb9.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/a4acddfb288d4dcc00891618f2247c904106235c6420cf13aa8afde31f2b5f59.json` | Berkas konfigurasi/data: a4acddfb288d4dcc00891618f2247c904106235c6420cf13aa8afde31f2b5f59.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/a53afa6e3d056e3798ef6101cdb9b8310054319520150dc46d23ec5bc20173e7.json` | Berkas konfigurasi/data: a53afa6e3d056e3798ef6101cdb9b8310054319520150dc46d23ec5bc20173e7.json. |
+| `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/a72a884e4398b1e889137b48e7310a738cbff0ecc96672d5276c1c12107eb00a.json` | Berkas konfigurasi/data: a72a884e4398b1e889137b48e7310a738cbff0ecc96672d5276c1c12107eb00a.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/a7469aff7ba86c360ce17211813ec9005ab35ad3130764f382e8d147c1fded65.json` | Berkas konfigurasi/data: a7469aff7ba86c360ce17211813ec9005ab35ad3130764f382e8d147c1fded65.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/a953d077b13f78cd5711e78f0f08e5e13d2719942eb59e88d9c00944b6d21a94.json` | Berkas konfigurasi/data: a953d077b13f78cd5711e78f0f08e5e13d2719942eb59e88d9c00944b6d21a94.json. |
 | `graphify-out/cache/ast/v0.9.112-s48-g460503b3f2a4/a95f7494d7b8cd68323ad67a8aed5d07d453ba7f1650745a7c4133b96632bfb9.json` | Berkas konfigurasi/data: a95f7494d7b8cd68323ad67a8aed5d07d453ba7f1650745a7c4133b96632bfb9.json. |
@@ -773,6 +779,7 @@ python3 project/scripts/update_file_index.py
 | `graphify-out/graph.json` | Berkas konfigurasi/data: graph.json. |
 | `graphify-out/manifest.json` | Berkas konfigurasi/data: manifest.json. |
 | `lib/analytics-sync.js` | Berkas konfigurasi/data: analytics-sync.js. |
+| `lib/costing.js` | Berkas konfigurasi/data: costing.js. |
 | `lib/db-snapshot.js` | Berkas konfigurasi/data: db-snapshot.js. |
 | `lib/diag-orders.js` | Berkas konfigurasi/data: diag-orders.js. |
 | `lib/e2e-sync-test.js` | Berkas konfigurasi/data: e2e-sync-test.js. |
@@ -910,6 +917,7 @@ python3 project/scripts/update_file_index.py
 | `tests/fix02-contract.js` | Berkas konfigurasi/data: fix02-contract.js. |
 | `tests/fix02-negative-control.js` | Berkas konfigurasi/data: fix02-negative-control.js. |
 | `tests/fix05-server-authority.js` | Berkas konfigurasi/data: fix05-server-authority.js. |
+| `tests/hpp-prediction-nota-isolated.js` | Berkas konfigurasi/data: hpp-prediction-nota-isolated.js. |
 | `tests/import-rbac-prod-data.js` | Berkas konfigurasi/data: import-rbac-prod-data.js. |
 | `tests/import-rbac.js` | Berkas konfigurasi/data: import-rbac.js. |
 | `tests/journal-correction-e2e.js` | Berkas konfigurasi/data: journal-correction-e2e.js. |

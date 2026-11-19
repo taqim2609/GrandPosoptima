@@ -3,6 +3,7 @@ const path = require('path');
 const xlsx = require('xlsx');
 const vendorLedger = require('../lib/vendor-settlement');
 const journalCorrection = require('../lib/journal-correction');
+const costing = require('../lib/costing');
 const {
   readWaConfig,
   saveWaConfig,
@@ -568,28 +569,51 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
     res.json({ status: 'ok', detail: 'Bahan baku berhasil dihapus' });
   });
 
+  // "Bahan ini dipakai di produk mana" — tanpa jumlah pemakaian.
+  // Inilah satu-satunya input yang perlu diisi agar HPP bisa diprediksi.
+  app.get(['/api/ingredients/:id/usage-targets', '/ingredients/:id/usage-targets'], (req, res) => {
+    const ing = db.ingredients.find((i) => i.id === req.params.id);
+    if (!ing) return res.status(404).json({ detail: 'Bahan tidak ditemukan' });
+    const ids = Array.isArray(ing.used_in) ? ing.used_in : [];
+    res.json({
+      ingredient_id: ing.id,
+      name: ing.name,
+      product_ids: ids,
+      products: ids
+        .map((id) => db.products.find((p) => p.id === id))
+        .filter(Boolean)
+        .map((p) => ({ id: p.id, name: p.name, price: Number(p.price) || 0 })),
+    });
+  });
+
+  app.put(['/api/ingredients/:id/usage-targets', '/ingredients/:id/usage-targets'], (req, res) => {
+    const ing = db.ingredients.find((i) => i.id === req.params.id);
+    if (!ing) return res.status(404).json({ detail: 'Bahan tidak ditemukan' });
+    const productIds = req.body.product_ids || req.body.used_in || [];
+    const saved = costing.setUsedIn(db, ing, productIds);
+    if (typeof broadcastRealtimeSync === 'function') {
+      broadcastRealtimeSync('ingredient_usage_targets', { ingredient_id: ing.id, product_ids: saved });
+    }
+    res.json({ ingredient_id: ing.id, product_ids: saved });
+  });
+
   // POST /api/ingredients/:id/purchase
   app.post(['/api/ingredients/:id/purchase', '/ingredients/:id/purchase'], (req, res) => {
     const ing = db.ingredients.find((i) => i.id === req.params.id);
     if (!ing) return res.status(404).json({ detail: 'Bahan tidak ditemukan' });
-    const qty = Number(req.body.qty || 0);
-    const unit_cost = Number(req.body.unit_cost || ing.buy_price || 0);
-    ing.stock = (Number(ing.stock) || 0) + qty;
-    if (unit_cost > 0) ing.buy_price = unit_cost;
-
-    const record = {
-      id: 'ipur-' + Date.now(),
-      ingredient_id: ing.id,
-      ingredient_name: ing.name,
-      qty,
+    const saved = costing.applyPurchase(db, ing, req.body || {}, {
+      created_by: req.user?.username || '',
+    });
+    if (saved.error) return res.status(400).json({ detail: saved.error });
+    const record = saved.record;
+    res.json({
+      qty: record.qty,
       unit: ing.unit,
-      unit_cost,
-      total_cost: qty * unit_cost,
-      note: req.body.note || '',
-      created_at: new Date().toISOString(),
-    };
-    db.ingredientPurchases.unshift(record);
-    res.json({ qty, unit: ing.unit, new_stock: ing.stock, purchase: record });
+      new_stock: ing.stock,
+      unit_cost: record.unit_cost,
+      cost_after: record.cost_after,
+      purchase: record,
+    });
   });
 
   // POST /api/ingredients/:id/opname
@@ -614,28 +638,139 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
     res.json({ difference: diff, new_stock: ing.stock, record });
   });
 
-  // POST /api/ingredients/purchase-bulk
-  app.post(['/api/ingredients/purchase-bulk', '/ingredients/purchase-bulk'], (req, res) => {
-    const items = req.body.items || [];
-    items.forEach((item) => {
-      const ing = db.ingredients.find((i) => i.id === item.ingredient_id);
-      if (ing) {
-        const qty = Number(item.qty || 0);
-        ing.stock = (Number(ing.stock) || 0) + qty;
-        db.ingredientPurchases.unshift({
-          id: 'ipur-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-          ingredient_id: ing.id,
-          ingredient_name: ing.name,
-          qty,
-          unit: ing.unit,
-          unit_cost: Number(item.unit_cost || ing.buy_price || 0),
-          total_cost: qty * Number(item.unit_cost || ing.buy_price || 0),
-          note: item.note || '',
-          created_at: new Date().toISOString(),
-        });
+  // ==========================================
+  // Nota belanja bahan (foto atau diketik)
+  // ==========================================
+  // Satu nota boleh berisi banyak bahan. Bahan baru otomatis dibuat bila hanya
+  // dikirim `name` (hasil scan/ketik manual). Setiap baris memakai moving
+  // average sehingga `ingredients.cost` ikut terbarui, lalu HPP diprediksi dan
+  // diterapkan kecuali `apply_hpp: false`.
+  function processNota(body = {}, user = {}) {
+    const items = Array.isArray(body.items) ? body.items : [];
+    const notaId = 'nota-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const purchaseDate = body.purchase_date || new Date().toISOString().slice(0, 10);
+    const created = [];
+    const lines = [];
+    const failed = [];
+
+    for (const item of items) {
+      let ing = item.ingredient_id
+        ? db.ingredients.find((i) => i.id === item.ingredient_id)
+        : null;
+      if (!ing && item.name) {
+        ing = db.ingredients.find((i) => String(i.name).toLowerCase() === String(item.name).toLowerCase());
       }
+      if (!ing && item.name && body.create_missing !== false) {
+        ing = {
+          id: 'ing-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          name: String(item.name).trim(),
+          unit: item.unit || 'kg',
+          stock: 0,
+          min_stock: Number(item.min_stock || 5),
+          cost: 0,
+          buy_price: 0,
+          categories: [],
+        };
+        db.ingredients.push(ing);
+        created.push(ing);
+      }
+      if (!ing) {
+        failed.push({ name: item.name || '', reason: 'Bahan tidak ditemukan dan nama kosong' });
+        continue;
+      }
+      if (item.unit && !ing.unit) ing.unit = item.unit;
+
+      const saved = costing.applyPurchase(db, ing, item, {
+        nota_id: notaId,
+        supplier: body.supplier || item.supplier || '',
+        invoice_no: body.invoice_no || item.invoice_no || '',
+        purchase_date: purchaseDate,
+        note: body.note || item.note || '',
+        created_by: user.username || '',
+      });
+      if (saved.error) {
+        failed.push({ name: ing.name, reason: saved.error });
+        continue;
+      }
+      lines.push(saved.record);
+    }
+
+    const photoPath = body.photo ? costing.saveNotaPhoto(body.photo, notaId) : '';
+    const nota = {
+      id: notaId,
+      supplier: body.supplier || '',
+      invoice_no: body.invoice_no || '',
+      purchase_date: purchaseDate,
+      photo_path: photoPath,
+      note: body.note || '',
+      item_count: lines.length,
+      total_cost: lines.reduce((sum, line) => sum + Number(line.total_cost || 0), 0),
+      created_at: new Date().toISOString(),
+      created_by: user.username || '',
+    };
+    if (lines.length) {
+      costing.ensureCollection(db, 'ingredientNotas').unshift(nota);
+      if (db.ingredientNotas.length > 500) db.ingredientNotas.length = 500;
+    }
+
+    let applied = null;
+    if (lines.length && body.apply_hpp !== false) {
+      const prediction = costing.predictHpp(db, {
+        days: Number(body.hpp_days) || 30,
+        recipeHpp: computeRecipeHpp,
+      });
+      applied = costing.applyPrediction(db, prediction, { created_by: user.username || '' });
+    }
+
+    return { nota, lines, created, failed, applied };
+  }
+
+  // POST /api/ingredients/nota - simpan satu nota belanja (banyak bahan)
+  app.post(['/api/ingredients/nota', '/ingredients/nota'], (req, res) => {
+    const body = req.body || {};
+    if (!Array.isArray(body.items) || !body.items.length) {
+      return res.status(400).json({ detail: 'Nota harus berisi minimal satu bahan' });
+    }
+    const result = processNota(body, req.user || {});
+    if (!result.lines.length) {
+      return res.status(400).json({ detail: 'Tidak ada baris nota yang valid', failed: result.failed });
+    }
+    res.json({
+      ...result,
+      created_count: result.created.length,
+      saved: result.lines.length,
     });
-    res.json({ count: items.length });
+  });
+
+  // GET /api/ingredients/notas - riwayat nota (tanpa isi foto base64)
+  app.get(['/api/ingredients/notas', '/ingredients/notas'], (req, res) => {
+    costing.ensureCollection(db, 'ingredientNotas');
+    const limit = Math.min(200, Number(req.query.limit) || 50);
+    res.json(db.ingredientNotas.slice(0, limit));
+  });
+
+  // GET /api/ingredients/nota/:id/photo - foto nota yang tersimpan di data/nota
+  app.get(['/api/ingredients/nota/:id/photo', '/ingredients/nota/:id/photo'], (req, res) => {
+    const nota = costing.ensureCollection(db, 'ingredientNotas').find((n) => n.id === req.params.id);
+    if (!nota || !nota.photo_path) return res.status(404).json({ detail: 'Foto nota tidak ada' });
+    const file = path.join(costing.dataDir(), nota.photo_path);
+    if (!fs.existsSync(file)) return res.status(404).json({ detail: 'Berkas foto nota hilang' });
+    res.sendFile(file);
+  });
+
+  // POST /api/ingredients/purchase-bulk - kompatibilitas UI lama
+  app.post(['/api/ingredients/purchase-bulk', '/ingredients/purchase-bulk'], (req, res) => {
+    const body = req.body || {};
+    const items = Array.isArray(body.items) ? body.items : [];
+    if (!items.length) return res.json({ count: 0, applied: null });
+    const result = processNota(body, req.user || {});
+    res.json({
+      count: result.lines.length,
+      created: result.created.length,
+      failed: result.failed,
+      nota: result.nota,
+      applied: result.applied,
+    });
   });
 
   // POST /api/ingredients/opname-bulk
@@ -782,32 +917,25 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
   });
 
 
-  // POST /api/ingredients/vision-commit
+  // POST /api/ingredients/vision-commit - simpan hasil scan/ketik nota
   app.post(['/api/ingredients/vision-commit', '/ingredients/vision-commit'], (req, res) => {
-    const items = req.body.items || [];
-    const created = [];
-    const updated = [];
-
-    items.forEach((item, idx) => {
-      let ing = db.ingredients.find((i) => i.name.toLowerCase() === (item.name || '').toLowerCase());
-      if (ing) {
-        ing.stock = (Number(ing.stock) || 0) + Number(item.qty || 0);
-        if (item.cost) ing.buy_price = Number(item.cost);
-        updated.push(ing);
-      } else {
-        const newIng = {
-          id: 'ing-' + Date.now() + '-' + idx,
-          name: item.name,
-          unit: item.unit || 'kg',
-          stock: Number(item.qty || 0),
-          min_stock: 5,
-          buy_price: Number(item.cost || 0),
-        };
-        db.ingredients.push(newIng);
-        created.push(newIng);
-      }
+    const items = (req.body.items || []).map((item) => ({
+      ingredient_id: item.ingredient_id,
+      name: item.name,
+      qty: Number(item.qty || 0),
+      unit: item.unit,
+      unit_cost: Number(item.unit_cost || item.cost || 0),
+      note: item.note,
+    }));
+    if (!items.length) return res.status(400).json({ detail: 'Tidak ada baris nota' });
+    const result = processNota({ ...req.body, items }, req.user || {});
+    res.json({
+      created: result.created,
+      updated: result.lines,
+      failed: result.failed,
+      nota: result.nota,
+      applied: result.applied,
     });
-    res.json({ created, updated });
   });
 
   // POST /api/ingredients/import
@@ -1132,6 +1260,8 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
     const prod = db.products.find((p) => p.id === product_id);
     if (prod && calculated.hpp?.hpp_per_unit > 0) {
       prod.cost_price = calculated.hpp.hpp_per_unit;
+      prod.cost_source = 'recipe';
+      prod.cost_updated_at = new Date().toISOString();
     }
 
     broadcastRealtimeSync('recipe_updated', { product_id, hpp: calculated.hpp?.hpp_per_unit });
@@ -1159,6 +1289,66 @@ function registerAllMissingRoutes(app, db, upload, broadcastRealtimeSync, persis
     }
     broadcastRealtimeSync('product_hpp_updated', { product_id: prod.id, cost_price: cost });
     res.json({ cost, product: prod });
+  });
+
+  // ==========================================
+  // 7b. Prediksi HPP dari nota belanja (tanpa qty pemakaian)
+  // ==========================================
+
+  // GET /api/costing/prediction?days=30
+  app.get(['/api/costing/prediction', '/costing/prediction'], (req, res) => {
+    try {
+      const prediction = costing.predictHpp(db, {
+        days: Number(req.query.days) || 30,
+        from: req.query.from,
+        to: req.query.to,
+        recipeHpp: computeRecipeHpp,
+      });
+      res.json(prediction);
+    } catch (err) {
+      res.status(500).json({ detail: 'Gagal menghitung prediksi HPP: ' + err.message });
+    }
+  });
+
+  // GET /api/costing/coverage - ringkasan singkat untuk dashboard
+  app.get(['/api/costing/coverage', '/costing/coverage'], (req, res) => {
+    const prediction = costing.predictHpp(db, {
+      days: Number(req.query.days) || 30,
+      recipeHpp: computeRecipeHpp,
+    });
+    res.json({
+      period: prediction.period,
+      summary: prediction.summary,
+      missing_mapping: prediction.missing_mapping,
+      warnings: prediction.warnings,
+    });
+  });
+
+  // POST /api/costing/apply - tulis prediksi ke products.cost_price
+  app.post(['/api/costing/apply', '/costing/apply'], requireAdmin, (req, res) => {
+    try {
+      const body = req.body || {};
+      const prediction = costing.predictHpp(db, {
+        days: Number(body.days) || 30,
+        from: body.from,
+        to: body.to,
+        recipeHpp: computeRecipeHpp,
+      });
+      const result = costing.applyPrediction(db, prediction, {
+        productIds: body.product_ids,
+        created_by: req.user?.username || '',
+      });
+      if (typeof broadcastRealtimeSync === 'function') {
+        broadcastRealtimeSync('hpp_prediction_applied', { applied: result.applied.length });
+      }
+      res.json({
+        ...result,
+        summary: prediction.summary,
+        period: prediction.period,
+      });
+    } catch (err) {
+      res.status(500).json({ detail: 'Gagal menerapkan HPP: ' + err.message });
+    }
   });
 
   // ==========================================
@@ -2767,13 +2957,115 @@ Keluarkan JSON dengan format:
   });
 
   // POST /api/ai/ingredient-vision & /ai/ingredient-vision
-  app.post(['/api/ai/ingredient-vision', '/ai/ingredient-vision'], (req, res) => {
-    res.json({
-      items: [
-        { name: 'Beras Ramos Super', qty: 2, unit: 'karung', cost: 320000, category_name: 'Bahan Pokok' },
-        { name: 'Gula Pasir Gulaku 1kg', qty: 10, unit: 'kg', cost: 18000, category_name: 'Bahan Pokok' },
-      ],
-    });
+  //
+  // Dulu endpoint ini mengembalikan dua bahan karangan (Beras Ramos, Gula
+  // Gulaku) seolah-olah hasil pembacaan AI. Pemilik bisa menyimpan nota palsu
+  // tanpa sadar. Sekarang: kalau kunci vision benar-benar ada, panggil Gemini;
+  // kalau tidak, jawab 503 dan arahkan ke input manual — jangan mengarang.
+  app.post(['/api/ai/ingredient-vision', '/ai/ingredient-vision'], async (req, res) => {
+    const image = req.body?.image;
+    if (!image) return res.status(400).json({ detail: 'Foto nota wajib dikirim' });
+
+    const configured = [
+      ...(((db.ai && db.ai.gemini_keys) || [])),
+      ...(((db.settings && db.settings.ai && db.settings.ai.gemini_keys) || [])),
+      process.env.GEMINI_API_KEY || '',
+    ].filter((key) => /^(AIza|AQ\.)[0-9A-Za-z._-]{15,}$/.test(key) && !/dummy/i.test(key));
+
+    if (!configured.length) {
+      return res.status(503).json({
+        mode: 'manual',
+        detail: 'Pembacaan foto otomatis belum aktif: kunci AI vision belum diisi. Foto tetap bisa disimpan sebagai bukti; ketik item nota secara manual.',
+      });
+    }
+
+    const mimeMatch = /^data:(image\/[a-z+]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(String(image).trim());
+    const base64 = mimeMatch ? mimeMatch[2] : String(image).replace(/^data:[^,]+,/, '');
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    // Nama model Gemini berubah dan model lama bisa ditutup untuk kunci baru
+    // (gemini-2.5-flash menjawab 404 "no longer available to new users"). Coba
+    // beberapa model yang masih dilayani; GEMINI_VISION_MODEL bisa memaksa satu
+    // model tanpa mengubah setelan pemilik.
+    const models = process.env.GEMINI_VISION_MODEL
+      ? [process.env.GEMINI_VISION_MODEL]
+      : ['gemini-3-flash-preview', 'gemini-flash-latest', 'gemini-2.5-flash'];
+
+    const prompt = [
+      'Baca foto nota/faktur belanja bahan dapur ini.',
+      'Kembalikan HANYA JSON array tanpa penjelasan, format:',
+      '[{"name":"nama bahan","qty":1,"unit":"kg","unit_cost":0,"total_cost":0}]',
+      'Aturan: qty dan harga harus angka; bila nota hanya menulis total, isi total_cost dan biarkan unit_cost 0;',
+      'jangan mengarang item yang tidak terlihat di foto.',
+    ].join(' ');
+
+    try {
+      let lastStatus = 0;
+      for (const model of models) {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(configured[0])}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: prompt },
+                  { inline_data: { mime_type: mimeType, data: base64 } },
+                ],
+              }],
+              generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+            }),
+            signal: AbortSignal.timeout(30000),
+          }
+        );
+        if (!response.ok) {
+          lastStatus = response.status;
+          // 404/400 = model ditutup atau nama tidak dikenal, coba model berikutnya.
+          if (response.status === 404 || response.status === 400) continue;
+          return res.status(502).json({
+            mode: 'manual',
+            detail: `Pembacaan foto gagal (HTTP ${response.status}). Ketik item nota secara manual.`,
+          });
+        }
+        const payload = await response.json();
+        const text = (((payload.candidates || [])[0] || {}).content?.parts || [])
+          .map((part) => part.text || '')
+          .join('')
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/```\s*$/i, '')
+          .trim();
+        let items = [];
+        try {
+          const parsed = JSON.parse(text);
+          items = Array.isArray(parsed) ? parsed : Array.isArray(parsed.items) ? parsed.items : [];
+        } catch (_) {
+          return res.status(502).json({
+            mode: 'manual',
+            detail: 'Foto terbaca tetapi formatnya tidak bisa diurai. Ketik item nota secara manual.',
+          });
+        }
+        return res.json({
+          mode: 'ai',
+          model,
+          items: items.map((item) => ({
+            name: String(item.name || '').trim(),
+            qty: Number(item.qty || 0),
+            unit: String(item.unit || '').trim(),
+            unit_cost: Number(item.unit_cost || item.cost || 0),
+            total_cost: Number(item.total_cost || 0),
+          })).filter((item) => item.name),
+        });
+      }
+      return res.status(502).json({
+        mode: 'manual',
+        detail: `Pembacaan foto gagal: tidak ada model vision yang tersedia (HTTP ${lastStatus || '-'}). Ketik item nota secara manual.`,
+      });
+    } catch (err) {
+      res.status(502).json({
+        mode: 'manual',
+        detail: 'Pembacaan foto gagal: ' + err.message + '. Ketik item nota secara manual.',
+      });
+    }
   });
 
   // POST /api/ai/parse-invoice & /ai/parse-invoice

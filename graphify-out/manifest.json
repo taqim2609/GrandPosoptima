@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "api-server.js": {
-    "mtime": 1795063569.98394,
-    "seen": 1795063768.6457703,
-    "ast_hash": "f896ef38bd74a3c09c47a80f6d704259",
+    "mtime": 1795065331.2730832,
+    "seen": 1795104464.799586,
+    "ast_hash": "6e8babe62d3e35944ca92ad82f3848c2",
     "semantic_hash": ""
   },
   "backup-pi-to-vps.sh": {
@@ -198,9 +198,9 @@
     "semantic_hash": ""
   },
   "deploy/docker-compose.host.yml": {
-    "mtime": 1794677716.6892908,
-    "seen": 1794975495.6450434,
-    "ast_hash": "999a14c3ca3f598bd494542d4853a53f",
+    "mtime": 1795064558.0584352,
+    "seen": 1795065188.649476,
+    "ast_hash": "32bbf6008f341e47b647c71660b917eb",
     "semantic_hash": ""
   },
   "deploy/docker-compose.pi.yml": {
@@ -582,9 +582,9 @@
     "semantic_hash": ""
   },
   "project/frontend/public/ota/version.json": {
-    "mtime": 1795027132.24446,
-    "seen": 1795029458.241093,
-    "ast_hash": "0e2a44498bc454bf2dead19bf924a060",
+    "mtime": 1795104196.7657237,
+    "seen": 1795104464.7997122,
+    "ast_hash": "12d9296cca8e4cea5698fa035686535a",
     "semantic_hash": ""
   },
   "project/frontend/public/polyfills.js": {
@@ -1296,9 +1296,9 @@
     "semantic_hash": ""
   },
   "project/frontend/src/pages/Ingredients.jsx": {
-    "mtime": 1794605045.9451392,
-    "seen": 1794975495.6453054,
-    "ast_hash": "cddfea9fd4277a18548b86d9627658ba",
+    "mtime": 1795104114.4230635,
+    "seen": 1795104464.799903,
+    "ast_hash": "26bafff65147a0363fd73865414988df",
     "semantic_hash": ""
   },
   "project/frontend/src/pages/Integritas.jsx": {
@@ -1746,9 +1746,9 @@
     "semantic_hash": ""
   },
   "routes/allMissingRoutes.js": {
-    "mtime": 1795063462.5610163,
-    "seen": 1795063768.6462061,
-    "ast_hash": "c7bf5a7ca8040684082be8f86b370c98",
+    "mtime": 1795104600.2329593,
+    "seen": 1795104645.4840932,
+    "ast_hash": "81a95b4fb93848645c0c76cfe8df6fb9",
     "semantic_hash": ""
   },
   "routes/mcpServer.js": {
@@ -2454,9 +2454,9 @@
     "semantic_hash": ""
   },
   "INDEX-BERKAS.md": {
-    "mtime": 1795048521.6844666,
-    "seen": 1795048529.5831587,
-    "ast_hash": "66feca905cbeb38ef60ce0074ab22106",
+    "mtime": 1795104448.6205149,
+    "seen": 1795104464.8002377,
+    "ast_hash": "f9690f6db2e1ee6a6966f666ec07329d",
     "semantic_hash": ""
   },
   "PANDUAN-DEPLOY-VPS-DAN-PI-TAILSCALE.md": {
@@ -2574,9 +2574,9 @@
     "semantic_hash": ""
   },
   "project/INDEX-BERKAS.md": {
-    "mtime": 1795048521.6847866,
-    "seen": 1795048529.5831919,
-    "ast_hash": "66feca905cbeb38ef60ce0074ab22106",
+    "mtime": 1795104448.620905,
+    "seen": 1795104464.800271,
+    "ast_hash": "f9690f6db2e1ee6a6966f666ec07329d",
     "semantic_hash": ""
   },
   "project/MULAI-DISINI.txt": {
@@ -3099,6 +3099,18 @@
     "mtime": 1795063584.524065,
     "seen": 1795063768.6462839,
     "ast_hash": "dd437a977f927c93935b76c638c57acd",
+    "semantic_hash": ""
+  },
+  "lib/costing.js": {
+    "mtime": 1795064868.1821017,
+    "seen": 1795065188.649489,
+    "ast_hash": "cfd8825466dfdda9fb3e6062e05a0c40",
+    "semantic_hash": ""
+  },
+  "tests/hpp-prediction-nota-isolated.js": {
+    "mtime": 1795104150.6353538,
+    "seen": 1795104464.8000736,
+    "ast_hash": "16805ba89f84e96c0602f06da7836896",
     "semantic_hash": ""
   },
   "package-lock.json": {

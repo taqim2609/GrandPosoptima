@@ -2409,7 +2409,9 @@ app.patch(['/api/orders/:id/items', '/orders/:id/items'], (req, res) => {
       product_id: prod.id || it.product_id || ('p-' + Date.now()),
       name: prod.name || it.name || 'Produk',
       price,
-      cost: known ? Number(prod.cost || 0) : Number(it.cost || 0),
+      // Sama seperti pembuatan order: HPP resep/prediksi tersimpan di
+      // `cost_price`, jadi baris yang diedit tidak boleh kehilangan COGS.
+      cost: known ? Number(prod.cost || prod.cost_price || 0) : Number(it.cost || 0),
       qty,
       type: prod.type || it.type || 'fnb',
       weight,
@@ -3529,9 +3531,13 @@ function getReportSummary(dateStr) {
       o.items.forEach((it) => {
         const line = (Number(it.price) || 0) * (Number(it.qty) || 1);
         const prod = db.products.find((p) => p.id === it.product_id || p.id === it.id || p.name === it.name) || {};
-        // COGS comes from the catalogue (or the cost captured on the line). The old
+        // COGS comes from the line snapshot when it has one, so applying a new HPP
+        // never rewrites the profit of orders that were already closed. Old lines
+        // captured before any HPP existed (`cost = 0`) fall back to the catalogue,
+        // which is what makes the first HPP apply visible in past reports. The old
         // `price * 0.5` guess invented a 50% margin for any product without a cost.
-        const unitCost = Number(prod.cost_price ?? prod.cost ?? it.cost ?? 0) || 0;
+        const lineCost = Number(it.cost);
+        const unitCost = Number(lineCost > 0 ? lineCost : (prod.cost_price || prod.cost || 0)) || 0;
         const cost = unitCost * (Number(it.qty) || 1);
         total_cost += cost;
         if (oType === 'retail') {
@@ -4543,7 +4549,10 @@ app.get('/api/reports/period', (req, res) => {
       o.items.forEach((it) => {
         const line = (Number(it.price) || 0) * (Number(it.qty) || 1);
         const prod = (db.products || []).find((p) => p.id === it.product_id || p.id === it.id || p.name === it.name) || {};
-        const unitCost = Number(prod.cost_price ?? prod.cost ?? it.cost ?? 0) || 0;
+        // Snapshot baris menang supaya laporan order lama tidak berubah saat HPP
+        // diterapkan ulang; baris lama yang `cost = 0` memakai HPP katalog.
+        const lineCost = Number(it.cost);
+        const unitCost = Number(lineCost > 0 ? lineCost : (prod.cost_price || prod.cost || 0)) || 0;
         const cost = unitCost * (Number(it.qty) || 1);
         total_cost += cost;
         if (oType === 'retail') cost_retail += cost;

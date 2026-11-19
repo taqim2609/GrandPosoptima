@@ -1,13 +1,13 @@
 # Graph Report - pos-engine  (2026-11-19)
 
 ## Corpus Check
-- 464 files · ~406,641 words
+- 466 files · ~412,409 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 74 file(s) not represented in the graph (top: (none) 15, .bat 15, .tmpl 12)
+- Unclassified: 75 file(s) not represented in the graph (top: (none) 15, .bat 15, .tmpl 12)
 
 ## Summary
-- 3858 nodes · 6813 edges · 386 communities (224 shown, 162 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 139 edges (avg confidence: 0.89)
+- 3910 nodes · 6885 edges · 392 communities (229 shown, 163 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 150 edges (avg confidence: 0.88)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -15,7 +15,7 @@
 - apiError
 - cn
 - useAuth
-- DeviceSettings.jsx
+- formatWib
 - 📖 Panduan Lengkap Fitur & Operasional Kasir
 - Login.jsx
 - formatWib
@@ -27,7 +27,7 @@
 - test_result.md
 - ref_fs
 - ProductKitTest
-- dependencies
+- frontend/package.json
 - DX/README.md
 - Panduan Integrasi Hermes Agent (Nous Research) dengan Grand Aceh Kuliner POS
 - GrandPOS — Temuan Audit Lengkap
@@ -36,16 +36,16 @@
 - SettingsCustomWidgets.jsx
 - Diagnostik.jsx
 - RANCANGAN — Void / Refund Pesanan
-- frontend/package.json
-- frontend/scripts/make-ota.js
+- dependencies
+- scripts/make-ota.js
 - HybridSyncDiagnosticPanel.jsx
 - settings-persistence.js
 - 4. Daftar 10 Ide Inovasi Implementasi Hermes Agent
 - loyalty-rounding-shift-isolated.js
 - Dashboard.jsx
-- grandpos-app
+- environment
 - Sesi lanjutan — 2026-11-13 (remediation plan T1-T8)
-- dependencies
+- package.json
 - x-gak-token-bypass-removed.js
 - steps
 - accounting-discount-tax-split-isolated.js
@@ -58,13 +58,13 @@
 - landing-page-auth-guard.js
 - requireAdmin
 - __init__.py
-- package.json
+- dependencies
 - Panduan Instalasi Lengkap — Grand Aceh Kuliner POS
 - EXECUTION/README.md
 - PRD/README.md
-- recipe-hpp-order-isolated.js
+- koreksi-jurnal-vendor.js
 - command.jsx
-- whatsapp-branding-unified.js
+- recipe-hpp-order-isolated.js
 - compilerOptions
 - json
 - vendor-settlement.js
@@ -77,8 +77,8 @@
 - Kontrak API & Data — Perubahan Fix-02
 - Sesi lanjutan — 2026-11-13 (append-only; temuan di atas tidak diubah)
 - components.json
-- landingService.js
-- fix01-regression.js
+- Agent Rules — Grand Aceh Kuliner POS & Planora Framework
+- getServerUrl
 - fix02-contract.js
 - build.js
 - update_file_index.py
@@ -110,12 +110,12 @@
 - Analisa: Arsitektur Dua Database (Windows sebagai DB utama + Raspberry Pi sebagai DB sementara)
 - Grand Aceh Kuliner POS — Dokumentasi Teknis untuk Integrasi Open API Netzme (QRIS)
 - Learn More
-- koreksi-jurnal-vendor.js
+- ref_path
 - sync.js
 - E2E Report Format
 - frontend
-- requeue-analytics.js
-- ref_os
+- hpp-prediction-nota-isolated.js
+- run-tests.js
 - import-rbac.js
 - scaffold_product_kit.py
 - ExampleInstrumentedTest.java
@@ -127,21 +127,21 @@
 - bakso-cash-void-isolated.js
 - AbortSignalPolyfill
 - diag-orders.js
-- Ingredients.jsx
+- bluetooth.js
 - cash-drawer-authority.js
 - breadcrumb.jsx
 - security-probe-auth-gate.js
 - analytics-sync-rbac.js
 - Migrasi Backend Rust, PRD Planora v3.0, & Panduan Komprehensif Hermes Agent
 - MainActivity.java
-- seed-products.js
+- frontend/scripts/make-ota.js
 - Panduan: Membuat Akun dari Command Line (CMD / SSH)
 - Panduan Shift Harian (F&B & Retail) — satu shift per hari, dipakai bersama
 - journal-correction.js
 - Panduan Multi-Node POS: PC Master + Raspberry Pi Kasir + Evolution API + AI Studio (Tailscale)
 - Panduan Akses Server dari Luar Jaringan (Tailscale)
 - security-regression-test.js
-- ErrorBoundary
+- Diagnostik.jsx
 - .onCreate
 - PRD — Grand Aceh Kuliner POS (v3.0.0)
 - carousel.jsx
@@ -151,12 +151,12 @@
 - sheet.jsx
 - toggle-group.jsx
 - 2. Rincian Masalah yang Ditemukan dan Solusinya
-- @google/genai
+- registerAllMissingRoutes
 - UI and DX experience guides
 - PRD authoring
 - update_revision.py
 - check-workers-pi.sh
-- postcss
+- outlet-identity-isolated.js
 - Disk & backup alert
 - Panduan Operasional Go-Live: VPS, Raspberry Pi (Tailscale) & Android APK / Capgo OTA
 - project/check-workers-pi.sh
@@ -212,7 +212,7 @@
 - Quality gates
 - Planora Status
 - UI Design
-- hapus-user-alihkan.js
+- fix01-negative-control.js
 - 2026-11-11 — Live /sync/orders end-to-end (disposable PostgreSQL)
 - 2026-11-11 — Verifikasi call site cash/tunai + bug expected_cash MCP
 - src/index.js
@@ -237,9 +237,9 @@
 - Fitur — Manajemen Shift Kasir dan Rekonsiliasi Kas
 - project/backup-pi-to-vps.sh
 - dispatch_webhook.sh
-- tailwindcss
-- date-fns@^4.4.0
-- craco.config.js
+- Planora: Landing Page Publik & Portal Reservasi Meja Grand Aceh Kuliner
+- fix01-regression.js
+- OfflineContext.jsx
 - disk-alert.sh
 - grandpos-backup.sh
 - reclaim.sh
@@ -247,7 +247,7 @@
 - Layar: Landing Page Publik & Formulir Reservasi Online
 - check-update-pi.sh
 - watch_crons.sh
-- browserslist
+- health-endpoints.js
 - express
 - cmdk@^1.1.1
 - allMissingRoutes.js
@@ -262,41 +262,41 @@
 - bootstrap-vps.sh
 - CLAUDE.md
 - fix-permission-pi.sh
-- @radix-ui/react-accordion@^1.3.1
-- @radix-ui/react-avatar@^1.3.1
-- @radix-ui/react-collapsible@^1.2.1
-- @radix-ui/react-radio-group@^1.5.1
-- @radix-ui/react-tabs@^1.2.1
-- react-dom@^19.3.1
+- mcpServer.js
+- browserslist
+- Deploy host: compose produksi akhirnya ter-versi (2026-11-15 00:4x UTC / 07:4x WIB)
+- archiver
+- @capacitor/android@^6
+- @capacitor/core@^6
 - dotenv@^16.4.7
-- react-router-dom@^7.18.4
-- recharts@^3.10.1
-- Publikasi artefak dan restart host (2026-11-14 02:0x UTC / 09:0x WIB)
+- clsx@2.1.1
+- lucide-react@0.516.0
+- @radix-ui/react-alert-dialog@1.1.11
 - @capacitor/core@^8.5.3
 - Data hilang ditemukan dan dipulihkan: 6 order 13 Nov (2026-11-14 05:1x–05:3x UTC)
 - @radix-ui/react-dialog@^1.3.1
-- sonner@^2.0.8
+- @radix-ui/react-checkbox@1.2.3
 - embla-carousel-react@^8.6.0
 - follow-redirects@1.16.3
 - cors
 - @radix-ui/react-navigation-menu@^1.4.1
-- @capacitor/android@^6
+- clsx@^2.1.1
 - lucide-react@^1.58.0
 - next-themes@^0.4.6
 - scroll-area.jsx
-- @capgo/capacitor-updater@^6
+- multer
 - cmdk@1.1.1
-- date-fns@4.1.0
+- @radix-ui/react-context-menu@2.2.12
 - @capgo/capacitor-updater@^8.53.0
 - input-otp@^1.5.0
 - @radix-ui/react-dropdown-menu@^2.2.1
 - @radix-ui/react-progress@^1.2.1
-- embla-carousel-react@8.6.0
-- @radix-ui/react-accordion@1.2.8
+- @radix-ui/react-aspect-ratio@^1.2.0
+- @radix-ui/react-dialog@1.1.11
 - @radix-ui/react-select@^2.4.1
 - @radix-ui/react-aspect-ratio@1.1.4
 - tailwind-merge@^3.7.0
-- @radix-ui/react-checkbox@1.2.3
+- @radix-ui/react-context-menu@^2.4.1
 - @radix-ui/react-checkbox@^1.4.1
 - @tanstack/react-query@^5.104.3
 - project/backup-pi.sh
@@ -308,37 +308,38 @@
 - webhook_crond.sh
 - project/fix-permission-pi.sh
 - xlsx
-- @capacitor/core@^6
+- @radix-ui/react-label@^2.1.17
 - @radix-ui/react-menubar@^1.2.1
-- firebase@^12.19.0
-- cra-template@1.2.0
-- @radix-ui/react-dialog@1.1.11
-- @radix-ui/react-navigation-menu@1.2.10
-- lucide-react@0.516.0
-- @radix-ui/react-alert-dialog@1.1.11
-- @radix-ui/react-avatar@1.1.7
-- @radix-ui/react-scroll-area@1.2.6
 - @radix-ui/react-label@2.1.4
+- cra-template@1.2.0
+- @radix-ui/react-slot@^1.5.0
+- @radix-ui/react-toast@^1.3.1
+- @radix-ui/react-toggle-group@^1.2.1
+- react-hook-form@^7.90.0
+- @radix-ui/react-avatar@1.1.7
+- tsx@^4.23.15
+- @radix-ui/react-radio-group@1.3.4
 - @radix-ui/react-popover@^1.3.1
-- @radix-ui/react-switch@1.2.2
-- @radix-ui/react-slot@1.2.0
-- @radix-ui/react-tooltip@1.2.4
+- @hookform/resolvers@5.0.1
+- input-otp@1.4.2
+- @radix-ui/react-scroll-area@1.2.6
 - @radix-ui/react-separator@^1.2.0
 - @radix-ui/react-slider@^1.6.1
-- @radix-ui/react-separator@1.1.4
-- @radix-ui/react-slider@1.3.2
-- @radix-ui/react-toast@1.2.11
+- @radix-ui/react-collapsible@1.1.8
+- @radix-ui/react-dropdown-menu@2.1.12
+- @radix-ui/react-select@2.2.2
 - react-hot-toast@^2.6.1
 - vaul@^1.1.2
 - @radix-ui/react-toggle@1.1.6
 - @radix-ui/react-toggle-group@1.1.7
 - react-router-dom@7.18.5
 - react-hook-form@7.56.2
-- react-scripts@5.0.1
+- react@19.0.0
 - sonner@2.0.3
-- zod@3.24.4
+- @radix-ui/react-slider@1.3.2
 - tailwindcss-animate@1.0.7
-- @tanstack/react-query@5.56.2
+- @radix-ui/react-switch@1.2.2
+- react-day-picker@8.10.1
 - frontend/public/bootstrap-pi.sh
 - frontend/public/bootstrap-vps.sh
 - frontend/public/sw.js
@@ -366,6 +367,11 @@
 - setup-raspberrypi.sh
 - setup-tailscale.sh
 - update-pi.sh
+- @radix-ui/react-tooltip@1.2.4
+- react-hot-toast@^2.6.1
+- react-resizable-panels@3.0.1
+- react-scripts@5.0.1
+- tailwind-merge@3.2.0
 
 ## God Nodes (most connected - your core abstractions)
 1. `cn()` - 199 edges
@@ -375,58 +381,58 @@
 5. `DialogTitle` - 68 edges
 6. `formatWib()` - 67 edges
 7. `DialogHeader()` - 66 edges
-8. `api` - 56 edges
+8. `api` - 55 edges
 9. `DialogFooter()` - 54 edges
 10. `useAuth()` - 43 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Fix-02 — Penyelarasan kontrak API, data, konfigurasi (`api-server.js`, 4 lib frontend)` --references--> `getReportSummary()`  [INFERRED]
-  project/docs/LAPORAN-VERIFIKASI-VERIFY-01.md → api-server.js
-- `T8 — MCP tanpa autentikasi` --references--> `handleJsonRpc()`  [INFERRED]
-  docs/GRANDPOS-TEMUAN-AUDIT.md → routes/mcpServer.js
+- `Rencana Pelaksanaan Komponen (`TASK-008`)` --references--> `LandingPage()`  [INFERRED]
+  .aistudio/artifacts/brain/b7d4f55a-cdea-4f46-8495-e74eca6d4888/implementation_plan.md → project/frontend/src/pages/LandingPage.jsx
 - `Temuan` --references--> `drainOutbox()`  [INFERRED]
   docs/GRANDPOS-TEMUAN-AUDIT.md → lib/analytics-sync.js
 - `Uji` --references--> `initSync()`  [INFERRED]
   docs/GRANDPOS-TEMUAN-AUDIT.md → lib/analytics-sync.js
 - `Ledger dan antrean saling bertentangan` --references--> `loadOutbox()`  [INFERRED]
   docs/GRANDPOS-TEMUAN-AUDIT.md → lib/analytics-sync.js
+- `Fix-02 — Penyelarasan kontrak API, data, konfigurasi (`api-server.js`, 4 lib frontend)` --references--> `getReportSummary()`  [INFERRED]
+  project/docs/LAPORAN-VERIFIKASI-VERIFY-01.md → api-server.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (386 total, 162 thin omitted)
+## Communities (392 total, 163 thin omitted)
 
 ### Community 0 - "api-server.js"
 Cohesion: 0.03
 Nodes (70): activeCoupon(), AdmZip, ALL_GRANTABLE_MODULES, app, AUTH_AGENT_PREFIXES, AUTH_PUBLIC_PATHS, AUTH_PUBLIC_PREFIXES, BASE_MODULE_DEFAULTS (+62 more)
 
 ### Community 1 - "apiError"
-Cohesion: 0.11
-Nodes (51): AiIngredientRecommendationModal(), DEFAULT_MODELS, ChangePasswordDialog(), LazyProductImage, loadedImageUrls, DialogContent, DialogFooter(), DialogHeader() (+43 more)
+Cohesion: 0.13
+Nodes (45): AiIngredientRecommendationModal(), DEFAULT_MODELS, ChangePasswordDialog(), DialogContent, DialogFooter(), DialogHeader(), DialogOverlay, DialogTitle (+37 more)
 
 ### Community 2 - "cn"
 Cohesion: 0.05
 Nodes (49): AccordionContent, AccordionItem, AccordionTrigger, Avatar, AvatarFallback, AvatarImage, ContextMenuCheckboxItem, ContextMenuContent (+41 more)
 
 ### Community 3 - "useAuth"
-Cohesion: 0.10
-Nodes (43): ForceChangePassword(), HOME_MOD, homeFor(), landingFor(), NoAccess(), ProtectedRoute(), useAuth(), BASE_MODULES (+35 more)
+Cohesion: 0.08
+Nodes (56): ForceChangePassword(), PosAiChatWidget(), SUGGESTIONS, HOME_MOD, homeFor(), landingFor(), NoAccess(), ProtectedRoute() (+48 more)
 
-### Community 4 - "DeviceSettings.jsx"
-Cohesion: 0.06
-Nodes (59): Panduan Eksekusi Instalasi Otomatis: Server Gudang 644 & GrandPOS (Raspberry Pi), PROMPT INSTRUKSI AGUNAN UNTUK AGEN AI HERMES, 1. Berkas Konfigurasi & Root Server, 2. Lapisan Integrasi & Rute Backend (`/routes`), 3. Frontend Contexts & State Management (`/src/contexts`), 4. Halaman Antarmuka Pengguna (`/src/pages`), 5. Komponen UI Pendukung & Hardware Bridge (`/src/components`), 6. Skrip Shell Deployment & Pemeliharaan (+51 more)
+### Community 4 - "formatWib"
+Cohesion: 0.10
+Nodes (46): ReceiptModal(), ReceiptPaper(), SystemHealthPanel(), ThreeServerMatrix(), VpsConnectionAnalyticsCard(), clearBluetoothPrinter(), buildEposEnvelope(), DEVICE_DEFAULTS (+38 more)
 
 ### Community 5 - "📖 Panduan Lengkap Fitur & Operasional Kasir"
-Cohesion: 0.09
-Nodes (23): 10. Pusat Kontrol MCP & Audit Mutasi Agen AI Hermes, 1. Prinsip Bisnis & Aturan Emas Sistem, 2. Modul Transaksi F&B (Restoran & Rumah Makan Aceh), 3. Modul Transaksi Retail (Kelontong & Oleh-oleh), 4. Sistem Titipan Vendor Konsinyasi (Bagi Hasil Satu Pintu), 5. Manajemen Shift Kasir & Rekonsiliasi Uang, 6. Diskon, Kupon Promo & Poin Member, 7. WhatsApp Gateway Otomatis (Baileys Port 8644) (+15 more)
+Cohesion: 0.04
+Nodes (43): Panduan Eksekusi Instalasi Otomatis: Server Gudang 644 & GrandPOS (Raspberry Pi), PROMPT INSTRUKSI AGUNAN UNTUK AGEN AI HERMES, 10. Pusat Kontrol MCP & Audit Mutasi Agen AI Hermes, 1. Prinsip Bisnis & Aturan Emas Sistem, 2. Modul Transaksi F&B (Restoran & Rumah Makan Aceh), 3. Modul Transaksi Retail (Kelontong & Oleh-oleh), 4. Sistem Titipan Vendor Konsinyasi (Bagi Hasil Satu Pintu), 5. Manajemen Shift Kasir & Rekonsiliasi Uang (+35 more)
 
 ### Community 6 - "Login.jsx"
-Cohesion: 0.17
-Nodes (20): LoginServerSelector(), discoverServer(), getServerUrl(), probe(), probeServer(), setServerUrl(), checkOtaUpdate(), emitOta() (+12 more)
+Cohesion: 0.22
+Nodes (10): checkOtaUpdate(), emitOta(), localBundleVersion(), APK_DOWNLOAD_URL, APK_FILENAME, APK_VERSION, collectVersions(), isNativeApp() (+2 more)
 
 ### Community 7 - "formatWib"
-Cohesion: 0.11
-Nodes (35): HeaderConnectionBadge(), HeaderConnectionBanner(), Layout(), OfflineStatus(), SyncQueueDialog(), ThreeServerMatrix(), formatTimeAgo(), VisualSyncBadge() (+27 more)
+Cohesion: 0.09
+Nodes (41): HeaderConnectionBadge(), HeaderConnectionBanner(), Layout(), OfflineStatus(), SyncQueueDialog(), formatTimeAgo(), VisualSyncBadge(), VisualSyncStatusCard() (+33 more)
 
 ### Community 8 - "The testing data must be entered in yaml format Below is the data structure:"
 Cohesion: 0.05
@@ -438,7 +444,7 @@ Nodes (21): ShiftClosingReportView(), esc(), printInBrowser(), printShiftClosing
 
 ### Community 10 - "Grand Aceh Kuliner POS — PRD"
 Cohesion: 0.05
-Nodes (41): Accounts (seed) — see /app/memory/test_credentials.md, AI AKTIF (2026-06), Backlog (prioritas), BACKUP OTOMATIS RASPBERRY PI (2026-06-21), BACKUP & PANDUAN LENGKAP (2026-06-21), BACKUP/RESTORE IN-APP + RESTART (2026-06-21), BOOTSTRAP PI (2026-06-21), Build 16 (2026-06) — Produk Tipe Vendor (Bagi Hasil / Konsinyasi) (+33 more)
+Nodes (40): Accounts (seed) — see /app/memory/test_credentials.md, AI AKTIF (2026-06), Backlog (prioritas), BACKUP OTOMATIS RASPBERRY PI (2026-06-21), BACKUP & PANDUAN LENGKAP (2026-06-21), BACKUP/RESTORE IN-APP + RESTART (2026-06-21), BOOTSTRAP PI (2026-06-21), Build 16 (2026-06) — Produk Tipe Vendor (Bagi Hasil / Konsinyasi) (+32 more)
 
 ### Community 11 - ".planora/manifest.json"
 Cohesion: 0.05
@@ -454,11 +460,11 @@ Nodes (35): 1. Update Test Result File Before Testing:, 2. Incorporate User Feed
 
 ### Community 14 - "ref_fs"
 Cohesion: 0.08
-Nodes (15): fs, path, SRC, BUSINESS, { chromium }, fs, NOW, SHIFT (+7 more)
+Nodes (16): fs, path, SRC, ENDPOINTS, fs, os, path, ROOT (+8 more)
 
-### Community 16 - "dependencies"
-Cohesion: 0.06
-Nodes (35): dependencies, axios@1.21.1, class-variance-authority@0.7.1, clsx@2.1.1, dayjs@1.11.13, framer-motion@11.18.0, @hookform/resolvers@5.0.1, input-otp@1.4.2 (+27 more)
+### Community 16 - "frontend/package.json"
+Cohesion: 0.08
+Nodes (24): class-variance-authority@0.7.1, dayjs@1.11.13, embla-carousel-react@8.6.0, @radix-ui/react-accordion@1.2.8, @radix-ui/react-tabs@1.1.9, @radix-ui/react-toast@1.2.11, react-dom@19.0.0, swr@2.3.8 (+16 more)
 
 ### Community 17 - "DX/README.md"
 Cohesion: 0.06
@@ -473,8 +479,8 @@ Cohesion: 0.06
 Nodes (31): 10. Artefak, 1. Peta sistem, 2026-11-11 — Audit model shift Node/PostgreSQL/edge, 2026-11-11 — Consistency: copy kedua coercion + suite penuh tanpa skip, 2026-11-11 — Consistency: dokumentasi perintah pytest, 2026-11-11 — CORS production hardening, 2026-11-11 — CORS test alignment, 2026-11-11 — Daftar temuan terbuka setelah Node split fix (+23 more)
 
 ### Community 20 - "devDependencies"
-Cohesion: 0.06
-Nodes (31): autoprefixer@10.4.20, @babel/plugin-proposal-private-property-in-object@7.21.11, devDependencies, ajv@^6.12.6, ajv-keywords@^3.5.2, autoprefixer@10.4.20, @babel/plugin-proposal-private-property-in-object@7.21.11, @capacitor/cli@^6 (+23 more)
+Cohesion: 0.05
+Nodes (39): autoprefixer@10.4.20, @babel/plugin-proposal-private-property-in-object@7.21.11, postcss@8.5.10, tailwindcss@3.4.17, devDependencies, ajv@^6.12.6, ajv-keywords@^3.5.2, autoprefixer@10.4.20 (+31 more)
 
 ### Community 21 - "GDriveBackupManager.jsx"
 Cohesion: 0.14
@@ -485,28 +491,28 @@ Cohesion: 0.17
 Nodes (28): DialogDescription, WidgetKustomCard(), AUTO_KEYS, AUTO_VAR_MAP, AUTO_VARS, buildEnv(), codeLabel(), CW_COLORS (+20 more)
 
 ### Community 23 - "Diagnostik.jsx"
-Cohesion: 0.21
-Nodes (19): GlobalErrorDiagnosticPanel(), analyzePersistentFailures(), buildDiagReport(), categorizeError(), clearErrorLog(), errorListeners, errorLog, installDiag() (+11 more)
+Cohesion: 0.20
+Nodes (15): ErrorBoundary, GlobalErrorDiagnosticPanel(), analyzePersistentFailures(), buildDiagReport(), categorizeError(), clearErrorLog(), errorListeners, errorLog (+7 more)
 
 ### Community 24 - "RANCANGAN — Void / Refund Pesanan"
 Cohesion: 0.07
 Nodes (27): 10. Yang TIDAK termasuk (sesuai keputusan), 11. Catatan implementasi (apa yang benar-benar dibangun), 1. Kondisi sekarang (hasil pembacaan kode), 2. Keputusan pemilik (final, menjadi aturan), 3. Matriks aturan (hasil keputusan di atas), 4.1 Dokumen `orders` (tambahan field, tidak ada migrasi wajib), 4.2 `audit_logs` (tambahan field), 4.3 Pengaturan baru — `settings._id = "void"` (+19 more)
 
-### Community 25 - "frontend/package.json"
-Cohesion: 0.07
-Nodes (26): next-themes@0.4.6, @radix-ui/react-context-menu@2.2.12, @radix-ui/react-menubar@1.1.12, @radix-ui/react-popover@1.1.11, @radix-ui/react-radio-group@1.3.4, @radix-ui/react-select@2.2.2, @radix-ui/react-tabs@1.1.9, react-day-picker@8.10.1 (+18 more)
+### Community 25 - "dependencies"
+Cohesion: 0.06
+Nodes (33): dependencies, axios@1.21.1, @capgo/capacitor-updater@^6, date-fns@4.1.0, firebase@^12.19.0, framer-motion@11.18.0, lodash@^4.17.21, next-themes@0.4.6 (+25 more)
 
-### Community 26 - "frontend/scripts/make-ota.js"
-Cohesion: 0.10
-Nodes (25): adm-zip@^0.6.1, archiver@^6, archiver@^6, calculateSha256(), createZipBundle(), crypto, findBuildDir(), fs (+17 more)
+### Community 26 - "scripts/make-ota.js"
+Cohesion: 0.24
+Nodes (11): adm-zip@^0.6.1, adm-zip, calculateSha256(), createZipBundle(), crypto, findBuildDir(), fs, main() (+3 more)
 
 ### Community 27 - "HybridSyncDiagnosticPanel.jsx"
 Cohesion: 0.26
 Nodes (17): HybridSyncDiagnosticPanel(), TailscaleDashboard(), Alert, AlertDescription, AlertTitle, alertVariants, Badge(), badgeVariants (+9 more)
 
 ### Community 28 - "settings-persistence.js"
-Cohesion: 0.10
-Nodes (23): persistNow(), Akar, Bukti, Jangan pernah probe container hidup, Perbaikan, Temuan besar: semua simpanan Pengaturan hilang setiap restart (2026-11-14 05:4x UTC), Uji, Yang belum dikerjakan (+15 more)
+Cohesion: 0.11
+Nodes (21): Akar, Bukti, Perbaikan, Temuan besar: semua simpanan Pengaturan hilang setiap restart (2026-11-14 05:4x UTC), Uji, Yang belum dikerjakan, createDebouncedSaver(), fs (+13 more)
 
 ### Community 29 - "4. Daftar 10 Ide Inovasi Implementasi Hermes Agent"
 Cohesion: 0.08
@@ -514,23 +520,23 @@ Nodes (25): 1. Visi Eksekutif: Dari Mesin Kasir Pasif Menjadi AI Co-Pilot Otonom
 
 ### Community 30 - "loyalty-rounding-shift-isolated.js"
 Cohesion: 0.06
-Nodes (27): bcryptjs@^2.4.3, bcryptjs, app, assert, bcrypt, fs, http, os (+19 more)
+Nodes (28): bcryptjs@^2.4.3, bcryptjs, app, assert, bcrypt, fs, http, os (+20 more)
 
 ### Community 31 - "Dashboard.jsx"
 Cohesion: 0.12
-Nodes (34): WidgetTerlaris, WidgetTrend, ReceiptModal(), bizCache(), labelsOf(), loadBusiness(), ORDER_TYPE_LABEL, rupiah() (+26 more)
+Nodes (35): WidgetTerlaris, WidgetTrend, api, BIZ_DEFAULTS, bizCache(), labelsOf(), loadBusiness(), rupiah() (+27 more)
 
-### Community 32 - "grandpos-app"
-Cohesion: 0.08
-Nodes (24): driver, command, container_name, environment, image, labels, networks, ports (+16 more)
+### Community 32 - "environment"
+Cohesion: 0.04
+Nodes (45): external, ANALYTICS_URL, CORS_ORIGINS, DOCKER_API_VERSION, GRANDPOS_DATA_DIR, HERMES_WA_WEBHOOK_URL, JWT_SECRET, NODE_ENV (+37 more)
 
 ### Community 33 - "Sesi lanjutan — 2026-11-13 (remediation plan T1-T8)"
 Cohesion: 0.08
-Nodes (25): `analytics-outbox.json` produksi ditimpa oleh uji, Commit, push, dan deploy, `DATABASE_URL` yang menyesatkan, Deploy dan verifikasi, Deploy frontend (menutup skew di produksi), Deploy host: compose produksi akhirnya ter-versi (2026-11-15 00:4x UTC / 07:4x WIB), Kesalahan saya sendiri, dicatat, Koreksi catatan: `pos-db.json` berubah hash, tetapi tidak ada data yang berubah (+17 more)
+Nodes (26): `analytics-outbox.json` produksi ditimpa oleh uji, Artefak audit dan query masuk ke repo, Commit, Commit, push, dan deploy, Deploy frontend (menutup skew di produksi), Disk: alarm bekerja, dan itu membuka temuan, Koreksi catatan: `pos-db.json` berubah hash, tetapi tidak ada data yang berubah, Ledger dan antrean saling bertentangan (+18 more)
 
-### Community 34 - "dependencies"
-Cohesion: 0.07
-Nodes (27): dependencies, class-variance-authority@^0.7.1, clsx@^2.1.1, @radix-ui/react-alert-dialog@^1.2.1, @radix-ui/react-aspect-ratio@^1.2.0, @radix-ui/react-context-menu@^2.4.1, @radix-ui/react-hover-card@^1.2.1, @radix-ui/react-label@^2.1.17 (+19 more)
+### Community 34 - "package.json"
+Cohesion: 0.10
+Nodes (20): date-fns@^4.4.0, @radix-ui/react-alert-dialog@^1.2.1, @radix-ui/react-scroll-area@^1.4.0, @radix-ui/react-tabs@^1.2.1, @radix-ui/react-toggle@^1.2.1, react@^19.3.1, react-day-picker@^10.0.2, react-router-dom@^7.18.4 (+12 more)
 
 ### Community 35 - "x-gak-token-bypass-removed.js"
 Cohesion: 0.12
@@ -557,8 +563,8 @@ Cohesion: 0.09
 Nodes (22): afterVoid, assert(), bad, board, corrupt, db, duplicate, eq() (+14 more)
 
 ### Community 41 - "api.js"
-Cohesion: 0.12
-Nodes (25): PosAiChatWidget(), SUGGESTIONS, AuthContext, api, SERVER_PRESETS, feat(), FEAT_DEFAULTS, FEAT_KEY (+17 more)
+Cohesion: 0.32
+Nodes (10): LoginServerSelector(), discoverServer(), probe(), probeServer(), SERVER_PRESETS, setServerUrl(), brandTitle(), logoUrl() (+2 more)
 
 ### Community 42 - "alert-dialog.jsx"
 Cohesion: 0.12
@@ -569,8 +575,8 @@ Cohesion: 0.09
 Nodes (21): 10. Cara "Menyerahkan" Hasil Pengembangan Kembali, 1. Ringkasan Proyek, 2. Arsitektur & Stack, 3. Struktur Repo (penting), 4. Cara Menjalankan & Build, 5. Konvensi & Aturan Emas (jangan dilanggar), 6. Aturan Bisnis Kunci (angka & logika), 7. Endpoint Penting (prefix /api) (+13 more)
 
 ### Community 44 - "landing-page-auth-guard.js"
-Cohesion: 0.14
-Nodes (10): app, fs, http, jwt, liveSnapshot, os, path, REPO (+2 more)
+Cohesion: 0.06
+Nodes (24): jsonwebtoken@^9.0.2, accepted, evidence, forged, jwt, jsonwebtoken, admin, DRY (+16 more)
 
 ### Community 45 - "requireAdmin"
 Cohesion: 0.13
@@ -580,9 +586,9 @@ Nodes (16): requireAdmin(), 2026-11-11 — Hardening FastAPI API key dan MCP aut
 Cohesion: 0.15
 Nodes (11): build_payload(), forward(), _httpx(), _is_whatsapp(), on_pre_gateway_dispatch(), _platform_name(), _pos_url(), register() (+3 more)
 
-### Community 47 - "package.json"
-Cohesion: 0.10
-Nodes (20): axios@^1.20.0, multer@^2.4.0, @radix-ui/react-switch@^1.4.1, @radix-ui/react-toggle-group@^1.2.1, @radix-ui/react-tooltip@^1.4.1, react@^19.3.1, react-hook-form@^7.90.0, tsx@^4.23.15 (+12 more)
+### Community 47 - "dependencies"
+Cohesion: 0.07
+Nodes (27): dependencies, axios@^1.20.0, class-variance-authority@^0.7.1, @radix-ui/react-accordion@^1.3.1, @radix-ui/react-avatar@^1.3.1, @radix-ui/react-collapsible@^1.2.1, @radix-ui/react-hover-card@^1.2.1, @radix-ui/react-radio-group@^1.5.1 (+19 more)
 
 ### Community 48 - "Panduan Instalasi Lengkap — Grand Aceh Kuliner POS"
 Cohesion: 0.10
@@ -596,15 +602,15 @@ Nodes (15): Urutan Eksekusi, Urutan Eksekusi Fitur, Dependensi, Fase 00 — Kepu
 Cohesion: 0.10
 Nodes (14): Fitur — Integrasi Hardware Sunmi & Printer Thermal, Kebutuhan fungsional, Kriteria penerimaan, Fitur — Manajemen Titipan Vendor dan Konsinyasi, Kebutuhan fungsional, Kriteria penerimaan, Indikator Kinerja Kasir, Metrik Keberhasilan Produk (+6 more)
 
-### Community 51 - "recipe-hpp-order-isolated.js"
-Cohesion: 0.15
-Nodes (11): app, assert, bcrypt, fs, http, os, path, ROOT (+3 more)
+### Community 51 - "koreksi-jurnal-vendor.js"
+Cohesion: 0.14
+Nodes (12): bahanBakuAfter, bahanBakuBefore, baksoAfter, baksoBefore, duplicateFix, fs, path, plan (+4 more)
 
 ### Community 52 - "command.jsx"
 Cohesion: 0.20
 Nodes (9): Command, CommandDialog(), CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator (+1 more)
 
-### Community 53 - "whatsapp-branding-unified.js"
+### Community 53 - "recipe-hpp-order-isolated.js"
 Cohesion: 0.15
 Nodes (11): app, assert, bcrypt, fs, http, os, path, ROOT (+3 more)
 
@@ -621,8 +627,8 @@ Cohesion: 0.41
 Nodes (11): buildVendorBoard(), compareSettlements(), computeSettlement(), currentVendorBalance(), expectedCarryIn(), isVoided(), liveSettlementsFor(), num() (+3 more)
 
 ### Community 57 - "devDependencies"
-Cohesion: 0.10
-Nodes (20): devDependencies, autoprefixer@^10.6.1, playwright-core@^1.65.1, postcss@^8.5.30, tailwindcss@^4.3.3, tailwindcss-animate@^1.0.7, @tailwindcss/postcss@^4.3.3, @tailwindcss/vite@^4.3.3 (+12 more)
+Cohesion: 0.12
+Nodes (17): devDependencies, autoprefixer@^10.6.1, playwright-core@^1.65.1, postcss@^8.5.30, tailwindcss@^4.3.3, tailwindcss-animate@^1.0.7, @tailwindcss/postcss@^4.3.3, @tailwindcss/vite@^4.3.3 (+9 more)
 
 ### Community 58 - "SunmiBridge"
 Cohesion: 0.23
@@ -656,21 +662,21 @@ Nodes (17): Catatan operasional yang masih terbuka, Commit, Commit, push, dan de
 Cohesion: 0.11
 Nodes (17): aliases, components, hooks, lib, ui, utils, iconLibrary, rsc (+9 more)
 
-### Community 66 - "landingService.js"
-Cohesion: 0.07
-Nodes (42): 1. Think and Classify Before Acting, 2. Skills First & Planora Workflow, 3. Sistem & Arsitektur: Grand Aceh Kuliner POS, 4. Konvensi & Aturan Emas (Golden Rules — JANGAN DILANGGAR), 5. Aturan Bisnis Utama (Kunci Logika Transaksi & Kasir), 6. Lokasi Frontend — Baca Sebelum Menyentuh UI, 7. Testing & Validasi, 8. Planora Documentation Structure (+34 more)
+### Community 66 - "Agent Rules — Grand Aceh Kuliner POS & Planora Framework"
+Cohesion: 0.11
+Nodes (19): 1. Think and Classify Before Acting, 2. Skills First & Planora Workflow, 3. Sistem & Arsitektur: Grand Aceh Kuliner POS, 4. Konvensi & Aturan Emas (Golden Rules — JANGAN DILANGGAR), 5. Aturan Bisnis Utama (Kunci Logika Transaksi & Kasir), 6. Lokasi Frontend — Baca Sebelum Menyentuh UI, 7. Testing & Validasi, 8. Planora Documentation Structure (+11 more)
 
-### Community 67 - "fix01-regression.js"
-Cohesion: 0.20
-Nodes (6): allMissingRoutes, allMissingRoutesPath, apiServer, apiServerPath, fs, path
+### Community 67 - "getServerUrl"
+Cohesion: 0.27
+Nodes (15): GoogleSearchPreview(), DEFAULT_LANDING_CONFIG, getServerUrl(), SettingsLandingPage(), fetchLandingConfig(), fetchLandingConfigFromServer(), getAuthToken(), getCachedLandingConfig() (+7 more)
 
 ### Community 68 - "fix02-contract.js"
-Cohesion: 0.11
-Nodes (14): apiServer, apiServerPath, bluetooth, bluetoothPath, customWidgets, customWidgetsPath, device, devicePath (+6 more)
+Cohesion: 0.06
+Nodes (28): DB_PATH, fs, loadDb(), main(), mapCategory(), mapChannel(), mapUnit(), OUT_PATH (+20 more)
 
 ### Community 69 - "build.js"
-Cohesion: 0.06
-Nodes (29): AdmZip, copyRecursiveSync(), destDir, destIndex, { execSync }, frontendDir, fs, hasCraco (+21 more)
+Cohesion: 0.13
+Nodes (13): AdmZip, copyRecursiveSync(), destDir, destIndex, { execSync }, frontendDir, fs, hasCraco (+5 more)
 
 ### Community 70 - "update_file_index.py"
 Cohesion: 0.16
@@ -697,12 +703,12 @@ Cohesion: 0.12
 Nodes (15): Completion Criteria, E2E Assessment, E2E Handoff Format, E2E Policy, Feature, Feature Description, Implementation Rules, Implementation Tasks (+7 more)
 
 ### Community 76 - "3. Temuan kritis (urut dampak)"
-Cohesion: 0.12
-Nodes (16): 3. Temuan kritis (urut dampak), T10 — Dashboard `top_products` palsu, T11 — `/api/admin/reset-data` tanpa verifikasi password, T12 — Stub DELETE membalas sukses, T13 — Speed-test memalsukan latensi, T14 — Duplicate route guard diam, T15 — `edge_sync.py:398` quantize tanpa rounding eksplisit, T1 — Catch-all `/api/*` memalsukan sukses (+8 more)
+Cohesion: 0.13
+Nodes (15): 3. Temuan kritis (urut dampak), T10 — Dashboard `top_products` palsu, T11 — `/api/admin/reset-data` tanpa verifikasi password, T12 — Stub DELETE membalas sukses, T13 — Speed-test memalsukan latensi, T14 — Duplicate route guard diam, T15 — `edge_sync.py:398` quantize tanpa rounding eksplisit, T1 — Catch-all `/api/*` memalsukan sukses (+7 more)
 
 ### Community 77 - "Daftar Lengkap Berkas Menurut Modul"
 Cohesion: 0.12
-Nodes (15): 📁 Agent Skill System (51 berkas), 📁 Berkas Pendukung / Konfigurasi (440 berkas), 📁 Cloud Run & Server Root (4 berkas), Daftar Lengkap Berkas Menurut Modul, 📁 Deployment & DevOps (71 berkas), 📁 Dokumentasi Teknis (17 berkas), 📁 Frontend — Halaman UI (48 berkas), 📁 Frontend — Komponen UI (72 berkas) (+7 more)
+Nodes (15): 📁 Agent Skill System (51 berkas), 📁 Berkas Pendukung / Konfigurasi (452 berkas), 📁 Cloud Run & Server Root (4 berkas), Daftar Lengkap Berkas Menurut Modul, 📁 Deployment & DevOps (71 berkas), 📁 Dokumentasi Teknis (17 berkas), 📁 Frontend — Halaman UI (48 berkas), 📁 Frontend — Komponen UI (72 berkas) (+7 more)
 
 ### Community 78 - "2. Tujuh hal yang wajib disiapkan (ini isi pekerjaannya)"
 Cohesion: 0.12
@@ -714,7 +720,7 @@ Nodes (10): FormControl, FormDescription, FormFieldContext, FormItem, FormItemCo
 
 ### Community 80 - "Daftar Lengkap Berkas Menurut Modul"
 Cohesion: 0.12
-Nodes (15): 📁 Agent Skill System (51 berkas), 📁 Berkas Pendukung / Konfigurasi (440 berkas), 📁 Cloud Run & Server Root (4 berkas), Daftar Lengkap Berkas Menurut Modul, 📁 Deployment & DevOps (71 berkas), 📁 Dokumentasi Teknis (17 berkas), 📁 Frontend — Halaman UI (48 berkas), 📁 Frontend — Komponen UI (72 berkas) (+7 more)
+Nodes (15): 📁 Agent Skill System (51 berkas), 📁 Berkas Pendukung / Konfigurasi (452 berkas), 📁 Cloud Run & Server Root (4 berkas), Daftar Lengkap Berkas Menurut Modul, 📁 Deployment & DevOps (71 berkas), 📁 Dokumentasi Teknis (17 berkas), 📁 Frontend — Halaman UI (48 berkas), 📁 Frontend — Komponen UI (72 berkas) (+7 more)
 
 ### Community 81 - "Panduan Integrasi Hermes Agent (Nous Research) dengan Grand Aceh Kuliner POS"
 Cohesion: 0.12
@@ -745,8 +751,8 @@ Cohesion: 0.13
 Nodes (14): 1. Arsitektur yang benar, 2. Konfigurasi Grand POS di 644, 3.1 Pasangkan nomor bot terpisah, 3.2 Konfigurasi WhatsApp Hermes, 3.3 Pasang plugin pesan masuk, 3.4 Route outbound `deliver_only`, 3. Konfigurasi Hermes di 644, 4. Raspberry Pi (backup) (+6 more)
 
 ### Community 89 - "platform.js"
-Cohesion: 0.23
-Nodes (19): applyTheme(), clamp255(), fetchPlatform(), hexToRgb(), isDarkHex(), loadPlatform(), PLATFORM_DEFAULTS, platformCache() (+11 more)
+Cohesion: 0.22
+Nodes (18): applyTheme(), clamp255(), fetchPlatform(), hexToRgb(), isDarkHex(), loadPlatform(), PLATFORM_DEFAULTS, platformCache() (+10 more)
 
 ### Community 90 - "Panduan Instalasi & Update — Grand Aceh Kuliner POS"
 Cohesion: 0.13
@@ -784,9 +790,9 @@ Nodes (13): 1. Ringkasan Sistem, 2.1 Stack, 2.2 Diagram Arus Data (level tinggi)
 Cohesion: 0.14
 Nodes (13): Advanced Configuration, Analyzing the Bundle Size, Available Scripts, Code Splitting, Deployment, Getting Started with Create React App, Learn More, Making a Progressive Web App (+5 more)
 
-### Community 99 - "koreksi-jurnal-vendor.js"
-Cohesion: 0.14
-Nodes (12): bahanBakuAfter, bahanBakuBefore, baksoAfter, baksoBefore, duplicateFix, fs, path, plan (+4 more)
+### Community 99 - "ref_path"
+Cohesion: 0.08
+Nodes (19): config, makeDevServerV5Compatible(), path, webpackConfig, from, fs, movementRefs, path (+11 more)
 
 ### Community 100 - "sync.js"
 Cohesion: 0.16
@@ -800,17 +806,17 @@ Nodes (12): Authorization and Boundaries, E2E Report Format, E2E Tester, Executi
 Cohesion: 0.17
 Nodes (12): aliases, external, name, container_name, image, networks, ports, restart (+4 more)
 
-### Community 103 - "requeue-analytics.js"
-Cohesion: 0.11
-Nodes (14): jsonwebtoken@^9.0.2, accepted, evidence, forged, jwt, jsonwebtoken, admin, DRY (+6 more)
-
-### Community 104 - "ref_os"
+### Community 103 - "hpp-prediction-nota-isolated.js"
 Cohesion: 0.12
-Nodes (18): formatBytes(), formatDuration(), os, SERVER_START_TIME, setupHealthEndpoints(), registerMcpServer(), executeTool(), handleJsonRpc() (+10 more)
+Nodes (12): app, assert, bcrypt, fs, http, now, os, path (+4 more)
+
+### Community 104 - "run-tests.js"
+Cohesion: 0.18
+Nodes (8): bundle, CHROME, FAST, fs, path, plain, results, { spawnSync }
 
 ### Community 105 - "import-rbac.js"
-Cohesion: 0.08
-Nodes (15): PORT, fs, liveChecks, NEW, OLD, path, bcrypt, ENDPOINTS (+7 more)
+Cohesion: 0.12
+Nodes (17): T8 — MCP tanpa autentikasi, registerMcpServer(), executeTool(), handleJsonRpc(), logAgentAudit(), logMcpCall(), readResource(), verifyToken() (+9 more)
 
 ### Community 106 - "scaffold_product_kit.py"
 Cohesion: 0.36
@@ -848,9 +854,9 @@ Nodes (3): AbortControllerPolyfill(), AbortSignalPolyfill(), ResizeObserverPolyf
 Cohesion: 0.18
 Nodes (10): byId, byStatus, CH, db, DB_PATH, fs, mixed, noSku (+2 more)
 
-### Community 116 - "Ingredients.jsx"
-Cohesion: 0.42
-Nodes (8): Badge(), fmtRp(), IngredientsPage(), Lbl(), Loader(), nf(), TabBtn(), Tiny()
+### Community 116 - "bluetooth.js"
+Cohesion: 0.28
+Nodes (13): buildEscPos(), CANDIDATE_SERVICES, cmd(), concat(), ensureCharacteristic(), escapeBluetoothSupported(), printPlainViaBluetooth(), printViaBluetooth() (+5 more)
 
 ### Community 117 - "cash-drawer-authority.js"
 Cohesion: 0.25
@@ -872,9 +878,9 @@ Nodes (11): admin, assert, fs, http, jwt, kasir, os, path (+3 more)
 Cohesion: 0.20
 Nodes (9): 1. Overview & Core Concept, 2. User Experience & Visual Design, 3. Key Product Decisions & Trade-Offs, 4. Technical Architecture & Data Strategy, 5. Rencana Penyusunan Dokumen Planora v3.0, 6. Rencana Panduan Koding AI Hermes Agent, 7. Rencana Rilis Pembaruan APK v3.0.0 & Kebersihan Repositori, Diagram Arsitektur Sistem Terpisah (v3.0.0) (+1 more)
 
-### Community 123 - "seed-products.js"
-Cohesion: 0.29
-Nodes (9): DB_PATH, fs, loadDb(), main(), mapCategory(), mapChannel(), mapUnit(), OUT_PATH (+1 more)
+### Community 123 - "frontend/scripts/make-ota.js"
+Cohesion: 0.31
+Nodes (9): calculateSha256(), createZipBundle(), crypto, findBuildDir(), fs, main(), path, sanitizeOldWebview() (+1 more)
 
 ### Community 124 - "Panduan: Membuat Akun dari Command Line (CMD / SSH)"
 Cohesion: 0.20
@@ -899,6 +905,10 @@ Nodes (9): Langkah 1 — Pasang Tailscale di Raspberry Pi, Langkah 2 — Pasang 
 ### Community 129 - "security-regression-test.js"
 Cohesion: 0.24
 Nodes (9): API_SERVER_PATH, assert(), assertContains(), assertNotContains(), failures, fs, path, settingsMutators (+1 more)
+
+### Community 130 - "Diagnostik.jsx"
+Cohesion: 0.25
+Nodes (11): Aturan, B. Kebocoran Token API di Bundle Frontend, authHeaders(), installDiag(), deleteRemoteErrorLog(), fetchRemoteErrorLogs(), markErrorResolved(), testFirestoreConnection (+3 more)
 
 ### Community 132 - "PRD — Grand Aceh Kuliner POS (v3.0.0)"
 Cohesion: 0.22
@@ -929,12 +939,12 @@ Cohesion: 0.31
 Nodes (5): ToggleGroup, ToggleGroupContext, ToggleGroupItem, Toggle, toggleVariants
 
 ### Community 139 - "2. Rincian Masalah yang Ditemukan dan Solusinya"
-Cohesion: 0.15
-Nodes (12): Aturan, 1. Ringkasan Eksekutif, 2. Rincian Masalah yang Ditemukan dan Solusinya, 3. Hasil Verifikasi Pengujian, 4. Catatan Deployment, A. P0-B & P2: Otoritas Harga di Sisi Server (Server-Authoritative Pricing), B. Kebocoran Token API di Bundle Frontend, C. P1-D: Rotasi `JWT_SECRET` Per-Deployment (+4 more)
+Cohesion: 0.20
+Nodes (9): 1. Ringkasan Eksekutif, 2. Rincian Masalah yang Ditemukan dan Solusinya, 3. Hasil Verifikasi Pengujian, 4. Catatan Deployment, A. P0-B & P2: Otoritas Harga di Sisi Server (Server-Authoritative Pricing), C. P1-D: Rotasi `JWT_SECRET` Per-Deployment, E. P2: Penghapusan Data Fiktif pada Laporan (Fabricated Data), G. Perbaikan Suite Regresi yang Berhenti Menggigit (Regression Suite Rot) (+1 more)
 
-### Community 140 - "@google/genai"
-Cohesion: 0.67
-Nodes (3): parseReservationMessage(), @google/genai@^2.23.0, @google/genai
+### Community 140 - "registerAllMissingRoutes"
+Cohesion: 0.30
+Nodes (13): applyPrediction(), applyPurchase(), dataDir(), ensureCollection(), fs, nowIso(), path, periodRange() (+5 more)
 
 ### Community 141 - "UI and DX experience guides"
 Cohesion: 0.25
@@ -952,9 +962,9 @@ Nodes (3): _bump(), main(), update_revision()
 Cohesion: 0.43
 Nodes (6): info(), ok(), say(), sec(), check-workers-pi.sh script, warn()
 
-### Community 145 - "postcss"
-Cohesion: 0.67
-Nodes (3): postcss@8.5.10, postcss@8.5.10, postcss
+### Community 145 - "outlet-identity-isolated.js"
+Cohesion: 0.15
+Nodes (10): app, assert, bcrypt, fs, http, os, path, ROOT (+2 more)
 
 ### Community 146 - "Disk & backup alert"
 Cohesion: 0.25
@@ -997,8 +1007,8 @@ Cohesion: 0.25
 Nodes (7): APK rilis ter-tanda-tangan (untuk distribusi), 🖨️ Cetak thermal Sunmi (T2s) — native, Langkah build APK, Membuat APK Android (Capacitor) — Grand Aceh Kuliner POS, Prasyarat (di komputer Anda, bukan di server ini), Ringkasan konfigurasi, Update versi
 
 ### Community 156 - "ref_react"
-Cohesion: 0.09
-Nodes (36): App(), wrap(), OtaIndicator(), SystemHealthPanel(), AuthProvider(), BIZ_DEFAULTS, syncCategoryToFirestore, syncStockToFirestore (+28 more)
+Cohesion: 0.10
+Nodes (31): App(), wrap(), LazyProductImage, loadedImageUrls, OtaIndicator(), SubTabs(), AuthProvider(), syncProductToFirestore (+23 more)
 
 ### Community 157 - "interface"
 Cohesion: 0.29
@@ -1109,8 +1119,8 @@ Cohesion: 0.33
 Nodes (6): Non-negotiable constraints, Package location, Planora Product Kit, Required outcome, Scaffold and validate, Workflow
 
 ### Community 185 - "9. Aturan kerja yang WAJIB dipatuhi"
-Cohesion: 0.50
-Nodes (4): 9. Aturan kerja yang WAJIB dipatuhi, Kalau terlanjur mengotori data, pytest, Test frontend
+Cohesion: 0.33
+Nodes (6): persistNow(), 9. Aturan kerja yang WAJIB dipatuhi, Jangan pernah probe container hidup, Kalau terlanjur mengotori data, pytest, Test frontend
 
 ### Community 187 - "collect-metrics-pi.sh"
 Cohesion: 0.60
@@ -1168,9 +1178,9 @@ Nodes (4): Constraints, Package location, Planora Status, Workflow
 Cohesion: 0.40
 Nodes (4): Boundaries, Source of truth, UI Design, Workflow
 
-### Community 201 - "hapus-user-alihkan.js"
-Cohesion: 0.18
-Nodes (10): from, fs, movementRefs, path, ROOT, shiftRefs, snap, SNAPSHOT (+2 more)
+### Community 201 - "fix01-negative-control.js"
+Cohesion: 0.24
+Nodes (8): check(), { execFileSync }, fs, headSource(), path, REPO, rows, workSource()
 
 ### Community 202 - "2026-11-11 — Live /sync/orders end-to-end (disposable PostgreSQL)"
 Cohesion: 0.40
@@ -1181,8 +1191,8 @@ Cohesion: 0.40
 Nodes (5): 2026-11-11 — Verifikasi call site cash/tunai + bug expected_cash MCP, Bug finansial baru ditemukan lewat probe runtime, Catatan lingkungan, Suite penuh, Verifikasi enam call site hasil consistency check
 
 ### Community 204 - "src/index.js"
-Cohesion: 0.20
-Nodes (4): queryClient, root, rootElement, renderPage()
+Cohesion: 0.29
+Nodes (3): queryClient, root, rootElement
 
 ### Community 205 - "Fase 01 — Fondasi POS & Hardware Kasir"
 Cohesion: 0.40
@@ -1264,51 +1274,67 @@ Nodes (3): die(), log(), backup-pi-to-vps.sh script
 Cohesion: 0.83
 Nodes (3): read_secret(), dispatch_webhook.sh script, strip_quotes()
 
-### Community 227 - "tailwindcss"
-Cohesion: 0.67
-Nodes (3): tailwindcss@3.4.17, tailwindcss@3.4.17, tailwindcss
+### Community 227 - "Planora: Landing Page Publik & Portal Reservasi Meja Grand Aceh Kuliner"
+Cohesion: 0.22
+Nodes (8): 1. Overview & Core Concept, 2. User Experience & Visual Design, 3. Key Product Decisions & Trade-Offs, 4. Technical Architecture & Data Strategy, Data Model & Entities, Planora: Landing Page Publik & Portal Reservasi Meja Grand Aceh Kuliner, Rencana Pelaksanaan Komponen (`TASK-008`), User Review & Critical Decisions
 
-### Community 230 - "craco.config.js"
-Cohesion: 0.29
-Nodes (6): config, makeDevServerV5Compatible(), path, webpackConfig, @emergentbase/visual-edits@https://assets.emergent.sh/npm/emerge..., @emergentbase/visual-edits
+### Community 228 - "fix01-regression.js"
+Cohesion: 0.20
+Nodes (6): allMissingRoutes, allMissingRoutesPath, apiServer, apiServerPath, fs, path
+
+### Community 230 - "OfflineContext.jsx"
+Cohesion: 0.43
+Nodes (5): OfflineContext, OfflineProvider(), reconcilePendingOrders(), setFirestoreSyncing, syncOrderToFirestore
 
 ### Community 234 - "Dokumen PRD — Grand Aceh Kuliner POS"
 Cohesion: 0.67
 Nodes (3): Daftar Dokumen Spesifikasi, Dokumen PRD — Grand Aceh Kuliner POS, Modul Fitur
 
-### Community 238 - "browserslist"
+### Community 238 - "health-endpoints.js"
+Cohesion: 0.47
+Nodes (5): formatBytes(), formatDuration(), os, SERVER_START_TIME, setupHealthEndpoints()
+
+### Community 239 - "express"
+Cohesion: 0.25
+Nodes (6): express@^4.21.2, vite@^8.3.4, express, vite, PORT, startServer()
+
+### Community 241 - "allMissingRoutes.js"
+Cohesion: 0.18
+Nodes (17): migrateLegacyStores(), parseReservationMessage(), isPlaceholderEvolution(), isWaConfigured(), probeWaStatus(), readWaConfig(), saveWaConfig(), syncWaMirror() (+9 more)
+
+### Community 256 - "browserslist"
 Cohesion: 0.67
 Nodes (3): browserslist, development, production
 
-### Community 241 - "allMissingRoutes.js"
-Cohesion: 0.24
-Nodes (12): migrateLegacyStores(), isPlaceholderEvolution(), isWaConfigured(), probeWaStatus(), readWaConfig(), saveWaConfig(), syncWaMirror(), fs (+4 more)
+### Community 257 - "Deploy host: compose produksi akhirnya ter-versi (2026-11-15 00:4x UTC / 07:4x WIB)"
+Cohesion: 0.50
+Nodes (4): `DATABASE_URL` yang menyesatkan, Deploy dan verifikasi, Deploy host: compose produksi akhirnya ter-versi (2026-11-15 00:4x UTC / 07:4x WIB), Kesalahan saya sendiri, dicatat
 
-### Community 264 - "Publikasi artefak dan restart host (2026-11-14 02:0x UTC / 09:0x WIB)"
-Cohesion: 0.40
-Nodes (5): Artefak audit dan query masuk ke repo, Commit, Disk: alarm bekerja, dan itu membuka temuan, Publikasi artefak dan restart host (2026-11-14 02:0x UTC / 09:0x WIB), Restart host
+### Community 258 - "archiver"
+Cohesion: 0.67
+Nodes (3): archiver@^6, archiver@^6, archiver
 
 ### Community 266 - "Data hilang ditemukan dan dipulihkan: 6 order 13 Nov (2026-11-14 05:1x–05:3x UTC)"
 Cohesion: 0.40
 Nodes (5): Catatan operasional, Data hilang ditemukan dan dipulihkan: 6 order 13 Nov (2026-11-14 05:1x–05:3x UTC), Pemulihan data, Temuan, Uji
 
 ## Knowledge Gaps
-- **162 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **163 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `5. Zona Waktu WIB` connect `Kontrak API & Data — Perubahan Fix-02` to `Dashboard.jsx`?**
-  _High betweenness centrality (0.170) - this node is a cross-community bridge._
+  _High betweenness centrality (0.190) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `rupiah()` (e.g. with `1. Format Mata Uang (Rupiah)` and `G. Perbaikan Suite Regresi yang Berhenti Menggigit (Regression Suite Rot)`) actually correct?**
   _`rupiah()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Should `api-server.js` be split into smaller, more focused modules?**
   _Cohesion score 0.03213242453748783 - nodes in this community are weakly interconnected._
-- **Why does `wibToday()` connect `Dashboard.jsx` to `apiError`, `useAuth`, `api.js`, `Ingredients.jsx`, `SettingsCustomWidgets.jsx`, `ref_react`, `Kontrak API & Data — Perubahan Fix-02`?**
-  _High betweenness centrality (0.170) - this node is a cross-community bridge._
+- **Why does `wibToday()` connect `Dashboard.jsx` to `apiError`, `useAuth`, `formatWib`, `SettingsCustomWidgets.jsx`, `Kontrak API & Data — Perubahan Fix-02`?**
+  _High betweenness centrality (0.189) - this node is a cross-community bridge._
 - **Should `apiError` be split into smaller, more focused modules?**
-  _Cohesion score 0.11216644052464948 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.12568306010928962 - nodes in this community are weakly interconnected._
 - **Why does `wibTodayStr()` connect `Kontrak API & Data — Perubahan Fix-02` to `api-server.js`?**
-  _High betweenness centrality (0.057) - this node is a cross-community bridge._
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
 - **Should `cn` be split into smaller, more focused modules?**
   _Cohesion score 0.0494458653026428 - nodes in this community are weakly interconnected._

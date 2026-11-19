@@ -1,64 +1,85 @@
 # Compose produksi untuk host POS (gudang).
 #
-# Kode tidak dibakar ke dalam image: /root/grandpos/pos-engine di-bind-mount ke /app dan
-# dijalankan lewat `tsx server.ts` tanpa watch. Artinya berkas di disk BUKAN kode yang
-# berjalan -- setiap perubahan server-side wajib diikuti restart container:
+# Sebelum 2026-11-19 container `grandpos_web_app` dan `pg-grandpos` dibuat manual
+# (`docker run`) sehingga tidak punya label Compose: `docker compose up/pull`
+# tidak mengenalinya, dan tidak ada satu berkas pun yang mendokumentasikan
+# mount, environment, atau command yang sebenarnya berjalan. Berkas ini
+# mereplikasi konfigurasi hasil `docker inspect` apa adanya, lalu container
+# diadopsi dengan:
 #
-#   docker compose -f docker-compose.host.yml up -d --force-recreate --no-deps grandpos-app
+#   sudo docker compose -f deploy/docker-compose.host.yml up -d
 #
-# Nilai rahasia ada di .env di sebelah berkas ini (tidak masuk git). Lihat .env.example.
+# Kode tidak dibakar ke dalam image: repositori di-bind-mount ke /app (read-only)
+# dan dijalankan lewat `tsx server.ts` tanpa watch. Artinya berkas di disk BUKAN
+# kode yang berjalan -- setiap perubahan server-side wajib diikuti restart:
+#
+#   sudo docker compose -f deploy/docker-compose.host.yml up -d --force-recreate --no-deps grandpos-app
+#
+# Nilai rahasia ada di .env di sebelah berkas ini (tidak masuk git).
+name: grandpos
+
 services:
   grandpos-app:
     image: node:20-alpine
     container_name: grandpos_web_app
-    restart: always
+    restart: unless-stopped
+    # Container lama memakai host networking; dipertahankan supaya
+    # ANALYTICS_URL (host :8000) dan webhook Hermes (127.0.0.1:8644) tetap
+    # terjangkau persis seperti sebelumnya. Port 3000 otomatis listen di host.
+    network_mode: host
     working_dir: /app
-    ports:
-      - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
-      - NODE_SYNC_KEY=${NODE_SYNC_KEY:?NODE_SYNC_KEY is required}
-      # Analytics API (FastAPI) hidup di host, dijangkau lewat gateway bridge Docker.
-      - ANALYTICS_URL=${ANALYTICS_URL:-http://172.20.0.1:8000}
-      - HERMES_WA_WEBHOOK_URL=${HERMES_WA_WEBHOOK_URL:-http://127.0.0.1:8644/webhooks/grandpos-outbox}
-      # Allow-list for credentialed cross-origin calls. Unset means the `cors`
-      # package reflects every origin while credentials:true is on, i.e. any site
-      # could read authenticated responses. Keep the POS/kiosk origins only.
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://127.0.0.1:3000}
+      NODE_ENV: production
+      PORT: "3000"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      NODE_SYNC_KEY: ${NODE_SYNC_KEY:?NODE_SYNC_KEY is required}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1:3000}
+      ANALYTICS_URL: ${ANALYTICS_URL:-http://172.20.0.1:8000}
+      HERMES_WA_WEBHOOK_URL: ${HERMES_WA_WEBHOOK_URL:-http://127.0.0.1:8644/webhooks/grandpos-outbox}
+      GRANDPOS_DATA_DIR: /data
+      NODE_ID: ${NODE_ID:-gudang7783}
+      POS_ENGINE_DIR: ${POS_ENGINE_DIR:-/root/grandpos-project/pos-engine}
     volumes:
-      - ${POS_ENGINE_DIR:-/root/grandpos/pos-engine}:/app:rw
-    command: sh -c "NODE_ENV=production PORT=3000 npx tsx server.ts"
-    networks:
-      - gak_network
+      - ${POS_ENGINE_DIR:-/root/grandpos-project/pos-engine}:/app:ro
+      - ${GRANDPOS_DATA_DIR_HOST:-/root/grandpos-project/pos-engine/data}:/data:rw
+    command: ["sh", "-c", "./node_modules/.bin/tsx server.ts"]
     labels:
-      # The app is bind-mounted from the host and is not published to any registry.
-      # Watchtower must not recreate this container: it would restart the POS mid-shift
-      # and could pull an unintended node:20-alpine base. Opt out explicitly.
+      # Kode di-bind-mount dari host; Watchtower tidak boleh me-recreate POS
+      # saat jam ramai.
       - "com.centurylinklabs.watchtower.enable=false"
 
+  pg-grandpos:
+    image: postgres:16-alpine
+    container_name: pg-grandpos
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    # Cluster sudah diinisialisasi di /srv/pgdata/grandpos (role grandpos_app).
+    # Variabel POSTGRES_* hanya dibaca saat data dir kosong, jadi sengaja tidak
+    # diduplikasi di sini: kredensial hidup di satu tempat, yaitu .env analytics.
+    volumes:
+      - /srv/pgdata/grandpos:/var/lib/postgresql/data
+    networks:
+      - db_net
+
+  # Watchtower tidak dijalankan otomatis (container-nya memang tidak ada).
+  # Aktifkan hanya bila diperlukan: docker compose --profile watchtower up -d
   watchtower:
-    # Ping the daemon with a modern API version: the daemon requires >= 1.40.
+    profiles: ["watchtower"]
     image: containrrr/watchtower:latest
     container_name: gak_watchtower_updater
     restart: unless-stopped
     environment:
-      # Watchtower defaults its Docker client to API 1.25 (too old for this daemon).
-      - DOCKER_API_VERSION=1.44
-      - WATCHTOWER_POLL_INTERVAL=86400
-      - WATCHTOWER_TIMEOUT=60s
-      - WATCHTOWER_CLEANUP=true
-      - TZ=UTC
+      DOCKER_API_VERSION: "1.44"
+      WATCHTOWER_POLL_INTERVAL: "86400"
+      WATCHTOWER_CLEANUP: "true"
+      TZ: UTC
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - gak_network
-    labels:
-      # Do not let watchtower update itself (it could never clean up properly).
-      - "com.centurylinklabs.watchtower.enable=false"
     command: ["--cleanup", "--interval", "86400"]
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
 
 networks:
-  gak_network:
-    driver: bridge
+  db_net:
+    external: true
