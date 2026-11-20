@@ -97,4 +97,16 @@ Ringkas per 2026-11-19:
   backup pra-cutover, dan `probe_edge.py`; `.env.example` placeholder
   ditambahkan. PIN, telepon outlet, dan nomor penerima WA disamarkan sebelum
   push. Path host lama (`/root/grandpos/...`) sudah diganti path relatif repo
-  pada `04e6d8e`/`e4bac13`; HEAD repo saat ini `e4bac13`.
+ pada `04e6d8e`/`e4bac13`; HEAD repo saat ini `e4bac13`.
+
+## Update arsitektur 2026-11-20
+
+- `ARSITEKTUR-GRANDPOS.md` mengikuti runtime nyata: hostname gudang
+  `gudang7783`, Tailscale `100.70.161.30`, POS memakai snapshot JSON, dan
+  PostgreSQL hanya untuk analytics/MCP.
+- Service aktif: analytics `:8000`, MCP `127.0.0.1:8001`, Hermes dashboard
+  `:9119`, 7 container dalam 5 project Compose. Host tidak memakai nginx;
+  port 80/443 dipegang `kiri` dan menjawab 404.
+- OTA server `2.10.20261119160316` berbeda dari berkas lokal Pi
+  `2.10.20261118183852`. Webhook Hermes `127.0.0.1:8644` belum listen saat
+  verifikasi. HPP live masih menunggu nota pertama.

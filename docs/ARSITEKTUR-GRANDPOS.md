@@ -1,236 +1,263 @@
 # GrandPOS — Arsitektur & Dependency (dokumen acuan)
 
-> Diverifikasi langsung dari sistem pada **2026-10-30 21:55 WIB** (bukan dari ingatan/laporan agen).
-> Kalau ada yang tidak cocok dengan kenyataan, **dokumen ini yang salah** — periksa ulang sistem lalu perbarui.
+> Diverifikasi langsung dari sistem pada **2026-11-20 12:22 WIB** (bukan dari
+> ingatan/laporan agen). Versi sebelumnya (2026-10-30) sudah tidak berlaku:
+> host berganti nama/IP, nginx dihapus, dan POS tidak lagi memakai PostgreSQL
+> sebagai sumber kebenaran. Kalau ada yang tidak cocok dengan kenyataan,
+> **dokumen ini yang salah** — periksa ulang sistem lalu perbarui.
 
 ---
 
 ## 1. Gambaran besar — 3 node
 
 ```
-┌─────────────────────┐        ┌──────────────────────┐        ┌─────────────────────┐
-│  PI (kasir fisik)   │        │  GUDANG-644 (VPS)    │        │  Tailscale tailnet  │
-│  100.109.98.56      │◄──────►│  100.117.186.13      │◄──────►│  tailf3a839.ts.net  │
-│  Raspberry Pi       │  HTTP  │  Debian cloud        │        │                     │
-└─────────────────────┘        └──────────────────────┘        └─────────────────────┘
+┌─────────────────────┐        ┌──────────────────────────┐        ┌─────────────────────┐
+│  PI (kasir fisik)   │        │  GUDANG7783 (VPS)        │        │  Tailscale tailnet  │
+│  100.109.98.56      │◄──────►│  100.70.161.30           │◄──────►│  tailf3a839.ts.net  │
+│  Raspberry Pi       │  HTTP  │  Debian                  │        │                     │
+└─────────────────────┘        └──────────────────────────┘        └─────────────────────┘
 ```
 
 | Node | Hostname tailnet | IP tailnet | Peran |
 |---|---|---|---|
-| Pi | `kasir-pi` | `100.109.98.56` | Kasir fisik di restoran. Nginx + SPA POS. **Mode kiosk**. LAN statis `192.168.8.254` — ini alamat resmi kasir. |
-| Gudang-644 | `gudang-644.tailf3a839.ts.net` | `100.117.186.13` | VPS: backend API, DB, landing, MCP, WA gateway. **Landing page saja** — POS ditutup. |
-| Landing | `landing.gudang-644.tailf3a839.ts.net` | (alias ke Gudang) | Subdomain landing page |
+| Pi | `kasir-pi` | `100.109.98.56` | Kasir fisik. Nginx + SPA POS mode kiosk. LAN statis `192.168.8.254`. |
+| Gudang | `gudang7783.tailf3a839.ts.net` | `100.70.161.30` | VPS: POS engine, analytics API, MCP, PostgreSQL analitik, Hindsight. |
+| Tailnet | — | — | `tailf3a839.ts.net`. Funnel hanya untuk Beszel (:10000). |
 
 SSH Pi: `taqim258@100.109.98.56` (bukan root).
 
+**Nama/IP lama (arsip, jangan dipakai):** host pernah bernama `gudang-644`
+dengan IP `100.117.186.13`. Semua konfigurasi yang masih menyebut nilai itu
+berarti belum diperbarui. Alamat `100.117.186.13` juga masih muncul di berkas
+OTA (`nodes.fallback_vps`) sebagai fallback remote.
+
 ---
 
-## 2. P1A — `grandpos_web_app` (POS engine, Node)
+## 2. Peta runtime — container & service
 
-**Container:** `grandpos_web_app` · image `node:20-alpine` · port `0.0.0.0:3000->3000`
+**Docker** mengelola 7 container dalam 5 project Compose:
 
-**Compose:** `/root/grandpos/deploy/docker-compose-p1a.yml` (project `deploy`, network `deploy_gak_network`)
+| Project | Compose file | Container | Port |
+|---|---|---|---|
+| `grandpos` | `/root/grandpos-project/pos-engine/deploy/docker-compose.host.yml` | `grandpos_web_app`, `pg-grandpos` | 3000 (host net), 127.0.0.1:5432 |
+| `beszel` | `/srv/beszel/compose.yml` | `beszel`, `beszel-agent` | 127.0.0.1:8090 |
+| `filebrowser` | `/srv/filebrowser/compose.yml` | `filebrowser` | 127.0.0.1:8081 |
+| `hindsight` | `/srv/pg-hindsight/compose.yml` | `pg-hindsight` | 127.0.0.1:5433 |
+| `homepage` | `/srv/homepage/compose.yml` | `homepage` | 127.0.0.1:8088 |
 
-**Source (bind mount rw):** `/root/grandpos/pos-engine` → `/app`
+**systemd** menjalankan layanan Python (bukan container):
 
-**Entrypoint:** `pos-engine/server.ts` → `require('./api-server.js')`
-- `server.ts` hanya wrapper: import `api-server.js`, listen port 3000
-- **`api-server.js` = 261 KB, file inti seluruh backend POS** (Express, semua route)
-- Produksi: `express.static(dist)` + SPA fallback `index.html`
-- Dev: Vite middleware mode
+| Unit | Port | Kode |
+|---|---|---|
+| `grandpos-analytics.service` | `0.0.0.0:8000` | `uvicorn app.api:app` |
+| `grandpos-mcp.service` | `127.0.0.1:8001` | `app/mcp_server.py` |
+| `hermes-dashboard.service` | `127.0.0.1:9119` | `hermes dashboard` |
 
-**Frontend:** `/root/grandpos/pos-engine/project/frontend/`
-- Build: `craco` (CRA + override) → output `build/`
-- `npm run build` = `FAST_REFRESH=false NODE_ENV=production craco build`
-- `postbuild` = `node scripts/make-ota.js` → bikin `build/ota/bundle.zip` untuk OTA APK
-- `npm run check:undef` = eslint config khusus deteksi undefined var
-- 66 dependencies, 18 devDependencies
+Dua layanan GrandPOS (analytics & MCP) berjalan dari
+`/root/grandpos/backend-landing-page` + `venv_mcp`; `hermes-dashboard` dari
+`/home/taqim258`. **Perhatikan:** itu folder lama, bukan
+`/root/grandpos-project/backend-landing-page` yang dipakai repo. Isinya
+disamakan manual; lihat §10.
+
+Tidak ada nginx di host ini. Port 80/443 dipegang `kiri` (container engine,
+port mapper) dan menjawab 404 — tidak ada lagi reverse proxy web.
+
+---
+
+## 3. POS engine — `grandpos_web_app`
+
+**Container:** `grandpos_web_app` · image `node:20-alpine` · **`network_mode: host`** · port `3000`
+**Command:** `sh -c ./node_modules/.bin/tsx server.ts` (tanpa watch)
+**Restart:** `unless-stopped`
+
+**Mount:**
+| Host | Container | Mode |
+|---|---|---|
+| `/root/grandpos-project/pos-engine` | `/app` | **ro** |
+| `/root/grandpos-project/pos-engine/data` | `/data` | rw |
+
+**Env penting (nilai rahasia tidak ditulis di sini):** `GRANDPOS_DATA_DIR=/data`,
+`NODE_ID=gudang7783`, `PORT=3000`, `ANALYTICS_URL=http://172.20.0.1:8000`,
+`NODE_ENV=production`, `CORS_ORIGINS` (localhost, `:3000`, IP Pi, hostname
+tailnet), `JWT_SECRET`, `NODE_SYNC_KEY`, `HERMES_WA_WEBHOOK_URL`.
+Nilai asli hanya ada di `pos-engine/deploy/.env` (git-ignored).
+
+**Kode yang berjalan = berkas di disk**, bukan image. Karena mount `/app` read-only,
+setiap perubahan server **wajib restart container**:
+
+```bash
+sudo docker restart grandpos_web_app
+```
+
+**Entrypoint:** `server.ts` (tipis) → `api-server.js` (Express, semua route).
+Produksi menyajikan `dist/` + SPA fallback `index.html`.
+
+**Frontend:** `/root/grandpos-project/pos-engine/project/frontend/`
+- Build `craco` → `build/`, lalu di-`rsync` ke `dist/`
+- `postbuild` = `scripts/make-ota.js` → `build/ota/bundle.zip`
+- Build butuh `sudo` karena `build/.well-known` bermasalah permission
 - **JANGAN** aktifkan `sw.js`, **JANGAN** hapus `polyfills.js`, **JANGAN** tambah dynamic import
 
-**Static served:** `/root/grandpos/pos-engine/dist/` (dibuat oleh build)
+**Artefak saat ini:** `dist/index.html` dibangun 2026-11-19 16:03; bundle
+`main.49e6eb94.js`; OTA `2.10.20261119160316` (645 KB, sha256 `e353714d…`).
 
-**Aturan wajib baca sebelum sentuh kode:**
-- `/root/grandpos/pos-engine/AGENTS.md` (7 KB — aturan emas UI)
-- `/root/grandpos/pos-engine/project/AGENTS.md` (13 KB — instruksi proyek)
+**Aturan wajib baca sebelum sentuh kode:** `pos-engine/AGENTS.md`,
+`pos-engine/project/AGENTS.md`, `pos-engine/project/frontend/AGENTS.md`.
 
 ---
 
-## 3. P1B — `grandpos-api-1` (FastAPI backend + landing API)
+## 4. Sumber data — JSON snapshot, bukan PostgreSQL
 
-**Container:** `grandpos-api-1` · image `grandpos-api` (build lokal) · port `0.0.0.0:8000->8000`
+**Sumber kebenaran POS: `pos-engine/data/pos-db.json`** (705 KB, `saved_at`
+2026-11-19T23:37Z). Struktur: `{ version, saved_at, collections, data }`;
+koleksi ada di dalam `data`, bukan di root.
 
-**Compose:** `/root/grandpos/backend-landing-page/docker-compose.yml` (project name **`grandpos`**)
-**Override:** `docker-compose.override.yml` (git-ignored) — buka port 8000 + bind DB ke Tailscale IP
+Isi saat diperiksa: **43 order**, **407 produk**, **2 bahan**, 0 resep,
+0 nota belanja, 3 user, 14 shift. Semua `products.cost = 0` dan belum ada
+`cost_price` — HPP/COGS baru terisi setelah nota pertama diinput.
 
-**Source (bind mount):** `/srv/grandpos` → `/app` (lihat override)
+Mutasi API disimpan lewat debounce saver ke berkas ini. Migrasi saat boot
+**tidak** menulis snapshot.
 
-**Stack:** FastAPI 0.143.0 + uvicorn 0.32.1 + pydantic 2.14.1 + psycopg 3.2.3 + PyYAML + httpx
+**PostgreSQL (`pg-grandpos`) khusus analitik:**
 
-**Modul (`app/`):**
-| File | Fungsi |
+| Item | Nilai |
 |---|---|
-| `api.py` (29.7 KB) | **Semua route HTTP**, termasuk `/api/landing/config` GET+PUT |
-| `services.py` (36.9 KB) | Business logic inti |
-| `mcp_reports.py` (33.6 KB) | Laporan MCP (sales, inventory, cash, member, dll) |
-| `edge_sync.py` (19.6 KB) | Sinkronisasi Pi ↔ Gudang |
-| `mcp_server.py` (19.1 KB) | MCP server (dipakai port 8001) |
-| `outbox.py` / `outbox_delivery.py` | Antrean pesan WA keluar |
-| `rules.py` (10.3 KB) | Validasi (`validate_landing_config`, dll) |
-| `guard.py` (7.8 KB) | Auth/API key guard |
-| `signing.py` (4.3 KB) | Signature request |
-| `db.py`, `parsers.py`, `constants.py`, `healthcheck.py`, `mcp_db.py` | Pendukung |
+| Container | `pg-grandpos` · `postgres:16-alpine` |
+| Port | `127.0.0.1:5432` |
+| Volume | `/srv/pgdata/grandpos` (**data asli di sini**) |
+| Role aplikasi | `grandpos_app` |
+| Pemakai | `grandpos-analytics.service` (:8000), `grandpos-mcp.service` (:8001) |
 
-**Endpoint landing:**
-- `GET /api/landing/config` (butuh API key) → config dikelompokkan per section
-- `PUT /api/landing/config` (butuh API key) → upsert + validasi section/key/value
+`POSTGRES_*` sengaja tidak diduplikasi di compose: cluster sudah diinisialisasi,
+kredensial hidup di `.env` analytics.
 
----
+**`pg-hindsight`** (`pgvector/pgvector:pg16`, `127.0.0.1:5433`,
+`/srv/pgdata/hindsight`) terpisah — memori agen, bukan data POS.
 
-## 4. Database — `grandpos-db-1`
-
-**Container:** `grandpos-db-1` · image `postgres:16-alpine` · port `100.117.186.13:5432->5432`
-**Volume:** named volume `grandpos_pgdata` → `/var/lib/postgresql/data` (**data asli di sini**)
-**Timezone:** `Asia/Jakarta` (via `grandpos.timezone` setting)
-**Dipakai bersama** oleh P1A dan P1B — **satu DB untuk semuanya**.
-
-**Initdb mounts (urutan eksekusi, hanya jalan saat volume kosong):**
-```
-01-schema.sql          ← db/schema.sql (32 KB)
-02-seed.sql            ← db/seed.sql (18 KB)
-03-roles.sql           ← db/roles.sql
-04-optimistic_lock.sql ← db/migrations/0002_optimistic_lock.sql
-05-edge_sync.sql       ← db/migrations/0003_edge_sync.sql
-06-landing_config.sql  ← db/migrations/0004_landing_config.sql   ← DITAMBAH 2026-10-30
-```
-
-**28 tabel:** `articles audit_logs cash_movements categories coupon_redemptions coupons edge_ingest_log edge_transactions ingredients inventory_movements landing_config member_point_ledger members order_items order_voids orders outbox_messages payments products promos recipes reservations settings shifts tables user_credentials users vendor_settlements vendors`
-
-**Catatan penting:** initdb **hanya jalan sekali** saat volume kosong. Migration baru **tidak** otomatis diterapkan ke DB yang sudah ada — harus dijalankan manual atau recreate volume (berisiko).
+> Konsekuensi: laporan POS **tidak** membaca PostgreSQL. Kalau butuh angka
+> historis di SQL, datanya harus disalin lebih dulu oleh pipeline analitik.
 
 ---
 
-## 5. Nginx Gudang-644
+## 5. Analytics API & MCP
 
-**Config:** `/etc/nginx/sites-available/grandpos` → symlink ke `sites-enabled/`
+**`grandpos-analytics.service`** — FastAPI (`app/api.py`) di `0.0.0.0:8000`,
+`EnvironmentFile=/root/grandpos/backend-landing-page/.env`.
+Verifikasi: `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/health`
+(dari luar tanpa kunci, `/api/landing/config` menjawab **401** — itu benar).
 
-**Server block 1 — `gudang-644.tailf3a839.ts.net:80` (POS + API):**
-| Location | Proxy ke | Guna |
+**`grandpos-mcp.service`** — `MCP_HOST=127.0.0.1`, `MCP_PORT=8001`,
+`MCP_DATABASE_URL` ke role `grandpos_app`. Dipakai profil Hermes
+`business-analyst` lewat tool `mcp__grandpos__*`.
+
+**Modul utama `app/`:** `api.py`, `services.py` (logika bisnis), `rules.py`,
+`edge_sync.py` (sinkron Pi ↔ gudang), `mcp_reports.py`, `mcp_server.py`,
+`outbox*.py` (antrean WA), `guard.py`, `signing.py`, `db.py`, `parsers.py`.
+
+Panduan operasional: `migration-meta/PANDUAN-ANALYTICS-SERVICE.md`.
+
+---
+
+## 6. Akses jaringan
+
+**Gudang (100.70.161.30):**
+| Port | Layanan | Catatan |
 |---|---|---|
-| `/` | `127.0.0.1:3000` | SPA POS (P1A) |
-| `/api/public/` | `127.0.0.1:3000` | API publik |
-| `/api/pos/` | `127.0.0.1:3000` | API POS |
-| `/api/mcp/` | `127.0.0.1:3000` | MCP via P1A |
-| `/api/` | `127.0.0.1:3000` | API umum (catch-all) |
-| `/mcp/` | `127.0.0.1:8001` | MCP server Python |
-| `/wa-api/` | `127.0.0.1:8644/` | Hermes WA Gateway |
+| 3000 | POS engine | **akses utama POS**; juga dipanggil Pi |
+| 8000 | Analytics API | FastAPI systemd |
+| 8001 | MCP | loopback saja |
+| 5432 / 5433 | PostgreSQL | loopback saja |
+| 80 / 443 | `kiri` port mapper | 404, bukan web server |
+| 9119 | Hermes dashboard | tailnet |
+| 10000 (Funnel) | Beszel | `https://gudang7783.tailf3a839.ts.net:10000` |
+| 20128 | 9Router (AI gateway) | tailnet only |
 
-**Server block 2 — `landing.gudang-644.tailf3a839.ts.net:80` (landing):**
-| Location | Target | Guna |
-|---|---|---|
-| `/` | `root /var/www/landing` + try_files → index.html | Landing SPA |
-| `/static/` | `root /var/www/landing` (cache 1 tahun immutable) | Aset statis |
-| `/api/landing/` | `127.0.0.1:8000` | Landing config API (P1B) |
+Tidak ada lagi `landing.<host>` maupun `/var/www/landing`.
 
-**PENTING:** root landing = `/var/www/landing`, **bukan** `/root/grandpos/pos-engine/dist`.
-Alasan: `/root` mode `700`, www-data tidak bisa baca. Build harus di-copy ke `/var/www/landing` setiap kali build ulang.
+**Pi (100.109.98.56)** — nginx dalam container, mode kiosk:
+| Location | Target |
+|---|---|
+| `/` | SPA POS lokal (`/usr/share/nginx/html`), fallback `index.html` |
+| `/api/` | proxy ke POS di gudang (IPv4 tailnet, **bukan hostname** — IPv6 tak terjangkau) |
+| `/ota/` | **lokal** (`/ota/bundle.zip`, `/ota/version.json`) |
+| `/static/` | lokal |
 
-**Backup config:** `/etc/nginx/sites-available/grandpos.bak.*` + `/root/backup-grandpos-20261030-114909/grandpos.nginx.current`
-
----
-
-## 6. MCP Server (port 8001)
-
-**systemd:** `grandpos-mcp.service` (enabled, running)
-- WorkingDirectory: `/root/grandpos/backend-landing-page`
-- ExecStart: `venv_mcp/bin/python app/mcp_server.py`
-- `MCP_HOST=127.0.0.1`, `MCP_PORT=8001`
-- `MCP_DATABASE_URL` → `postgresql://grandpos_app@100.117.186.13:5432/grandpos`
-- Restart=always, RestartSec=5
-
-**Dipakai oleh:** profil Hermes `business-analyst` (laporan harian via tool `mcp__grandpos__*`)
+Bukti 2026-11-20: `GET http://100.109.98.56/api/health` → 200 (proxy hidup),
+`GET /api/ota/version` → `2.10.20261119160316` (dari server).
 
 ---
 
-## 7. Pi (kasir fisik)
-
-**Container:** `project-frontend-1` · image `f995fc250554` · port `0.0.0.0:80->80`
-**Compose working_dir (label):** `/home/taqim258/grand-aceh-pos/project` — **direktori ini sudah TIDAK ADA di disk**; container tetap jalan dari image.
-**Nginx config di dalam container:** `/etc/nginx/conf.d/default.conf`
-
-| Location | Target | Guna |
-|---|---|---|
-| `/` (root `/usr/share/nginx/html`) | try_files → SPA POS | **Mode kiosk** — root = POS, bukan landing |
-| `/api/landing/` | `http://100.117.186.13:8000` | Landing config → P1B Gudang |
-| `/api/` | `http://100.117.186.13` | API → nginx Gudang port 80 |
-| `/static/` | lokal | Aset POS |
-| `/ota/` | lokal | Bundle OTA APK |
-| `/index.html` | lokal | SPA fallback |
-
-**Catatan:** proxy pakai **IPv4 tailnet `100.117.186.13`**, bukan hostname — hostname resolve ke IPv6 yang tidak terjangkau container Pi.
-**Redirect `/` → `/pos` sudah DIHAPUS** (2026-10-30): root langsung melayani SPA POS.
-**Backup config Pi:** `/tmp/pi-nginx-default.conf.bak.*` (di host Pi, bukan container)
-
----
-
-## 8. Dependency chain — siapa butuh siapa
+## 7. Dependency chain
 
 ```
-Browser/Pi
+Browser / Pi
    │
-   ├─ port 80 Pi ──► project-frontend-1 (nginx + SPA POS)
-   │                     ├─ /            → SPA lokal
-   │                     ├─ /api/landing/ → 100.117.186.13:8000  (P1B)
-   │                     └─ /api/        → 100.117.186.13:80    (nginx Gudang)
+   ├─ port 80 Pi ──► nginx container (SPA kiosk)
+   │                    ├─ /            → SPA lokal
+   │                    ├─ /api/*       → 100.70.161.30:3000 (POS)
+   │                    └─ /ota/*       → berkas lokal Pi
    │
-   └─ port 80 Gudang ──► nginx
-                            ├─ /              → 127.0.0.1:3000 (P1A)
-                            ├─ /api/*         → 127.0.0.1:3000 (P1A)
-                            ├─ /mcp/          → 127.0.0.1:8001 (MCP python)
-                            ├─ /wa-api/       → 127.0.0.1:8644 (Hermes WA)
-                            └─ Host: landing.*
-                                 ├─ /           → /var/www/landing (static)
-                                 └─ /api/landing/ → 127.0.0.1:8000 (P1B)
+   └─ port 3000 Gudang ──► grandpos_web_app (Express)
+                              ├─ /api/*  → api-server.js
+                              └─ /       → dist/ (SPA)
 
-P1A (3000) ──┐
-P1B (8000) ──┼──► grandpos-db-1 (5432, volume grandpos_pgdata)
-MCP (8001) ──┘
-
-P1A ──► Hermes WA Gateway 127.0.0.1:8644 (webhook outbox)
+grandpos-analytics (8000) ─┐
+grandpos-mcp (8001) ───────┼──► pg-grandpos (5432, /srv/pgdata/grandpos)
+                           ┘
+grandpos_web_app ──► data/pos-db.json (sumber kebenaran POS)
+        └──────────► GrandPOS Analytics API (ANALYTICS_URL, opsional)
+        └──────────► webhook Hermes `127.0.0.1:8644` (dikonfigurasi; listener
+                     tidak aktif saat verifikasi 2026-11-20)
 ```
 
-**Urutan start yang benar:** DB → P1B (api) → P1A (web) → MCP → nginx.
-**Kalau DB mati:** P1A error 500, P1B error 500, MCP mati, landing config 500.
+**Urutan start:** `pg-grandpos` → `grandpos_web_app` → `grandpos-analytics` →
+`grandpos-mcp`. Kalau PostgreSQL mati, POS **tetap jalan** (data dari JSON);
+yang mati hanya analitik/MCP.
 
 ---
 
-## 9. Perintah operasional
+## 8. Perintah operasional
 
 ```bash
 # Status
-docker ps --filter name=grandpos
-systemctl status grandpos-mcp nginx
+docker ps
+docker compose ls
+systemctl status grandpos-analytics grandpos-mcp
 
-# Rebuild P1B (JANGAN sentuh DB)
-cd /root/grandpos/backend-landing-page
-env -u DATABASE_URL docker compose up -d --build --no-deps api
+# Semua container POS (adopsi Compose 2026-11-19)
+cd /root/grandpos-project/pos-engine
+docker compose -f deploy/docker-compose.host.yml up -d
+docker compose -f deploy/docker-compose.host.yml ps
 
-# Rebuild P1A
-cd /root/grandpos/deploy
-docker compose -f docker-compose-p1a.yml up -d --build
+# Restart POS setelah ubah server-side
+sudo docker restart grandpos_web_app
+curl -sS http://127.0.0.1:3000/api/health
 
-# Build frontend POS
-cd /root/grandpos/pos-engine/project/frontend
-npm run build
-cp -r /root/grandpos/pos-engine/dist/* /var/www/landing/   # WAJIB untuk landing
+# Build frontend + OTA
+cd /root/grandpos-project/pos-engine/project/frontend
+sudo npm run build
+sudo rsync -a --delete build/ ../../dist/     # atau ikuti catatan rilis
 
-# Nginx
-nginx -t && systemctl reload nginx     # reload, JANGAN restart
-
-# Verifikasi cepat
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/api/landing/config
-curl -s -o /dev/null -w "%{http_code}\n" -H "Host: landing.gudang-644.tailf3a839.ts.net" http://127.0.0.1/
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/
+# Analytics / MCP
+sudo systemctl restart grandpos-analytics
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/health
 ```
+
+`deploy/docker-compose.host.yml` mendefinisikan `watchtower`, tetapi
+container-nya **tidak dijalankan** — jangan `up` tanpa sengaja, karena itu
+mengaktifkan auto-update image.
+
+---
+
+## 9. Repo & dokumen
+
+- Repo: `taqim2609/GrandPosoptima` (`main`). Kode POS di `pos-engine/`.
+- POS terakhir dipush: `2a72351` (HPP otomatis dari nota).
+- `landing-page/` = kode FastAPI/gateway (impor 2026-11-20).
+- Dokumen: `migration-meta/`, `docs/`, `HANDOVER.md`.
+- Di host ada dua salinan kode: `/root/grandpos-project` (kerja/repo) dan
+  `/root/grandpos` (dipakai unit systemd). Lihat jebakan di §10.
 
 ---
 
@@ -238,36 +265,68 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/
 
 | Jebakan | Akibat | Pencegahan |
 |---|---|---|
-| `DATABASE_URL` di shell meng-override `.env` | api konek ke DB salah → HTTP 500 | `env -u DATABASE_URL docker compose ...` |
-| `docker compose up` tanpa `--no-deps` | DB ikut di-recreate | Selalu `--no-deps` untuk api saja |
-| Migration baru tidak di-mount | Tabel hilang saat DB fresh | Tambah ke `docker-entrypoint-initdb.d` |
-| Landing root di `/root/...` | 403/500, www-data tak bisa baca | Copy ke `/var/www/landing` |
-| Pi proxy pakai hostname | Resolve IPv6, tidak terjangkau → 000 | Pakai IPv4 `100.117.186.13` |
-| `systemctl restart nginx` | Downtime | Pakai `reload` |
-| Compose project P1B pernah hilang (`/root/grandpos-platform`) | Container dari image beku, kode drift | Compose benar: `/root/grandpos/backend-landing-page` |
-| `sw.js` diaktifkan | Cache service worker nyangkut | Jangan aktifkan |
-| `polyfills.js` dihapus | APK lama rusak | Jangan hapus |
-| Dynamic import/chunk splitting | Bug chunk load di WebView | Jangan tambah |
+| Dua salinan kode (`grandpos` vs `grandpos-project`) | Edit di satu tempat, yang jalan di tempat lain | Samakan berkas lalu restart unit; unit systemd menunjuk `/root/grandpos/...` |
+| Lupa restart setelah ubah `api-server.js` | Kode disk ≠ kode berjalan | `docker restart grandpos_web_app` |
+| Anggap PostgreSQL = data POS | Laporan/angka kosong, query tidak cocok | POS memakai `data/pos-db.json`; PostgreSQL hanya analitik |
+| `POSTGRES_*` dihapus dari compose | Cluster lama aman, tapi re-init di volume kosong gagal | Jangan recreate volume `/srv/pgdata/grandpos` |
+| Menjalankan `watchtower` | Image POS bisa diganti di tengah jam kasir | Biarkan service itu tidak dijalankan |
+| Proxy Pi pakai hostname | Resolve IPv6, tak terjangkau → 000 | Pakai IPv4 tailnet |
+| IP lama `100.117.186.13` | Koneksi gagal (host sekarang `100.70.161.30`) | Perbarui konfigurasi, jangan salin dokumen lama |
+| Mengaktifkan `sw.js` | Cache service worker nyangkut | Jangan aktifkan |
+| Menghapus `polyfills.js` | APK lama rusak | Jangan hapus |
+| Dynamic import / chunk splitting | Bug chunk load di WebView | Jangan tambah |
+| `rsync --delete` saat push | Menghapus berkas repo yang tidak ada lokal | Tanpa `--delete`, exclude cache |
 
 ---
 
 ## 11. Backup & rollback
 
-- **Backup penuh produksi:** `/root/backup-grandpos-20261030-114909/`
-  - `backup-grandpos-dump.sql` (DB dump)
-  - `grandpos.nginx.current` (nginx Gudang)
-  - `p1a-compose.yml`, `p1b-compose.yml`, `p1b-compose.override.yml`, `p1b.env`
-  - `container-grandpos-api-1.json`, `container-grandpos_web_app.json`
-  - `pre-d2-*` (snapshot sebelum rebuild P1B)
-- **Repo git:** `pos-engine/.git` dan `backend-landing-page/.git` ada, tapi `/root/grandpos` sendiri bukan repo.
-- **Pi:** `/tmp/pi-nginx-default.conf.bak.*`
+Semua di `/root/backups/grandpos/` (root-only, 5,9 GB; akses perlu `sudo`):
+
+| Isi | Keterangan |
+|---|---|
+| `pre-compose-20261119/` | `grandpos.sql` + `pos-db.json` sebelum adopsi Compose |
+| `pos-db-pre-cutover-20261118T155637Z.json` | snapshot JSON sebelum cutover 2026-11-18 |
+| `pos-db-before-docker-recovery-20261118T165918Z.json` | snapshot sebelum recovery Docker |
+| `pre-grandpos-migration-20261117T172232Z.dump` | dump PostgreSQL pra-migrasi |
+| `container-grandpos-web-app-pre-cutover-*.json` | `docker inspect` container lama |
+| `runtime-pre-recovery-20261118T162915Z/` | backup runtime `docker/`, `containerd/`, `etc-docker/` (5,9 GB) |
+| `containerd-meta-corrupt-20261118T162120Z.db` | salinan forensik metadata containerd yang korup |
+| `docker-ghost-*/` | sisa/ghost container yang dibersihkan |
+
+- **Volume PostgreSQL:** `/srv/pgdata/grandpos`, `/srv/pgdata/hindsight`.
+- **Snapshot JSON POS:** salin `pos-engine/data/pos-db.json` sebelum mutasi besar.
+- **Backup Pi:** `/tmp/pi-nginx-default.conf.bak.*` (di host Pi, hilang setelah reboot).
+- **Rollback Compose:** lihat `migration-meta/PANDUAN-COMPOSE-HOST.md` §8.
+
+> Backup produksi lama 2026-10-30 yang dulu disebut di dokumen ini
+> (`/root/backup-grandpos-20261030-114909/`) **sudah tidak ada** di disk.
 
 ---
 
-## 12. Hal yang BELUM dikerjakan / diketahui
+## 12. Status fitur & hal terbuka
 
-1. **Landing page = build POS yang sama** (`dist/`), bukan halaman landing terpisah. Kalau mau landing beda tampilan, perlu dibuat.
-2. **Jest & ESLint P1A gagal** — 2 test suite error `Cannot use import statement outside a module`, eslint output JSON rusak. Pre-existing, bukan akibat perubahan 2026-10-30.
-3. **Pi compose dir hilang** (`/home/taqim258/grand-aceh-pos/project` tidak ada). Container jalan dari image; rebuild Pi butuh rekonstruksi compose.
-4. **`/root/grandpos-platform`** hampir kosong (sisa `db/`), tapi dulu sumber image P1B. Jangan dihapus sebelum yakin.
-5. **`gak_watchtower_updater`** jalan, poll registry tiap 24 jam, update image otomatis — bisa mengejutkan kalau ada image baru.
+**Sudah jalan:** HPP otomatis dari nota (foto/ketik → moving average → pilih
+produk tanpa qty → prediksi → terapkan), COGS snapshot di laporan profit,
+WhatsApp satu sumber `settings.wa`, branding satu sumber `db.platform`,
+Compose host, Analytics API systemd.
+
+**Belum / terbuka:**
+
+1. **HPP live masih 0** — belum ada nota belanja maupun resep; menunggu input pemilik.
+2. **OTA di Pi tertinggal.** Pi melayani `/ota/version.json` versi
+   `2.10.20261118183852` (bundle 659.379 B), sedangkan server sudah
+   `2.10.20261119160316` (660.030 B). Endpoint `/api/ota/version` di Pi
+   meneruskan versi server, jadi hanya berkas lokal Pi yang belum disalin.
+3. **Dua akun live** `kasir` dan `admin` masih aktif dengan PIN sama; `admin`
+   ber-izin penuh. Perlu keputusan pemilik.
+4. **Kunci AI** tersimpan di `settings.ai` (belum dimigrasi ke `db.ai`).
+5. **Cetak struk tepat 1 lembar** belum terbukti di printer fisik.
+6. **Jest & ESLint P1A** masih gagal (pre-existing, bukan akibat perubahan ini).
+7. **`dist/` menyimpan beberapa bundle lama** (`main.03a49497.js`,
+   `main.49e6eb94.js`, `main.70f4893f.js`) — sampah build, tidak dibersihkan
+   agar APK yang masih menunjuk bundle lama tidak rusak.
+8. **Webhook Hermes belum aktif di host** — `HERMES_WA_WEBHOOK_URL` masih
+   menunjuk `127.0.0.1:8644`, tetapi port 8644 tidak listen saat verifikasi.
+   Jangan menganggap pengiriman WA outbox aktif sebelum gateway dijalankan dan
+   diuji.
