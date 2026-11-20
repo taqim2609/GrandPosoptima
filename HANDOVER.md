@@ -91,5 +91,7 @@ Ringkas per 2026-11-19:
 - Data POS: 43 order, 407 produk, 0 nota, 0 pembelian; HPP baru terisi setelah
   nota pertama diinput pemilik.
 - Dokumen `migration-meta/` dan `HANDOVER.md` sudah masuk repo di commit
-  `b8a3304`; PIN, telepon outlet, dan nomor penerima WA disamarkan sebelum
-  push. `backend-landing-page` masih di luar repo.
+  `b8a3304`; dokumen root (arsitektur, rencana landing, task breakdown,
+  task-review) ada di `docs/` (commit `4c967bb`). PIN, telepon outlet, dan
+  nomor penerima WA disamarkan sebelum push. `backend-landing-page` masih di
+  luar repo.
