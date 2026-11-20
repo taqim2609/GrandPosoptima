@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # go_live.sh — penyelesaian go-live GrandPOS di gudang-644.
-# Jalankan sebagai root:   bash /root/grandpos/backend-landing-page/scripts/go_live.sh
+# Jalankan sebagai root:   bash scripts/go_live.sh   (dari root folder layanan)
 # Idempoten: aman dijalankan ulang. Tidak pernah mencetak nilai secret.
 set -euo pipefail
 cd "$(dirname "$0")/.."

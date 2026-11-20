@@ -16,16 +16,17 @@ from pathlib import Path
 
 def get_env_path() -> Path:
     """Get the .env file path."""
-    # Try to find .env in project root
+    project_root = Path(__file__).resolve().parent.parent
+    # Urutan: override eksplisit, lalu .env di root layanan, lalu direktori kerja.
     possible_paths = [
-        Path("/root/grandpos/backend-landing-page/.env"),
-        Path(__file__).parent.parent / ".env",
+        Path(os.environ["GRANDPOS_ENV_FILE"]) if os.environ.get("GRANDPOS_ENV_FILE") else None,
+        project_root / ".env",
         Path.cwd() / ".env",
     ]
     for path in possible_paths:
-        if path.exists():
+        if path and path.exists():
             return path
-    return possible_paths[0]  # Default to first option
+    return project_root / ".env"
 
 
 def read_env_file(env_path: Path) -> dict:

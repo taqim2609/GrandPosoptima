@@ -37,7 +37,7 @@
 6. Rekonsiliasi: expected = opening_float + sale_cash + void_reversal + cash_in - cash_out - vendor_cash. variance = counted - expected.
 
 ## 5. Target deploy / VPS
-- Dev saat ini: /root/grandpos/backend-landing-page (host gudang-644, Docker 29.9.1).
+- Dev saat ini: backend-landing-page (host gudang-644, Docker 29.9.1).
 - Target produksi: server grandpos 100.109.98.56 (SSH taqim258@grandpos).
 - Status: BELUM deploy. Stack smoke masih jalan lokal. Matikan manual: docker compose down.
 - Yang dibutuhkan deploy: .env produksi, postgres volume, backup, CCTV? tidak. Perlu: API_SERVER_KEY, OUTBOX_SECRET, allowlist WA owner/kasir.

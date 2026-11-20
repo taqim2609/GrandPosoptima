@@ -3,6 +3,7 @@
 
 import os
 import sys
+from pathlib import Path
 
 # ✅ ✅ ✅ EDIT DI BAWAH INI ✅ ✅ ✅
 # Ganti "your-api-key-here" dengan API key Anda yang sebenarnya
@@ -17,7 +18,14 @@ if API_KEY == "your-api-key-here":
     print("   Edit file ini dan ganti 'your-api-key-here' dengan key Anda.")
     sys.exit(1)
 
-env_path = '/root/grandpos/backend-landing-page/.env'
+# .env ada di root folder layanan (satu tingkat di atas hermes/).
+# Bisa dioverride lewat GRANDPOS_ENV_FILE bila .env disimpan di tempat lain.
+env_path = Path(os.environ.get("GRANDPOS_ENV_FILE") or Path(__file__).resolve().parent.parent / ".env")
+
+if not env_path.exists():
+    print(f"❌ ERROR: {env_path} tidak ditemukan.")
+    print("   Salin .env.example ke .env lebih dulu.")
+    sys.exit(1)
 
 # Baca file
 with open(env_path, 'r') as f:

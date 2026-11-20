@@ -3,6 +3,11 @@
 Referensi implementasi mandiri untuk POS restoran F&B khas Aceh + retail.
 Seluruhnya berjalan lokal, tanpa Firebase.
 
+> Catatan repo: layanan ini sekarang berada di folder `landing-page/` pada repo
+> `GrandPosoptima`. Semua path relatif di dokumen ini dihitung dari folder
+> tersebut, dan riwayat di `EVIDENCE.md`/`docs/` adalah catatan 2026-10-17
+> (sebelum dipindahkan ke repo).
+
 ## Ringkasan arsitektur
 
 ```mermaid
@@ -315,4 +320,4 @@ persisnya di lingkungan ini.
 
 Pekerjaan ini **tidak** melakukan deploy, tidak mengubah config/env Hermes
 live, tidak membuat kredensial, tidak commit/push, dan tidak me-restart
-layanan. Semua perubahan berada di bawah `/root/grandpos/backend-landing-page`.
+layanan. Semua perubahan berada di bawah `backend-landing-page`.

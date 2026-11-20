@@ -4,7 +4,9 @@ Build a production-oriented, locally runnable reference implementation for Grand
 
 ## Source request
 
-Read `/root/.hermes/profiles/chieftain/attachments/Pasted content (4.1 KB)` in full.
+Permintaan sumber (2026-10-17) berupa lampiran di luar repo dan tidak ikut
+disalin; keputusan arsitektur di bawah adalah kontrak yang dihasilkan dari
+permintaan itu.
 
 ## Architecture decisions
 

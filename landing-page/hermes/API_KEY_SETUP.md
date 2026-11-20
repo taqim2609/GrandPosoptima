@@ -6,7 +6,7 @@
 
 1. **Buka file .env:**
    ```bash
-   nano /root/grandpos/backend-landing-page/.env
+   nano backend-landing-page/.env
    ```
 
 2. **Cari baris:**
@@ -63,7 +63,7 @@ Sesuaikan dengan dokumentasi provider masing-masing.
 Setelah mengisi API key, test dengan:
 
 ```bash
-cd /root/grandpos/backend-landing-page
+cd backend-landing-page
 python -m hermes health
 ```
 

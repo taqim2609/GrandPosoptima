@@ -20,7 +20,7 @@ Berkas:
 ## Cara menjalankan
 
 ```bash
-cd /root/grandpos/backend-landing-page
+cd backend-landing-page
 
 # Standar: nyalakan db bila belum jalan, jalankan 5 tes, cetak tabel
 scripts/run_go_live_regression.sh
@@ -207,7 +207,7 @@ klaster.
 ## Ringkasan perintah lengkap (bukti go-live)
 
 ```bash
-cd /root/grandpos/backend-landing-page
+cd backend-landing-page
 
 scripts/run_go_live_regression.sh        # 5 item, tabel PASS/FAIL, exit code
 python -m pytest -q                       # suite unit + integrasi penuh

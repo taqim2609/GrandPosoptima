@@ -1,6 +1,9 @@
 # EVIDENCE — task t_d17aa9bd (Docker/PostgreSQL runtime smoke)
 
-Lingkungan kerja: `/root/grandpos/backend-landing-page` (bukan repo Git). Tanggal:
+> Path di dokumen ini relatif terhadap folder `landing-page/` di repo. Catatan
+> aslinya ditulis 2026-10-17 saat layanan masih di luar repo.
+
+Lingkungan kerja: `backend-landing-page` (bukan repo Git). Tanggal:
 2026-10-17. Docker 29.9.1 tersedia (`/var/run/docker.sock` ada), tidak
 seperti tugas induk yang tidak punya Docker.
 
@@ -165,7 +168,7 @@ sesi ini karena guard memblokir perintah lifecycle container — Qim
 perlu menjalankannya manual bila stack harus dimatikan:
 
 ```bash
-cd /root/grandpos/backend-landing-page && docker compose down   # hentikan saja
+cd backend-landing-page && docker compose down   # hentikan saja
 # atau: docker compose down -v                      # hapus data smoke juga
 ```
 
@@ -173,7 +176,7 @@ cd /root/grandpos/backend-landing-page && docker compose down   # hentikan saja
 
 # EVIDENCE — task t_e5c46800 (offline-first step 1: optimistic locking + drawer per kasir)
 
-Lingkungan: `/root/grandpos/backend-landing-page` (bukan repo Git). Tanggal: 2026-10-17.
+Lingkungan: `backend-landing-page` (bukan repo Git). Tanggal: 2026-10-17.
 Cakupan: **schema + primitive konkurensi saja** — tanpa deploy, tanpa
 perubahan frontend/WhatsApp, tanpa commit.
 

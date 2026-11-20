@@ -43,6 +43,11 @@ itu tetapi berkasnya belum ada.
   tidak ditulis di repo publik; nilainya diganti `[REDACTED]` / `[disamarkan]`.
 - Dokumen di folder ini tidak memuat kredensial. Alamat IP/host tailnet yang
   muncul di sini sudah lebih dulu ada di berkas lain dalam repo ini.
-- Berkas `EVIDENCE.md` dan `README.md` di `landing-page/` masih menyebut path
-  host lama (`/root/grandpos/...`). Itu catatan historis, bukan konfigurasi
-  yang dipakai sekarang.
+- Path host lama (`/root/grandpos/...`) di `landing-page/` sudah diganti path
+  relatif repo. Skrip di `landing-page/scripts/` mencari `.env` relatif
+  terhadap folder layanan, dan `landing-page/deploy/docker-compose-p1a.yml`
+  memakai `POS_ENGINE_DIR` dari `deploy/.env` (wajib diisi, gagal cepat bila
+  kosong) alih-alih path host yang di-hardcode.
+- `landing-page/.env.example` dan `landing-page/deploy/.env.example` hanya berisi
+  placeholder; keduanya ditambahkan karena README masing-masing sudah merujuk
+  berkas itu.

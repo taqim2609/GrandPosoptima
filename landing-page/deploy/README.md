@@ -1,6 +1,8 @@
 # Deployment — GrandPOS P1A
 
-Salinan dari source-of-truth di server: `/root/grandpos/deploy/`.
+Salinan dari source-of-truth di host `gudang-644`. Di repo ini konfigurasi POS
+ada di `pos-engine/deploy/`, sedangkan folder ini milik layanan FastAPI
+(`landing-page/`).
 
 File di direktori ini ada agar konfigurasi deploy ikut ter-version-control. Salinan
 di server tetap yang dipakai saat menjalankan `docker compose`.
@@ -39,7 +41,7 @@ Kedua service diberi label:
 
 Alasannya:
 
-- `grandpos-app` ter-bind-mount dari host (`/root/grandpos/pos-engine:/app:rw`)
+- `grandpos-app` ter-bind-mount dari host (`pos-engine:/app:rw`, path host diatur lewat `POS_ENGINE_DIR`)
   dan tidak dipublikasikan ke registry mana pun. Watchtower akan mencoba
   menarik image tiap 24 jam, gagal, dan menghasilkan log noise.
 - Yang lebih penting, bila suatu saat ada image publik dengan nama yang sama,
@@ -51,7 +53,7 @@ Alasannya:
 ## Perintah
 
 ```bash
-# Jalankan (dari /root/grandpos/deploy)
+# Jalankan (dari folder deploy layanan)
 docker compose -f docker-compose-p1a.yml up -d
 
 # Restart P1A setelah deploy kode

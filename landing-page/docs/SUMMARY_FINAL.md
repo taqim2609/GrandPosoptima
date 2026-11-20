@@ -35,7 +35,7 @@
 1. **7 bug runtime** (smoke flow): constraint collision (2x), bootstrap, healthcheck, DSN, `_one` vs RETURNING, settlement skip 0%.
 2. **Multi-vendor settlement blocker (R3)**: shift dengan ≥2 vendor titipan tidak bisa ditutup (HTTP 500). Fix Opsi A: settlement mereferensi baris settlement sendiri; close_shift idempoten. Detail: `docs/FINDING-multi-vendor-settlement.md` (status FIXED).
 3. **Tanda cash_in/out terbalik di view `v_shift_cash`** — diperbaiki (murni tanda baca view).
-4. **Tooling**: `rtk-rewrite` memalsukan output pytest → di-exclude di `/root/.config/rtk/config.toml`; `check_static.py` kini gagal bila pytest mengoleksi 0 tes.
+4. **Tooling**: `rtk-rewrite` memalsukan output pytest → di-exclude di `~/.config/rtk/config.toml`; `check_static.py` kini gagal bila pytest mengoleksi 0 tes.
 
 ## File kunci
 - `db/schema.sql`, `db/seed.sql`, `db/roles.sql`, `db/migrations/0002_optimistic_lock.sql`
@@ -52,7 +52,7 @@
 
 ## Cara menjalankan verifikasi ulang
 ```bash
-cd /root/grandpos/backend-landing-page
+cd backend-landing-page
 python3 -m pytest -q
 node --test gateway/test/*.test.js   # dari folder gateway/
 python3 scripts/check_static.py

@@ -2,7 +2,8 @@
 # Buat NODE_SYNC_KEY (token kiosk Pi -> gudang) bila belum ada di .env.
 # Nilai tidak pernah dicetak: hanya panjangnya yang dilaporkan.
 set -e
-ENV_FILE=/root/grandpos/backend-landing-page/.env
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ENV_FILE="$ROOT/.env"
 
 if grep -q '^NODE_SYNC_KEY=' "$ENV_FILE"; then
   echo "NODE_SYNC_KEY sudah ada, tidak diubah."

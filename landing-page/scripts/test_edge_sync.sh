@@ -2,7 +2,8 @@
 # Uji kirim transaksi kiosk (Pi) -> gudang, termasuk idempotensi.
 # Token dibaca dari .env dan TIDAK pernah dicetak.
 set -e
-ENV_FILE=/root/grandpos/backend-landing-page/.env
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ENV_FILE="$ROOT/.env"
 KEY=$(grep '^NODE_SYNC_KEY=' "$ENV_FILE" | tail -1 | cut -d= -f2-)
 BASE=http://127.0.0.1:8000
 

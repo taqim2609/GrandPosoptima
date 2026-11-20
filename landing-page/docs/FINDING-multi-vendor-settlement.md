@@ -228,7 +228,7 @@ DDL tabel/index, migrasi, atau konfigurasi deploy.
 ## Cara mereproduksi (sebelum perbaikan)
 
 ```bash
-cd /root/grandpos/backend-landing-page
+cd backend-landing-page
 scripts/run_go_live_regression.sh --no-up     # R3 FAIL sebelum fix, ALL PASS sesudahnya
 ```
 

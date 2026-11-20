@@ -17,7 +17,7 @@ services:
       - ANALYTICS_URL=${ANALYTICS_URL:-http://172.20.0.1:8000}
       - HERMES_WA_WEBHOOK_URL=${HERMES_WA_WEBHOOK_URL:-http://127.0.0.1:8644/webhooks/grandpos-outbox}
     volumes:
-      - /root/grandpos/pos-engine:/app:rw
+      - ${POS_ENGINE_DIR:?set POS_ENGINE_DIR in deploy/.env}:/app:rw
     command: sh -c "NODE_ENV=production PORT=3000 npx tsx server.ts"
     networks:
       - gak_network
