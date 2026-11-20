@@ -1,5 +1,5 @@
 Review-07: backend-landing-page — Audit lapisan MCP (app/mcp_server.py, app/mcp_db.py, app/mcp_reports.py)
-Ruang lingkup: read-only audit MCP GrandPOS di /root/grandpos/backend-landing-page/app.
+Ruang lingkup: read-only audit MCP GrandPOS di landing-page/app.
 Tujuan: memverifikasi MCP berbicara ke database GrandPOS yang benar, tidak ke paperclip-db, dan output konsisten tanpa mengubah kode.
 Lihat:
 1. app/mcp_server.py (~19 KB): daftar tool MCP, routing, read-only enforcement, limit 500 baris per panggilan.

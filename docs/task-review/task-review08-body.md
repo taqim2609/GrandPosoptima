@@ -1,5 +1,5 @@
 Review-08: backend-landing-page — Audit keamanan, validasi, sinkronisasi & outbox (app/guard.py, app/rules.py, app/signing.py, app/outbox.py, app/outbox_delivery.py, app/parsers.py, app/edge_sync.py)
-Ruang lingkup: read-only audit keamanan dan integritas data di /root/grandpos/backend-landing-page/app.
+Ruang lingkup: read-only audit keamanan dan integritas data di landing-page/app.
 Tujuan: menemukan celah validasi, otorisasi, signing, dan risiko sinkronisasi tanpa mengubah kode.
 Lihat:
 1. app/guard.py (~8 KB): otorisasi/guard — endpoint apa saja yang dilindungi, ada yang bocor?

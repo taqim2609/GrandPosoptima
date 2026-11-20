@@ -1,5 +1,5 @@
 Review-05: backend-landing-page — Audit lapisan API (app/api.py, app/constants.py)
-Ruang lingkup: read-only audit FastAPI di /root/grandpos/backend-landing-page/app/api.py (~26 KB) dan app/constants.py (~0.8 KB).
+Ruang lingkup: read-only audit FastAPI di landing-page/app/api.py (~26 KB) dan app/constants.py (~0.8 KB).
 Tujuan: menemukan bug, ketidakselarasan, dan risiko di lapisan API tanpa mengubah kode.
 Lihat:
 1. Semua endpoint FastAPI: daftar path, method, query/body parameter, status code kembali.

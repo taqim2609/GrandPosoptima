@@ -1,5 +1,5 @@
 Review-06: backend-landing-page — Audit layanan bisnis & database (app/services.py, app/db.py, db/schema.sql, db/seed.sql)
-Ruang lingkup: read-only audit logika bisnis dan lapisan data di /root/grandpos/backend-landing-page.
+Ruang lingkup: read-only audit logika bisnis dan lapisan data di landing-page/.
 Tujuan: menemukan bug perhitungan, drift skema, dan ketidakkonsistenan data tanpa mengubah kode.
 Lihat:
 1. app/services.py (~36 KB): perhitungan diskon, HPP (cost of goods sold), margin, vendor settlement, pembulatan mata uang (NUMERIC/BIGINT PostgreSQL vs float JS di pos-engine).

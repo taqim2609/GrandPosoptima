@@ -1,5 +1,5 @@
 Review-10: Frontend & backend — Audit rute dan sisa api-server.js (routes/allMissingRoutes.js, routes/mcpServer.js, api-server.js sisa)
-Ruang lingkup: audit rute dan sisa coverage api-server.js di /root/grandpos/pos-engine yang belum diverifikasi penuh setelah Fix-01/Fix-02/Fix-03.
+Ruang lingkup: audit rute dan sisa coverage api-server.js di pos-engine/ yang belum diverifikasi penuh setelah Fix-01/Fix-02/Fix-03.
 Tujuan: memastikan semua rute punya auth guard yang tepat, tidak ada duplicate route tersembunyi, dan konsisten antara Express (port 3000) dan FastAPI (port 8000).
 Lihat:
 1. routes/allMissingRoutes.js (~105 KB): audit sisa rute yang belum diperiksa Fix-01 (Fix-01 hanya hapus 3 duplicate). Cek rute tanpa auth, rute sintetis 200, rute yang bocor path internal.
