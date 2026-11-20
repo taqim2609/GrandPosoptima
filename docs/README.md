@@ -17,7 +17,7 @@ Status terkini selalu ada di:
 | Berkas | Isi | Tanggal snapshot |
 | :--- | :--- | :--- |
 | `GRANDPOS-TEMUAN-AUDIT.md` | Temuan audit lengkap dan serah-terima sistem | 2026-11-11 |
-| `ARSITEKTUR-GRANDPOS.md` | Arsitektur 3 node (Pi kasir, VPS/gudang, Tailscale), dependency, dan alur data | 2026-10-30 |
+| `ARSITEKTUR-GRANDPOS.md` | Arsitektur 3 node (Pi kasir, VPS/gudang, Tailscale), dependency, dan alur data | 2026-11-20 |
 | `RENCANA-LANDING-SEP-2026.md` | Rencana gabungan Review 05–11 + Landing L-01–L-07 | 2026-10-30 |
 | `TASK-BREAKDOWN-EVEN.md` | Pecahan 24 task (R-01 … R-24) dari rencana di atas | 2026-10-30 |
 | `task-review/task-review05-body.md` … `task-review11-body.md` | Badan issue/task review 05–11 | 2026-10-30 |
