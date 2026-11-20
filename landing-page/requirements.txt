@@ -1,0 +1,12 @@
+# Runtime dependencies for the GrandPOS API.
+# The test suite (tests/test_rules.py, test_parsers.py, test_signing.py,
+# test_guard.py, test_outbox.py, test_api_integration.py) runs with only
+# fastapi + pydantic + pytest + httpx installed; psycopg is required for the
+# live database paths and the container image.
+fastapi==0.143.0
+uvicorn[standard]==0.32.1
+pydantic==2.14.1
+psycopg[binary]==3.2.3
+PyYAML==6.0
+httpx==0.28.1
+pytest==9.1.1

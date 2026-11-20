@@ -1,0 +1,18 @@
+{
+  "name": "grandpos-whatsapp-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GrandPOS WhatsApp gateway: zero-LLM command router and outbox delivery",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "pino": "^9.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

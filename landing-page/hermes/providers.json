@@ -1,0 +1,18 @@
+{
+  "providers": [
+    {
+      "name": "local-ai",
+      "base_url": "http://127.0.0.1:20128/v1",
+      "api_key": "${LOCAL_AI_API_KEY}",
+      "default_model": "gh/gpt-4o-mini",
+      "timeout": 60,
+      "max_retries": 3,
+      "enabled": true
+    }
+  ],
+  "default_provider": "local-ai",
+  "routing": {
+    "fallback_enabled": false,
+    "health_check_interval": 30
+  }
+}

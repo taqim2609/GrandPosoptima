@@ -1,0 +1,53 @@
+services:
+  grandpos-app:
+    image: node:20-alpine
+    container_name: grandpos_web_app
+    restart: always
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Secrets are read from the surrounding shell environment / .env file.
+      # Never commit real values: copy deploy/.env.example to deploy/.env and fill it in.
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - NODE_SYNC_KEY=${NODE_SYNC_KEY:?NODE_SYNC_KEY is required}
+      - ANALYTICS_URL=${ANALYTICS_URL:-http://172.20.0.1:8000}
+      - HERMES_WA_WEBHOOK_URL=${HERMES_WA_WEBHOOK_URL:-http://127.0.0.1:8644/webhooks/grandpos-outbox}
+    volumes:
+      - /root/grandpos/pos-engine:/app:rw
+    command: sh -c "NODE_ENV=production PORT=3000 npx tsx server.ts"
+    networks:
+      - gak_network
+    labels:
+      # The app is bind-mounted from the host and is not published to any registry.
+      # Watchtower must not recreate this container: it would restart the POS mid-shift
+      # and could pull an unintended node:20-alpine base. Opt out explicitly.
+      - "com.centurylinklabs.watchtower.enable=false"
+  watchtower:
+    # Ping the daemon with a modern API version: the daemon requires >= 1.40.
+    # Run once per poll (one-shot) and let `restart: on-failure` re-run it.
+    image: containrrr/watchtower:latest
+    container_name: gak_watchtower_updater
+    restart: unless-stopped
+    environment:
+      # Watchtower defaults its Docker client to API 1.25 (too old for this daemon).
+      - DOCKER_API_VERSION=1.44
+      # Poll the registry every 24h (86400s).
+      - WATCHTOWER_POLL_INTERVAL=86400
+      - WATCHTOWER_TIMEOUT=60s
+      - WATCHTOWER_CLEANUP=true
+      - TZ=UTC
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - gak_network
+    labels:
+      # Do not let watchtower update itself (it could never clean up properly).
+      - "com.centurylinklabs.watchtower.enable=false"
+    command: ["--cleanup", "--interval", "86400"]
+networks:
+  gak_network:
+    driver: bridge

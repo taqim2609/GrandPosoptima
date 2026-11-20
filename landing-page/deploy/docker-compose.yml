@@ -1,0 +1,36 @@
+services:
+  # 1. Grand Aceh Kuliner POS Node.js Server & Web App (Port 3000)
+  grandpos-app:
+    image: node:20-alpine
+    container_name: grandpos_web_app
+    restart: always
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HERMES_WA_WEBHOOK_URL=http://127.0.0.1:8644/webhooks/grandpos-outbox
+    volumes:
+      - ./data:/app/data
+    command: sh -c "if [ -f package.json ]; then npm start; else tail -f /dev/null; fi"
+    networks:
+      - gak_network
+
+  # 2. Watchtower Auto-Updater
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: gak_watchtower_updater
+    restart: always
+    environment:
+      - DOCKER_API_VERSION=1.44
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=86400
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - gak_network
+
+networks:
+  gak_network:
+    driver: bridge

@@ -1,0 +1,87 @@
+name: grandpos
+# GrandPOS — self-hosted stack. PostgreSQL 16 + FastAPI backend.
+# All credentials come from the environment; this file ships no secrets.
+# Copy .env.example to .env and set strong values before first boot.
+#
+# Credential policy: every variable below is interpolated from .env. There is
+# no literal default password anywhere in this repository.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      TZ: ${TZ:-Asia/Jakarta}
+    command:
+      - postgres
+      # GrandPOS business timezone is exposed to the schema via current_setting();
+      # application code also sets it per transaction.
+      - -c
+      - grandpos.timezone=${TZ:-Asia/Jakarta}
+    volumes:
+      - grandpos_pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+      - ./db/roles.sql:/docker-entrypoint-initdb.d/03-roles.sql:ro
+      # R-07: 0003_edge_sync.sql was never mounted, so a fresh deployment created the
+      # database without edge_transactions / edge_ingest_log while api.py and edge_sync.py
+      # queried them. It must run after schema.sql (it depends on update_timestamp()).
+      - ./db/migrations/0002_optimistic_lock.sql:/docker-entrypoint-initdb.d/04-optimistic_lock.sql:ro
+      - ./db/migrations/0003_edge_sync.sql:/docker-entrypoint-initdb.d/05-edge_sync.sql:ro
+      - ./db/migrations/0004_landing_config.sql:/docker-entrypoint-initdb.d/06-landing_config.sql:ro
+      # 0005: payments.tendered_drift — kas fisik vs alokasi buku. Fresh installs
+      # need it for the same reason as 0003; existing databases apply it manually.
+      - ./db/migrations/0005_payment_tendered_drift.sql:/docker-entrypoint-initdb.d/07-payment_tendered_drift.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    ports:
+      - "100.117.186.13:${POSTGRES_PORT:-5432}:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      GRANDPOS_TZ: ${TZ:-Asia/Jakarta}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      AI_DATABASE_URL: ${AI_DATABASE_URL:-}
+      API_PORT: ${API_PORT:-8000}
+      # API Key for POS-to-backend sync (kasir -> gudang). Wajib diisi:
+      # tanpa nilai ini endpoint terproteksi menolak semua request (fail-closed).
+      POS_API_KEY: ${POS_API_KEY:?set POS_API_KEY in .env}
+      # Token khusus kiosk (Pi -> gudang). Terpisah dari POS_API_KEY karena
+      # pemanggilnya proses server Pi, bukan browser/kasir. Wajib diisi:
+      # tanpa nilai ini endpoint /sync/* menolak semua kiriman (fail-closed).
+      NODE_SYNC_KEY: ${NODE_SYNC_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -m app.healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "${API_PORT:-8000}:8000"
+    labels:
+      # The image is built locally and is not published to any registry. Watchtower
+      # would try to pull it every 24h, fail, and log noise — or worse, replace the
+      # container if a same-named public image ever appears. Opt out explicitly.
+      - "com.centurylinklabs.watchtower.enable=false"
+
+volumes:
+  grandpos_pgdata:
+    name: grandpos_pgdata
