@@ -1120,7 +1120,7 @@ Dibaca langsung dari snapshot aktif setelah pembersihan Docker. Data utuh:
 | 13 | Branding ganda | **SELESAI 2026-11-19** — `settings.platform` dihapus saat boot; `db.platform` (`KULINER POS`) satu-satunya sumber | — |
 | 14 | Sampah setelan | **SELESAI 2026-11-19** — semua `settings["metrics_process:N"]` dihapus saat boot | — |
 | 15 | Analytics API | **SELESAI 2026-11-19** — `grandpos-analytics.service` (systemd, enabled, `Restart=always`), health 200 | — |
-| 16 | Push GitHub | Kode POS ter-push sampai commit `2a72351` (WhatsApp, branding, analytics, Compose host, dan HPP nota otomatis); `backend-landing-page` (120 file) dan dokumen root + `migration-meta/` **belum** ada di repo mana pun | Nama repo / izin (ditunda) |
+| 16 | Push GitHub | Kode POS ter-push sampai `2a72351`; dokumen `migration-meta/` + `HANDOVER.md` masuk repo di commit `b8a3304` (PIN, telepon, nomor WA disamarkan). `backend-landing-page` (120 file) masih di luar repo | Tujuan repo landing page (ditunda) |
 | 17 | Compose drift | **SELESAI 2026-11-19** — 5 layanan manual diadopsi ke 4 project Compose (`grandpos`, `filebrowser`, `beszel`, `hindsight`); `deploy/.env` dibuat; panduan: `PANDUAN-COMPOSE-HOST.md` | — |
 | 18 | HPP otomatis | **TERIMPLEMENTASI 2026-11-19** — nota (foto/ketik) → harga rata-rata → tandai "dipakai di produk mana" tanpa qty → prediksi HPP → terapkan ke katalog. Baca foto aktif (kunci `settings.ai`, model `gemini-3-flash-preview`). Live belum ada data nota, jadi HPP masih 0 sampai nota pertama diisi | Isi nota nyata + petakan bahan |
 
@@ -1289,5 +1289,6 @@ dobel; data tetap di bind mount lama. Panduan: `PANDUAN-COMPOSE-HOST.md`.
   - Commit **`2a72351`** (`feat: predict HPP from purchase notes without usage quantity`).
   - Total 18 file (+1684 / −416).
   - Cara push yang dipakai: klon baru `git clone --depth 1 -b main` ke `/tmp/opencode/gp-remote`, `rsync -a` dari `pos-engine/` dengan pengecualian `.env`, `data/`, `node_modules/`, `dist/`, `project/frontend/build/`, `*.apk`, `*.map`, `package-lock.json`, dan `graphify-out/cache/`; lalu commit dan `git push origin main` memakai deploy key SSH.
-  - Dokumen root & `migration-meta/` tetap lokal sesuai opsi "hanya pos engine".
+  - Dokumen `migration-meta/` + `HANDOVER.md` di-push ke repo pada commit **`b8a3304`** (`docs:`).
+  - Sanitasi sebelum push: PIN akun uji, nomor telepon outlet, nomor penerima WhatsApp, dan nilai secret diganti `[REDACTED]` / `[disamarkan]`.
 

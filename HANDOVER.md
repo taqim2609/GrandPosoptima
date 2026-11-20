@@ -90,4 +90,6 @@ Ringkas per 2026-11-19:
   `2.10.20261119160316`.
 - Data POS: 43 order, 407 produk, 0 nota, 0 pembelian; HPP baru terisi setelah
   nota pertama diinput pemilik.
-- Dokumen root dan `migration-meta/` belum masuk repo (opsi "hanya pos engine").
+- Dokumen `migration-meta/` dan `HANDOVER.md` sudah masuk repo di commit
+  `b8a3304`; PIN, telepon outlet, dan nomor penerima WA disamarkan sebelum
+  push. `backend-landing-page` masih di luar repo.
