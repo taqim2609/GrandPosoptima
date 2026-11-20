@@ -92,6 +92,8 @@ Ringkas per 2026-11-19:
   nota pertama diinput pemilik.
 - Dokumen `migration-meta/` dan `HANDOVER.md` sudah masuk repo di commit
   `b8a3304`; dokumen root (arsitektur, rencana landing, task breakdown,
-  task-review) ada di `docs/` (commit `4c967bb`). PIN, telepon outlet, dan
-  nomor penerima WA disamarkan sebelum push. `backend-landing-page` masih di
-  luar repo.
+  task-review) ada di `docs/` (commit `4c967bb`). `backend-landing-page` diimpor
+  ke `landing-page/` (commit `7c444fe`, 96 file), tanpa `graphify-out/`, `.omh/`,
+  backup pra-cutover, dan `probe_edge.py`; `.env.example` placeholder
+  ditambahkan. PIN, telepon outlet, dan nomor penerima WA disamarkan sebelum
+  push. HEAD repo saat ini `cca0291`.

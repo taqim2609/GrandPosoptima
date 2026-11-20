@@ -1120,7 +1120,7 @@ Dibaca langsung dari snapshot aktif setelah pembersihan Docker. Data utuh:
 | 13 | Branding ganda | **SELESAI 2026-11-19** — `settings.platform` dihapus saat boot; `db.platform` (`KULINER POS`) satu-satunya sumber | — |
 | 14 | Sampah setelan | **SELESAI 2026-11-19** — semua `settings["metrics_process:N"]` dihapus saat boot | — |
 | 15 | Analytics API | **SELESAI 2026-11-19** — `grandpos-analytics.service` (systemd, enabled, `Restart=always`), health 200 | — |
-| 16 | Push GitHub | Kode POS ter-push sampai `2a72351`; `migration-meta/` + `HANDOVER.md` di `b8a3304` (PIN, telepon, nomor WA disamarkan); dokumen root (arsitektur, rencana landing, task breakdown, task-review) di `docs/` pada `4c967bb`. `backend-landing-page` (120 file) masih di luar repo | Tujuan repo landing page (ditunda) |
+| 16 | Push GitHub | Semua kode dan dokumen sudah di `taqim2609/GrandPosoptima` `main`: POS `2a72351`, dokumen `b8a3304`/`7762097`, root docs `4c967bb`, landing page `landing-page/` (96 file) `7c444fe`, indeks `cca0291`. PIN, telepon, nomor WA disamarkan | Selesai |
 | 17 | Compose drift | **SELESAI 2026-11-19** — 5 layanan manual diadopsi ke 4 project Compose (`grandpos`, `filebrowser`, `beszel`, `hindsight`); `deploy/.env` dibuat; panduan: `PANDUAN-COMPOSE-HOST.md` | — |
 | 18 | HPP otomatis | **TERIMPLEMENTASI 2026-11-19** — nota (foto/ketik) → harga rata-rata → tandai "dipakai di produk mana" tanpa qty → prediksi HPP → terapkan ke katalog. Baca foto aktif (kunci `settings.ai`, model `gemini-3-flash-preview`). Live belum ada data nota, jadi HPP masih 0 sampai nota pertama diisi | Isi nota nyata + petakan bahan |
 
@@ -1291,5 +1291,8 @@ dobel; data tetap di bind mount lama. Panduan: `PANDUAN-COMPOSE-HOST.md`.
   - Cara push yang dipakai: klon baru `git clone --depth 1 -b main` ke `/tmp/opencode/gp-remote`, `rsync -a` dari `pos-engine/` dengan pengecualian `.env`, `data/`, `node_modules/`, `dist/`, `project/frontend/build/`, `*.apk`, `*.map`, `package-lock.json`, dan `graphify-out/cache/`; lalu commit dan `git push origin main` memakai deploy key SSH.
   - Dokumen `migration-meta/` + `HANDOVER.md` di-push ke repo pada commit **`b8a3304`** (`docs:`).
   - Dokumen root (arsitektur, rencana landing, breakdown task, task-review) di-push ke folder `docs/` pada commit **`4c967bb`**.
+  - `backend-landing-page` diimpor ke folder **`landing-page/`** pada commit **`7c444fe`** (96 file, +18110). Dikecualikan: `graphify-out/` (3,1 MB artefak generate), `.omh/` (catatan kerja agen), `docker-compose.yml.before-cutover-20261117` (backup lama), `probe_edge.py` (skrip sekali pakai). `docker-compose.override.yml` tetap lokal karena berisi port/IP host dan sudah ada di `.gitignore`.
+  - `landing-page/.env.example` ditambahkan (37 baris, hanya placeholder) karena `README.md` layanan itu sudah merujuk berkas tersebut tetapi berkasnya belum ada.
+  - Indeks `docs/README.md` diperbarui pada commit **`cca0291`** untuk mencatat folder `landing-page/` dan pengecualiannya.
   - Sanitasi sebelum push: PIN akun uji, nomor telepon outlet, nomor penerima WhatsApp, dan nilai secret diganti `[REDACTED]` / `[disamarkan]`.
 
