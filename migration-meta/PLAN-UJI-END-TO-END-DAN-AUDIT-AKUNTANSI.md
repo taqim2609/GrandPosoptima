@@ -1296,3 +1296,12 @@ dobel; data tetap di bind mount lama. Panduan: `PANDUAN-COMPOSE-HOST.md`.
   - Indeks `docs/README.md` diperbarui pada commit **`cca0291`** untuk mencatat folder `landing-page/` dan pengecualiannya.
   - Sanitasi sebelum push: PIN akun uji, nomor telepon outlet, nomor penerima WhatsApp, dan nilai secret diganti `[REDACTED]` / `[disamarkan]`.
 
+### Log kerja 2026-11-20 (merapikan `landing-page/`)
+
+- **Path host dihapus dari kode**: `scripts/test_edge_sync.sh` dan `scripts/gen_node_key.sh` kini mencari `.env` relatif terhadap folder layanan (`ROOT=$(dirname "$0")/..`), tidak lagi `/root/grandpos/backend-landing-page/.env` yang tidak ada di host ini.
+- **Hermes**: `hermes/setup_api_key.py` dan `hermes/quick_setup.py` memakai `.env` di root layanan, bisa dioverride `GRANDPOS_ENV_FILE`, dan berhenti dengan pesan jelas bila `.env` belum ada.
+- **Compose**: `deploy/docker-compose-p1a.yml` memakai `${POS_ENGINE_DIR:?...}` (wajib, gagal cepat) alih-alih bind-mount hardcoded. `deploy/.env.example` ditambahkan sebagai template.
+- **Dokumen**: path `backend-landing-page`/`pos-engine` di `README.md`, `EVIDENCE.md`, `SPEC.md`, `docs/*.md`, `hermes/API_KEY_SETUP.md`, `deploy/README.md`, dan 6 badan task-review diganti path relatif repo. `SPEC.md` tidak lagi menyuruh membaca lampiran di luar repo.
+- **Verifikasi**: `yaml.safe_load` untuk 3 file compose → ok; `bash -n` semua skrip → ok; `python3 -m py_compile` dua skrip hermes → ok; `grep -rn "/root/\|/home/"` pada kode+dokumen `landing-page/` → kosong; live `/api/health` 200 dan 7 container tetap up.
+- **Commit**: `04e6d8e` (16 file, +57/−29, termasuk 2 template `.env.example`) dan `e4bac13` (6 badan task-review). HEAD repo **`e4bac13`**.
+

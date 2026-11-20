@@ -96,4 +96,5 @@ Ringkas per 2026-11-19:
   ke `landing-page/` (commit `7c444fe`, 96 file), tanpa `graphify-out/`, `.omh/`,
   backup pra-cutover, dan `probe_edge.py`; `.env.example` placeholder
   ditambahkan. PIN, telepon outlet, dan nomor penerima WA disamarkan sebelum
-  push. HEAD repo saat ini `cca0291`.
+  push. Path host lama (`/root/grandpos/...`) sudah diganti path relatif repo
+  pada `04e6d8e`/`e4bac13`; HEAD repo saat ini `e4bac13`.
